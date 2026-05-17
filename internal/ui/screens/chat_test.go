@@ -130,3 +130,20 @@ func TestChat_SelectedMessageID_ReturnsLastVisible(t *testing.T) {
 	})
 	assert.Equal(t, 3, m.SelectedMessageID())
 }
+
+func TestChat_SelectedMessageIsOut_Outgoing(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
+	assert.True(t, m.SelectedMessageIsOut())
+}
+
+func TestChat_SelectedMessageIsOut_Incoming(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: false, Date: time.Now()}})
+	assert.False(t, m.SelectedMessageIsOut())
+}
+
+func TestChat_SelectedMessageIsOut_NoMessages(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	assert.False(t, m.SelectedMessageIsOut())
+}

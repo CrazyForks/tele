@@ -104,6 +104,31 @@ func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) e
 	})
 }
 
+func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error {
+	c.mu.RLock()
+	api := c.api
+	c.mu.RUnlock()
+	if api == nil {
+		return fmt.Errorf("not connected")
+	}
+	c.log.Debug("DeleteMessages", zap.Int64("peer_id", peer.ID), zap.Int("count", len(ids)), zap.Bool("revoke", revoke))
+	return WithRetry(ctx, func() error {
+		if peer.Type == store.PeerChannel {
+			// Channel messages are always deleted for all members; revoke is N/A.
+			_, err := api.ChannelsDeleteMessages(ctx, &tg.ChannelsDeleteMessagesRequest{
+				Channel: &tg.InputChannel{ChannelID: peer.ID, AccessHash: peer.AccessHash},
+				ID:      ids,
+			})
+			return err
+		}
+		_, err := api.MessagesDeleteMessages(ctx, &tg.MessagesDeleteMessagesRequest{
+			Revoke: revoke,
+			ID:     ids,
+		})
+		return err
+	})
+}
+
 func peerToInput(p store.Peer) tg.InputPeerClass {
 	switch p.Type {
 	case store.PeerUser:

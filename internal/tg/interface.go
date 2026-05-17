@@ -15,6 +15,7 @@ type Client interface {
 	SendMessage(ctx context.Context, peer store.Peer, text string) (int, error)
 	MarkRead(ctx context.Context, peer store.Peer, maxID int) error
 	DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error)
+	DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error
 	// Updates returns a channel of incoming Telegram events.
 	Updates() <-chan store.Event
 }

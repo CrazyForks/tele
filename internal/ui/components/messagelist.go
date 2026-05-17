@@ -332,11 +332,25 @@ func (ml *MessageList) SelectedMessageID() int {
 	return ml.computeSelectedMsgID()
 }
 
-func (ml *MessageList) computeSelectedMsgID() int {
-	if len(ml.messages) == 0 {
-		return 0
+func (ml *MessageList) SelectedMessageIsOut() bool {
+	if msg := ml.computeSelectedMsg(); msg != nil {
+		return msg.IsOut
 	}
-	selectedID := 0
+	return false
+}
+
+func (ml *MessageList) computeSelectedMsgID() int {
+	if msg := ml.computeSelectedMsg(); msg != nil {
+		return msg.ID
+	}
+	return 0
+}
+
+func (ml *MessageList) computeSelectedMsg() *store.Message {
+	if len(ml.messages) == 0 {
+		return nil
+	}
+	selectedIdx := -1
 	linesUsed := 0
 	for i := ml.viewStart; i < len(ml.messages); i++ {
 		skipped := 0
@@ -346,7 +360,7 @@ func (ml *MessageList) computeSelectedMsgID() int {
 		h := ml.msgHeight(ml.messages[i])
 		firstContentVP := linesUsed + (1 - skipped)
 		if firstContentVP >= 0 && firstContentVP < ml.viewHeight {
-			selectedID = ml.messages[i].ID
+			selectedIdx = i
 		}
 		visible := h - skipped
 		if visible < 0 {
@@ -357,7 +371,10 @@ func (ml *MessageList) computeSelectedMsgID() int {
 			break
 		}
 	}
-	return selectedID
+	if selectedIdx < 0 {
+		return nil
+	}
+	return &ml.messages[selectedIdx]
 }
 
 // renderMessage returns the display lines for a single message bubble.

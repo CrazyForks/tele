@@ -354,3 +354,20 @@ func TestMessageList_Indicator_OnlyOnSelectedMessage(t *testing.T) {
 	plain := stripANSI(ml.View())
 	assert.Equal(t, 1, strings.Count(plain, "<<"))
 }
+
+func TestMessageList_SelectedMessageIsOut_Outgoing(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
+	assert.True(t, ml.SelectedMessageIsOut())
+}
+
+func TestMessageList_SelectedMessageIsOut_Incoming(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: false, Date: time.Now()}})
+	assert.False(t, ml.SelectedMessageIsOut())
+}
+
+func TestMessageList_SelectedMessageIsOut_NoMessages(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	assert.False(t, ml.SelectedMessageIsOut())
+}

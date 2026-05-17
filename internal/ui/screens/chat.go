@@ -71,6 +71,7 @@ func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool { return m.msgList.S
 func (m *ChatModel) VisibleReadMaxID() int                  { return m.msgList.VisibleReadMaxID() }
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }
 func (m *ChatModel) SelectedMessageID() int           { return m.msgList.SelectedMessageID() }
+func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.SelectedMessageIsOut() }
 func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
 func (m *ChatModel) Focused() bool                    { return m.focused }
 func (m *ChatModel) SetFocused(f bool)                { m.focused = f }

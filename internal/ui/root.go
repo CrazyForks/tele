@@ -85,6 +85,7 @@ type RootModel struct {
 	onChatOpen         func(int64)
 	nextSentinel       int
 	chatListPendingKey string
+	contextMenu        *components.ContextMenu
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -119,7 +120,8 @@ func (m RootModel) WithFocus(f Focus) RootModel {
 	return m
 }
 
-func (m RootModel) SearchActive() bool { return m.searchModel != nil }
+func (m RootModel) SearchActive() bool    { return m.searchModel != nil }
+func (m RootModel) ContextMenuOpen() bool { return m.contextMenu != nil }
 
 // SetLoginModel injects the login model after NewRootModel (called by app.go).
 func (m *RootModel) SetLoginModel(lm screens.LoginModel) {
@@ -326,6 +328,34 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case components.CloseContextMenuMsg:
+		m.contextMenu = nil
+		return m, nil
+
+	case components.DeleteMsgRequest:
+		m.contextMenu = nil
+		if m.st == nil {
+			return m, nil
+		}
+		m.st.RemoveMessage(m.currentChatID, msg.MsgID)
+		m.chat.SetMessages(m.st.Messages(m.currentChatID))
+		if m.tgClient == nil {
+			return m, nil
+		}
+		chat, ok := m.st.GetChat(m.currentChatID)
+		if !ok {
+			return m, nil
+		}
+		client := m.tgClient
+		peer := chat.Peer
+		msgID := msg.MsgID
+		revoke := msg.Revoke
+		return m, func() tea.Msg {
+			// TODO: on error, re-insert message (optimistic delete, no rollback yet)
+			_ = client.DeleteMessages(context.Background(), peer, []int{msgID}, revoke)
+			return nil
+		}
+
 	case screens.AuthRequestMsg, screens.ConnectedMsg:
 		if m.screen == ScreenLogin {
 			newLogin, cmd := m.login.Update(msg)
@@ -346,6 +376,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// While context menu is open, route all keys to it.
+	if m.contextMenu != nil {
+		newCM, cmd := m.contextMenu.Update(msg)
+		m.contextMenu = newCM
+		return m, cmd
+	}
+
 	keyStr := msg.String()
 	if m.verbose {
 		m.statusBar.SetLastKey(keyStr)
@@ -416,6 +453,17 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Chat pane: route through vim state machine
 	action := m.vimState.Process(keyStr)
 	m.statusBar.SetMode(m.vimState.Mode)
+
+	if action == keys.ActionOpenContextMenu && m.focus == FocusChat {
+		if m.chat != nil {
+			msgID := m.chat.SelectedMessageID()
+			isOut := m.chat.SelectedMessageIsOut()
+			if msgID != 0 {
+				m.contextMenu = components.NewContextMenu(msgID, isOut)
+			}
+		}
+		return m, nil
+	}
 
 	if action == keys.ActionPassthrough {
 		newPane, cmd := m.chat.Update(msg)
@@ -575,6 +623,9 @@ func (m RootModel) View() tea.View {
 		content = main + "\n" + m.statusBar.View()
 		if m.searchModel != nil {
 			content = overlayCenter(content, m.searchModel.View(), m.width, m.height)
+		}
+		if m.contextMenu != nil {
+			content = overlayBottomRight(content, m.contextMenu.View(), m.width, m.height)
 		}
 	}
 	v := tea.NewView(content)

@@ -26,6 +26,7 @@ const (
 	ActionConfirm        Action = "confirm"
 	ActionSearch         Action = "search"
 	ActionOpenPhoto      Action = "open_photo"
+	ActionOpenContextMenu Action = "open_context_menu"
 )
 
 type VimState struct {
@@ -83,6 +84,8 @@ func (vs *VimState) Process(key string) Action {
 		return ActionSearch
 	case "o":
 		return ActionOpenPhoto
+	case "space":
+		return ActionOpenContextMenu
 	}
 	return ActionNone
 }

@@ -40,6 +40,10 @@ func (m *mockClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.I
 	return nil, nil
 }
 
+func (m *mockClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, _ bool) error {
+	return nil
+}
+
 func (m *mockClient) Updates() <-chan store.Event {
 	return m.events
 }

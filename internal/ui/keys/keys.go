@@ -46,14 +46,16 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+d": ActionScrollHalfDown,
 			"ctrl+u": ActionScrollHalfUp,
 		},
+		// ContextChat is documentation-only; at runtime, chat keys route through VimState.Process.
 		ContextChat: {
-			"j":   ActionDown,
-			"k":   ActionUp,
-			"G":   ActionGoBottom,
-			"i":   ActionInsert,
-			"a":   ActionInsert,
-			"esc": ActionNormal,
-			"o":   ActionOpenPhoto,
+			"j":     ActionDown,
+			"k":     ActionUp,
+			"G":     ActionGoBottom,
+			"i":     ActionInsert,
+			"a":     ActionInsert,
+			"esc":   ActionNormal,
+			"o":     ActionOpenPhoto,
+			"space": ActionOpenContextMenu,
 		},
 	}
 }

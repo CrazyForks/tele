@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
@@ -33,6 +34,9 @@ func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string) (i
 func (m *mockTGClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
 func (m *mockTGClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.Image, error) {
 	return nil, nil
+}
+func (m *mockTGClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, _ bool) error {
+	return nil
 }
 func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Event) }
 
@@ -349,4 +353,87 @@ func TestRoot_Send_ConcurrentSentinelsHaveDistinctIDs(t *testing.T) {
 	id2 := msgs[1].ID
 	assert.Less(t, id2, 0, "second sentinel should have a negative ID")
 	assert.NotEqual(t, id1, id2, "two sentinel messages must have distinct IDs")
+}
+
+func TestRoot_Space_OpensContextMenu(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	newM, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	m = newM.(ui.RootModel)
+
+	assert.True(t, m.ContextMenuOpen())
+}
+
+func TestRoot_Space_NoMenuWhenNoMessages(t *testing.T) {
+	mock := &mockTGClient{}
+	m, _ := newRootWithOpenChat(t, mock)
+	// No messages added — SelectedMessageID() returns 0
+
+	newM, _ := m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	m = newM.(ui.RootModel)
+
+	assert.False(t, m.ContextMenuOpen(), "menu should not open when no message is selected")
+}
+
+func TestRoot_ContextMenu_EscCloses(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	// open menu
+	newM, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	m = newM.(ui.RootModel)
+	require.True(t, m.ContextMenuOpen())
+
+	// close with esc
+	newM, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = newM.(ui.RootModel)
+
+	// dispatch the CloseContextMenuMsg cmd if present
+	require.NotNil(t, cmd, "esc should return a CloseContextMenuMsg cmd")
+	newM, _ = m.Update(cmd())
+	m = newM.(ui.RootModel)
+
+	assert.False(t, m.ContextMenuOpen())
+}
+
+func TestRoot_DeleteMsgRequest_RemovesFromStore(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	require.Len(t, st.Messages(1), 1)
+
+	newM, _ = m.Update(components.DeleteMsgRequest{MsgID: 10, Revoke: false})
+	_ = newM
+
+	assert.Empty(t, st.Messages(1), "message removed from store")
+}
+
+func TestRoot_ContextMenu_QuitKeyDoesNotQuit(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	// open context menu
+	newM, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	m = newM.(ui.RootModel)
+	require.True(t, m.ContextMenuOpen())
+
+	// q while menu is open must not close the app
+	newM, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	m = newM.(ui.RootModel)
+
+	assert.True(t, m.ContextMenuOpen(), "context menu must stay open after q")
+	assert.Nil(t, cmd, "q while menu is open must not produce a quit cmd")
 }

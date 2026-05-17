@@ -56,3 +56,14 @@ func TestVimState_GG_InvalidSecond(t *testing.T) {
 	assert.Equal(t, keys.ActionNone, vs.Process("x"))
 	assert.Equal(t, keys.ActionDown, vs.Process("j"))
 }
+
+func TestVimState_Space_OpenContextMenu(t *testing.T) {
+	vs := keys.NewVimState()
+	assert.Equal(t, keys.ActionOpenContextMenu, vs.Process("space"))
+}
+
+func TestVimState_Space_PassthroughInInsertMode(t *testing.T) {
+	vs := keys.NewVimState()
+	vs.Process("i") // enter insert mode
+	assert.Equal(t, keys.ActionPassthrough, vs.Process("space"))
+}
