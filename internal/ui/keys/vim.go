@@ -11,18 +11,20 @@ const (
 type Action string
 
 const (
-	ActionNone        Action = ""
-	ActionPassthrough Action = "passthrough"
-	ActionUp          Action = "up"
-	ActionDown        Action = "down"
-	ActionLeft        Action = "left"
-	ActionRight       Action = "right"
-	ActionGoTop       Action = "go_top"
-	ActionGoBottom    Action = "go_bottom"
-	ActionInsert      Action = "insert"
-	ActionNormal      Action = "normal"
-	ActionConfirm     Action = "confirm"
-	ActionSearch      Action = "search"
+	ActionNone           Action = ""
+	ActionPassthrough    Action = "passthrough"
+	ActionUp             Action = "up"
+	ActionDown           Action = "down"
+	ActionLeft           Action = "left"
+	ActionRight          Action = "right"
+	ActionGoTop          Action = "go_top"
+	ActionGoBottom       Action = "go_bottom"
+	ActionScrollHalfDown Action = "scroll_half_down"
+	ActionScrollHalfUp   Action = "scroll_half_up"
+	ActionInsert         Action = "insert"
+	ActionNormal         Action = "normal"
+	ActionConfirm        Action = "confirm"
+	ActionSearch         Action = "search"
 )
 
 type VimState struct {
@@ -65,6 +67,10 @@ func (vs *VimState) Process(key string) Action {
 	case "g":
 		vs.Pending = "g"
 		return ActionNone
+	case "ctrl+d":
+		return ActionScrollHalfDown
+	case "ctrl+u":
+		return ActionScrollHalfUp
 	case "i", "a":
 		vs.Mode = ModeInsert
 		return ActionInsert

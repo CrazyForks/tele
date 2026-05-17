@@ -95,6 +95,15 @@ func (m *ChatListModel) SelectedChat() (store.Chat, bool) {
 	}
 	return m.chats[m.cursor], true
 }
+
+func (m *ChatListModel) SetCursorByID(id int64) {
+	for i, c := range m.chats {
+		if c.ID == id {
+			m.cursor = i
+			return
+		}
+	}
+}
 func (m *ChatListModel) Context() keys.Context       { return keys.ContextChatList }
 func (m *ChatListModel) Focused() bool               { return m.focused }
 func (m *ChatListModel) SetFocused(f bool)           { m.focused = f }
@@ -123,6 +132,24 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		case keys.ActionGoBottom:
 			if len(m.chats) > 0 {
 				m.cursor = len(m.chats) - 1
+			}
+		case keys.ActionScrollHalfDown:
+			step := m.height * 2 / 3
+			if step < 1 {
+				step = 1
+			}
+			m.cursor += step
+			if m.cursor >= len(m.chats) {
+				m.cursor = len(m.chats) - 1
+			}
+		case keys.ActionScrollHalfUp:
+			step := m.height * 2 / 3
+			if step < 1 {
+				step = 1
+			}
+			m.cursor -= step
+			if m.cursor < 0 {
+				m.cursor = 0
 			}
 		case keys.ActionConfirm:
 			if len(m.chats) > 0 {

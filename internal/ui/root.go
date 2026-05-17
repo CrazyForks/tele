@@ -70,9 +70,10 @@ type RootModel struct {
 	currentChatID int64
 	historyLimit  int
 	verbose       bool
-	searchModel   *screens.SearchModel
-	onChatOpen    func(int64)
-	nextSentinel  int
+	searchModel          *screens.SearchModel
+	onChatOpen           func(int64)
+	nextSentinel         int
+	chatListPendingKey   string
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -152,6 +153,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.OpenChatMsg:
 		m.searchModel = nil
 		m.currentChatID = msg.Chat.ID
+		m.chatList.SetCursorByID(msg.Chat.ID)
 		if m.onChatOpen != nil {
 			m.onChatOpen(msg.Chat.ID)
 		}
@@ -331,6 +333,20 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// In insert mode, bypass global bindings and pass key directly to chat/composer
+	if m.focus == FocusChat && m.vimState.Mode == keys.ModeInsert {
+		if keyStr == "esc" {
+			m.vimState.Mode = keys.ModeNormal
+			m.statusBar.SetMode(keys.ModeNormal)
+			newPane, cmd := m.chat.Update(keys.ActionMsg{Action: keys.ActionNormal})
+			m.chat = newPane.(*screens.ChatModel)
+			return m, cmd
+		}
+		newPane, cmd := m.chat.Update(msg)
+		m.chat = newPane.(*screens.ChatModel)
+		return m, tea.Batch(cmd, m.markReadCmd())
+	}
+
 	// Global bindings always take priority
 	switch m.keyMap.Resolve(keys.ContextGlobal, keyStr) {
 	case keys.ActionFocusLeft:
@@ -349,7 +365,21 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.focus == FocusChatList {
-		// Chatlist uses keymap directly, no vim state machine
+		// Handle gg two-key sequence
+		if m.chatListPendingKey == "g" {
+			m.chatListPendingKey = ""
+			if keyStr == "g" {
+				newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: keys.ActionGoTop})
+				m.chatList = newPane.(*screens.ChatListModel)
+				return m, cmd
+			}
+			// Not gg — fall through and process current key normally
+		}
+		if keyStr == "g" {
+			m.chatListPendingKey = "g"
+			return m, nil
+		}
+
 		action := m.keyMap.Resolve(keys.ContextChatList, keyStr)
 		if action != keys.ActionNone {
 			newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})

@@ -104,13 +104,31 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
 		case keys.ActionGoTop:
+			m.msgList.ScrollToTop()
 			if m.chat != nil && m.msgList.Count() > 0 {
 				chatID := m.chat.ID
 				offsetID := m.msgList.OldestID()
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
 		case keys.ActionGoBottom:
-			m.msgList.ScrollDown()
+			m.msgList.ScrollToBottom()
+		case keys.ActionScrollHalfDown:
+			n := m.msgList.ViewHeight() * 2 / 3
+			if n < 1 {
+				n = 1
+			}
+			m.msgList.ScrollDownBy(n)
+		case keys.ActionScrollHalfUp:
+			n := m.msgList.ViewHeight() * 2 / 3
+			if n < 1 {
+				n = 1
+			}
+			m.msgList.ScrollUpBy(n)
+			if m.msgList.AtTop() && m.chat != nil && m.msgList.Count() > 0 {
+				chatID := m.chat.ID
+				offsetID := m.msgList.OldestID()
+				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
+			}
 		case keys.ActionInsert:
 			m.composerFocused = true
 			m.vimState.Mode = keys.ModeInsert

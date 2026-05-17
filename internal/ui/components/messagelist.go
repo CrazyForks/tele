@@ -43,9 +43,31 @@ func (ml *MessageList) SetMessages(msgs []store.Message) {
 func (ml *MessageList) Count() int        { return len(ml.messages) }
 func (ml *MessageList) ViewStart() int    { return ml.viewStart }
 func (ml *MessageList) LineOffset() int   { return ml.lineOffset }
+func (ml *MessageList) ViewHeight() int   { return ml.viewHeight }
 func (ml *MessageList) AtTop() bool       { return ml.viewStart == 0 && ml.lineOffset == 0 }
 func (ml *MessageList) SetIsGroup(v bool)         { ml.isGroup = v }
 func (ml *MessageList) SetOutboxReadMaxID(id int) { ml.outboxReadMaxID = id }
+
+func (ml *MessageList) ScrollToBottom() {
+	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+}
+
+func (ml *MessageList) ScrollToTop() {
+	ml.viewStart = 0
+	ml.lineOffset = 0
+}
+
+func (ml *MessageList) ScrollDownBy(n int) {
+	for i := 0; i < n; i++ {
+		ml.ScrollDown()
+	}
+}
+
+func (ml *MessageList) ScrollUpBy(n int) {
+	for i := 0; i < n; i++ {
+		ml.ScrollUp()
+	}
+}
 
 // PrependMessages inserts older messages at the front and shifts viewStart so
 // that the currently-visible messages stay on screen.

@@ -72,9 +72,20 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		}
 		return m, nil
 	default:
-		if km.Text != "" {
-			m.query += km.Text
-			m.filter()
+		switch km.String() {
+		case "ctrl+j":
+			if m.cursor < len(m.results)-1 {
+				m.cursor++
+			}
+		case "ctrl+k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		default:
+			if km.Text != "" {
+				m.query += km.Text
+				m.filter()
+			}
 		}
 		return m, nil
 	}
