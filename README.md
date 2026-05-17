@@ -60,6 +60,7 @@ ui:
 | `gg` | Scroll to top (loads more history) |
 | `G` | Scroll to bottom |
 | `i` / `a` | Compose message (insert mode) |
+| `o` | Open photo in external viewer |
 
 ### Compose (insert mode)
 
@@ -82,7 +83,7 @@ ui:
 ### Next up
 
 - Reply, edit, delete messages
-- Media: photos, files, voice messages
+- Media: files, voice messages
 - Reactions (view and send)
 - Pinned messages
 - Extended markdown (links, blockquote, strikethrough, spoiler)
