@@ -64,12 +64,10 @@ func (sb *StatusBar) hints() string {
 	case sb.activePane == "chat":
 		down := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionDown)
 		up := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionUp)
-		menu := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionOpenContextMenu)
 		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
 		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
 		return joinHints(
 			hintNav(down, up, "scroll"),
-			hintKey(menu, "menu"),
 			hintKey(write, "write"),
 			hintKey(quit, "quit"),
 		)

@@ -11,46 +11,14 @@ import (
 )
 
 var (
-	inNameStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	tsStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	sentStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	readStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	inNameStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	tsStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	sentStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	readStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 )
 
-// incomingIndicator returns the indicator string appended to the right of an
-// incoming bubble's first content line. available is the column count to the
-// right of the bubble's right border.
-func incomingIndicator(available int) string {
-	if available >= 25 {
-		return " <<   space: context menu"
-	}
-	if available >= 9 {
-		return " <<   SPC"
-	}
-	if available >= 3 {
-		return " <<"
-	}
-	return ""
-}
-
-// outgoingIndicator returns a string of exactly leftPad columns that replaces
-// the leading whitespace to the left of an outgoing bubble's first content
-// line, placing arrows immediately before the bubble's left border.
-func outgoingIndicator(leftPad int) string {
-	const arrows = ">>"
-	if leftPad >= 24 {
-		// "space: context menu   >>" = 19+3+2 = 24 chars
-		return strings.Repeat(" ", leftPad-24) + "space: context menu   " + arrows
-	}
-	if leftPad >= 8 {
-		// "SPC   >>" = 3+3+2 = 8 chars
-		return strings.Repeat(" ", leftPad-8) + "SPC   " + arrows
-	}
-	if leftPad >= 2 {
-		return strings.Repeat(" ", leftPad-2) + arrows
-	}
-	return strings.Repeat(" ", leftPad)
-}
+const indicatorChar = "┃"
 
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
@@ -573,19 +541,24 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		for i := range allLines {
 			allLines[i] = pad + allLines[i]
 		}
-		if selected && ml.showIndicator && len(allLines) > 1 && leftPad >= 2 {
-			ind := outgoingIndicator(leftPad)
-			// allLines[1] = pad + originalLine; replace the leading pad with indicator.
-			// pad consists of leftPad ASCII spaces, so byte-slicing is safe.
-			allLines[1] = ind + allLines[1][leftPad:]
+		// Draw indicator bar on every content line (all except top and bottom border).
+		// First leftPad bytes are ASCII spaces, so byte-slicing is safe.
+		if selected && ml.showIndicator && len(allLines) > 2 && leftPad >= 2 {
+			bar := " " + indicatorStyle.Render(indicatorChar)
+			for i := 1; i < len(allLines)-1; i++ {
+				allLines[i] = allLines[i][:leftPad-2] + bar + allLines[i][leftPad:]
+			}
 		}
 	} else {
-		if selected && ml.showIndicator && len(allLines) > 1 {
+		// Draw indicator bar on every content line to the right of the bubble.
+		if selected && ml.showIndicator && len(allLines) > 2 {
 			bubbleW := lipgloss.Width(allLines[0])
 			available := ml.viewWidth - bubbleW
-			ind := incomingIndicator(available)
-			if ind != "" {
-				allLines[1] = allLines[1] + ind
+			if available >= 2 {
+				bar := " " + indicatorStyle.Render(indicatorChar)
+				for i := 1; i < len(allLines)-1; i++ {
+					allLines[i] = allLines[i] + bar
+				}
 			}
 		}
 	}

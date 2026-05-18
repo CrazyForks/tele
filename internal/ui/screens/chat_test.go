@@ -105,7 +105,7 @@ func TestChatModel_NoLoadMore_WhenNotAtTop(t *testing.T) {
 func TestChat_Indicator_VisibleByDefault(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
-	assert.Contains(t, m.View(), "<<")
+	assert.Contains(t, m.View(), "┃")
 }
 
 func TestChat_Indicator_HiddenWhenComposerFocused(t *testing.T) {
@@ -114,11 +114,11 @@ func TestChat_Indicator_HiddenWhenComposerFocused(t *testing.T) {
 
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
-	assert.NotContains(t, m.View(), "<<")
+	assert.NotContains(t, m.View(), "┃")
 
 	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionNormal})
 	m = newPane.(*screens.ChatModel)
-	assert.Contains(t, m.View(), "<<")
+	assert.Contains(t, m.View(), "┃")
 }
 
 func TestChat_SelectedMessageID_ReturnsLastVisible(t *testing.T) {

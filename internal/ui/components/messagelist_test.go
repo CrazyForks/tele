@@ -301,22 +301,20 @@ func TestMessageList_SelectedMessageID_FirstContentCutOff_SelectsNext(t *testing
 	assert.Equal(t, 6, ml.SelectedMessageID())
 }
 
-func TestMessageList_Indicator_Incoming_ShowsLeftArrows(t *testing.T) {
+func TestMessageList_Indicator_Incoming_ShowsBar(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
 	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
 	plain := stripANSI(ml.View())
-	assert.Contains(t, plain, "<<")
-	assert.NotContains(t, plain, ">>")
+	assert.Contains(t, plain, "┃")
 }
 
-func TestMessageList_Indicator_Outgoing_ShowsRightArrows(t *testing.T) {
+func TestMessageList_Indicator_Outgoing_ShowsBar(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
 	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now(), IsOut: true}})
 	plain := stripANSI(ml.View())
-	assert.Contains(t, plain, ">>")
-	assert.NotContains(t, plain, "<<")
+	assert.Contains(t, plain, "┃")
 }
 
 func TestMessageList_Indicator_HiddenWhenShowIndicatorFalse(t *testing.T) {
@@ -324,35 +322,30 @@ func TestMessageList_Indicator_HiddenWhenShowIndicatorFalse(t *testing.T) {
 	ml.SetShowIndicator(false)
 	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
 	plain := stripANSI(ml.View())
-	assert.NotContains(t, plain, "<<")
-	assert.NotContains(t, plain, ">>")
+	assert.NotContains(t, plain, "┃")
 }
 
-func TestMessageList_Indicator_FullHint_OnWideTerminal(t *testing.T) {
-	ml := components.NewMessageList(20, 120)
+func TestMessageList_Indicator_SpansAllContentLines(t *testing.T) {
+	// multiline message: bar should appear on every content line, not just the first
+	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "line1\nline2\nline3", Date: time.Now()}})
 	plain := stripANSI(ml.View())
-	assert.Contains(t, plain, "space: context menu")
-}
-
-func TestMessageList_Indicator_ShortHint_OnNarrowTerminal(t *testing.T) {
-	// width=30: bubble ≈10 cols, available ≈20 → 9<=20<25 → "SPC" hint, not full text
-	ml := components.NewMessageList(20, 30)
-	ml.SetShowIndicator(true)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
-	plain := stripANSI(ml.View())
-	assert.Contains(t, plain, "<<")
-	assert.NotContains(t, plain, "space: context menu")
+	assert.Equal(t, 3, strings.Count(plain, "┃"))
 }
 
 func TestMessageList_Indicator_OnlyOnSelectedMessage(t *testing.T) {
-	// 3 messages all visible; only the last (selected) gets <<
+	// 3 messages all visible; only the selected one gets the bar
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
-	ml.SetMessages(makeMessages(3))
+	ml.SetMessages([]store.Message{
+		{ID: 1, ChatID: 1, Text: "a", Date: time.Now()},
+		{ID: 2, ChatID: 1, Text: "b", Date: time.Now()},
+		{ID: 3, ChatID: 1, Text: "c", Date: time.Now()},
+	})
 	plain := stripANSI(ml.View())
-	assert.Equal(t, 1, strings.Count(plain, "<<"))
+	// each unselected message has 1 content line, selected has 1 → only 1 bar total
+	assert.Equal(t, 1, strings.Count(plain, "┃"))
 }
 
 func TestMessageList_SelectedMessageIsOut_Outgoing(t *testing.T) {

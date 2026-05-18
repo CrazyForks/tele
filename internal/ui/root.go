@@ -182,6 +182,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = FocusChat
 		m.chatList.SetFocused(false)
 		m.chat.SetFocused(true)
+		m.statusBar.SetActivePane("chat")
 		if m.tgClient != nil {
 			client := m.tgClient
 			peer := msg.Chat.Peer
