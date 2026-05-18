@@ -364,3 +364,132 @@ func TestMessageList_SelectedMessageIsOut_NoMessages(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	assert.False(t, ml.SelectedMessageIsOut())
 }
+
+func TestMessageList_MsgHeight_ReplyFound_ShowsGlyph(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	orig := store.Message{ID: 1, ChatID: 1, Text: "original text", Date: time.Now()}
+	reply := store.Message{ID: 2, ChatID: 1, Text: "reply", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]store.Message{orig, reply})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "▌")
+}
+
+func TestMessageList_MsgHeight_ReplyNotFound_ShowsPlaceholder(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	reply := store.Message{ID: 2, ChatID: 1, Text: "reply", Date: time.Now(), ReplyToMsgID: 99}
+	ml.SetMessages([]store.Message{reply})
+	view := ml.View()
+	assert.Contains(t, stripANSI(view), "Original not available")
+}
+
+func TestMessageList_View_ReplyToSelfNotInBuffer_ShowsPlaceholder(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	reply := store.Message{ID: 5, ChatID: 1, Text: "hi", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]store.Message{reply})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "Original not available")
+	assert.NotContains(t, view, "▌ ?")
+}
+
+func TestMessageList_View_ReplyShowsQuoteBlock(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	orig := store.Message{
+		ID:         1,
+		ChatID:     1,
+		SenderName: "Alice",
+		Text:       "Sure, let me check that",
+		Date:       time.Now(),
+	}
+	reply := store.Message{
+		ID:           2,
+		ChatID:       1,
+		SenderName:   "Bob",
+		Text:         "Actually it was Tuesday",
+		Date:         time.Now(),
+		ReplyToMsgID: 1,
+	}
+	ml.SetMessages([]store.Message{orig, reply})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "▌")
+	assert.Contains(t, view, "Alice")
+	assert.Contains(t, view, "Sure, let me check that")
+	assert.Contains(t, view, "Actually it was Tuesday")
+}
+
+func TestMessageList_View_ReplySnippetTruncated(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	longText := strings.Repeat("x", 200)
+	orig := store.Message{ID: 1, ChatID: 1, SenderName: "A", Text: longText, Date: time.Now()}
+	reply := store.Message{ID: 2, ChatID: 1, Text: "ok", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]store.Message{orig, reply})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "▌")
+	assert.Contains(t, view, "…")
+}
+
+func TestMessageList_ScrollToMessage_Found(t *testing.T) {
+	// viewHeight=6: 2 msgs of h=3 fit. Scrolling to msg2 (index 1) leaves
+	// 4 msgs below (12 lines > 6), so positionAtBottom is NOT triggered.
+	ml := components.NewMessageList(6, 80)
+	ml.SetMessages(makeMessages(5)) // IDs 1..5
+	found := ml.ScrollToMessage(2)
+	assert.True(t, found)
+	assert.Equal(t, 1, ml.ViewStart()) // index 1 = msg2
+	assert.Equal(t, 0, ml.LineOffset())
+}
+
+func TestMessageList_ScrollToMessage_FewMsgsBelow_AnchorToBottom(t *testing.T) {
+	// When messages from target to end don't fill viewport, positionAtBottom is called.
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages(makeMessages(5)) // IDs 1..5; 5×h=3=15 < viewHeight=20
+	found := ml.ScrollToMessage(4)
+	assert.True(t, found)
+	// positionAtBottom: all 5 msgs fit → viewStart=0
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "msg 4") // target visible
+	assert.Contains(t, view, "msg 1") // context above also visible
+}
+
+func TestMessageList_ScrollToMessage_NotFound(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages(makeMessages(5))
+	before := ml.ViewStart()
+	found := ml.ScrollToMessage(99)
+	assert.False(t, found)
+	assert.Equal(t, before, ml.ViewStart())
+}
+
+func TestMessageList_ScrollToMessage_Empty(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	found := ml.ScrollToMessage(1)
+	assert.False(t, found)
+}
+
+func TestMessageList_SelectedMessageReplyToMsgID_IsReply(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Now(), ReplyToMsgID: 42}
+	ml.SetMessages([]store.Message{msg})
+	assert.Equal(t, 42, ml.SelectedMessageReplyToMsgID())
+}
+
+func TestMessageList_SelectedMessageReplyToMsgID_NotReply(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages(makeMessages(1))
+	assert.Equal(t, 0, ml.SelectedMessageReplyToMsgID())
+}
+
+func TestMessageList_SelectedMessageReplyToMsgID_Empty(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	assert.Equal(t, 0, ml.SelectedMessageReplyToMsgID())
+}
+
+func TestMessageList_View_ReplySnippetFirstLineOnly(t *testing.T) {
+	// viewHeight=5 fits only the reply bubble (5 lines), hiding orig from the viewport.
+	ml := components.NewMessageList(5, 80)
+	orig := store.Message{ID: 1, ChatID: 1, SenderName: "A", Text: "line1\nline2\nline3", Date: time.Now()}
+	reply := store.Message{ID: 2, ChatID: 1, Text: "ok", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]store.Message{orig, reply})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "line1")
+	assert.NotContains(t, view, "line2")
+}

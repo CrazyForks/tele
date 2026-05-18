@@ -211,3 +211,22 @@ func TestConvertMessage_NoPhoto(t *testing.T) {
 	require.True(t, ok)
 	require.Nil(t, msg.Photo)
 }
+
+func TestConvertMessage_WithReply(t *testing.T) {
+	raw := &tg.Message{
+		ID:      99,
+		Message: "reply text",
+		Date:    1700000000,
+		ReplyTo: &tg.MessageReplyHeader{ReplyToMsgID: 42},
+	}
+	msg, ok := convertMessage(raw, 10)
+	require.True(t, ok)
+	assert.Equal(t, 42, msg.ReplyToMsgID)
+}
+
+func TestConvertMessage_NoReply_ReplyToMsgIDIsZero(t *testing.T) {
+	raw := &tg.Message{ID: 1, Message: "hello", Date: 1700000000}
+	msg, ok := convertMessage(raw, 10)
+	require.True(t, ok)
+	assert.Equal(t, 0, msg.ReplyToMsgID)
+}

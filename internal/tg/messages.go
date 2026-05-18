@@ -228,6 +228,9 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 		IsOut:    msg.Out,
 		Entities: convertEntities(msg.Entities),
 	}
+	if hdr, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok {
+		out.ReplyToMsgID = hdr.ReplyToMsgID
+	}
 	if media, ok := msg.Media.(*tg.MessageMediaPhoto); ok {
 		if photo, ok := media.Photo.(*tg.Photo); ok && len(photo.Sizes) > 0 {
 			thumb := pickThumbSize(photo.Sizes)

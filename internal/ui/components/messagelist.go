@@ -16,9 +16,11 @@ var (
 	sentStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	readStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 	indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	quoteStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 )
 
 const indicatorChar = "┃"
+const quoteGlyph = "▌ "
 
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
@@ -296,6 +298,14 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 
 	h := 0
 
+	if msg.ReplyToMsgID != 0 {
+		if ml.findMessage(msg.ReplyToMsgID) != nil {
+			h += 2
+		} else {
+			h += 1
+		}
+	}
+
 	if msg.Photo != nil {
 		if img, ok := ml.images[msg.Photo.ID]; ok {
 			cols := ml.photoContentCols()
@@ -325,6 +335,15 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 
 func (ml *MessageList) SetShowIndicator(v bool) { ml.showIndicator = v }
 
+func (ml *MessageList) findMessage(id int) *store.Message {
+	for i := range ml.messages {
+		if ml.messages[i].ID == id {
+			return &ml.messages[i]
+		}
+	}
+	return nil
+}
+
 func (ml *MessageList) SelectedMessageID() int {
 	return ml.computeSelectedMsgID()
 }
@@ -332,6 +351,31 @@ func (ml *MessageList) SelectedMessageID() int {
 func (ml *MessageList) SelectedMessageIsOut() bool {
 	if msg := ml.computeSelectedMsg(); msg != nil {
 		return msg.IsOut
+	}
+	return false
+}
+
+func (ml *MessageList) SelectedMessageReplyToMsgID() int {
+	if msg := ml.computeSelectedMsg(); msg != nil {
+		return msg.ReplyToMsgID
+	}
+	return 0
+}
+
+func (ml *MessageList) ScrollToMessage(id int) bool {
+	for i, msg := range ml.messages {
+		if msg.ID == id {
+			ml.viewStart = i
+			ml.lineOffset = 0
+			lines := 0
+			for j := i; j < len(ml.messages); j++ {
+				lines += ml.msgHeight(ml.messages[j])
+			}
+			if lines < ml.viewHeight {
+				ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+			}
+			return true
+		}
 	}
 	return false
 }
@@ -429,6 +473,14 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		}
 	}
 
+	// Ensure bubble is wide enough for the quote glyph + minimal text.
+	if msg.ReplyToMsgID != 0 {
+		minQuoteW := lipgloss.Width(quoteGlyph) + 8
+		if actualW < minQuoteW {
+			actualW = minQuoteW
+		}
+	}
+
 	// innerW = actualW (content) + 2 (padding 1 each side).
 	innerW := actualW + 2
 
@@ -480,8 +532,55 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	}
 	bottom := bs.Render(b.BottomLeft+strings.Repeat(b.Bottom, tsLeftFill)) + tsStr + bs.Render(b.BottomRight)
 
-	// Content lines: photo art (if any) then text.
+	// Content lines: quote block (if reply), photo art (if any), then text.
 	var sideLines []string
+
+	if msg.ReplyToMsgID != 0 {
+		glyphW := lipgloss.Width(quoteGlyph)
+		orig := ml.findMessage(msg.ReplyToMsgID)
+		if orig != nil {
+			name := orig.SenderName
+			if name == "" {
+				if orig.IsOut {
+					name = "You"
+				} else {
+					name = "?"
+				}
+			}
+			namePart := quoteGlyph + inNameStyle.Render(name)
+			nw := lipgloss.Width(namePart)
+			if nw < actualW {
+				namePart += strings.Repeat(" ", actualW-nw)
+			}
+			sideLines = append(sideLines, bs.Render(b.Left)+" "+namePart+" "+bs.Render(b.Right))
+
+			maxSnippetRunes := actualW - glyphW
+			if maxSnippetRunes < 1 {
+				maxSnippetRunes = 1
+			}
+			snippet := orig.Text
+			if idx := strings.IndexByte(snippet, '\n'); idx >= 0 {
+				snippet = snippet[:idx]
+			}
+			runes := []rune(snippet)
+			if len(runes) > maxSnippetRunes {
+				snippet = string(runes[:maxSnippetRunes-1]) + "…"
+			}
+			textPart := quoteGlyph + quoteStyle.Render(snippet)
+			tw := lipgloss.Width(textPart)
+			if tw < actualW {
+				textPart += strings.Repeat(" ", actualW-tw)
+			}
+			sideLines = append(sideLines, bs.Render(b.Left)+" "+textPart+" "+bs.Render(b.Right))
+		} else {
+			placeholder := quoteGlyph + quoteStyle.Render("Original not available")
+			pw := lipgloss.Width(placeholder)
+			if pw < actualW {
+				placeholder += strings.Repeat(" ", actualW-pw)
+			}
+			sideLines = append(sideLines, bs.Render(b.Left)+" "+placeholder+" "+bs.Render(b.Right))
+		}
+	}
 
 	if msg.Photo != nil {
 		photoCols := ml.photoContentCols()

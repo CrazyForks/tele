@@ -34,6 +34,7 @@ const (
 	ActionDelete          Action = "delete"
 	ActionDeleteRevoke    Action = "delete_revoke"
 	ActionDeleteMe        Action = "delete_me"
+	ActionJumpToOriginal  Action = "jump_to_original"
 )
 
 type VimState struct {

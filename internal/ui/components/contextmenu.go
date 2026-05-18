@@ -18,6 +18,11 @@ type DeleteMsgRequest struct {
 	Revoke bool
 }
 
+// JumpToMsgRequest is emitted when the user selects "Jump to original".
+type JumpToMsgRequest struct {
+	MsgID int
+}
+
 type menuState int
 
 const (
@@ -44,30 +49,36 @@ var (
 
 // ContextMenu is a keyboard-navigable context menu overlaid on the chat view.
 type ContextMenu struct {
-	items  []menuItem
-	cursor int
-	state  menuState
-	msgID  int
-	isOut  bool
-	keyMap keys.KeyMap
+	items        []menuItem
+	cursor       int
+	state        menuState
+	msgID        int
+	isOut        bool
+	replyToMsgID int
+	keyMap       keys.KeyMap
 }
 
-func NewContextMenu(msgID int, isOut bool, km keys.KeyMap) *ContextMenu {
+func NewContextMenu(msgID int, isOut bool, replyToMsgID int, km keys.KeyMap) *ContextMenu {
 	return &ContextMenu{
-		items:  mainItems(isOut),
-		msgID:  msgID,
-		isOut:  isOut,
-		keyMap: km,
+		items:        mainItems(isOut, replyToMsgID != 0),
+		msgID:        msgID,
+		isOut:        isOut,
+		replyToMsgID: replyToMsgID,
+		keyMap:       km,
 	}
 }
 
 func (cm *ContextMenu) Cursor() int { return cm.cursor }
 
-func mainItems(isOut bool) []menuItem {
-	items := []menuItem{
-		{label: "Reply", action: keys.ActionReply},
-		{label: "React", action: keys.ActionReact},
+func mainItems(isOut bool, isReply bool) []menuItem {
+	var items []menuItem
+	if isReply {
+		items = append(items, menuItem{label: "Jump to original", action: keys.ActionJumpToOriginal})
 	}
+	items = append(items,
+		menuItem{label: "Reply", action: keys.ActionReply},
+		menuItem{label: "React", action: keys.ActionReact},
+	)
 	if isOut {
 		items = append(items, menuItem{label: "Edit", action: keys.ActionEdit})
 	}
@@ -132,7 +143,7 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 	case keys.ActionCancel:
 		if cm.state == stateDeleteSub {
 			cm.state = stateMain
-			cm.items = mainItems(cm.isOut)
+			cm.items = mainItems(cm.isOut, cm.replyToMsgID != 0)
 			cm.cursor = 0
 			return cm, nil
 		}
@@ -157,6 +168,9 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 	action := cm.items[cm.cursor].action
 	switch action {
+	case keys.ActionJumpToOriginal:
+		replyToMsgID := cm.replyToMsgID
+		return nil, func() tea.Msg { return JumpToMsgRequest{MsgID: replyToMsgID} }
 	case keys.ActionReply, keys.ActionReact, keys.ActionEdit, keys.ActionCancel:
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
 	case keys.ActionDelete:

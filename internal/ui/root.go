@@ -332,6 +332,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case components.JumpToMsgRequest:
+		m.contextMenu = nil
+		if !m.chat.ScrollToMessage(msg.MsgID) {
+			m.statusBar.SetStatus("Not in buffer")
+		}
+		return m, nil
+
 	case components.CloseContextMenuMsg:
 		m.contextMenu = nil
 		return m, nil
@@ -380,6 +387,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.statusBar.SetStatus("")
 	// While context menu is open, route all keys to it.
 	if m.contextMenu != nil {
 		newCM, cmd := m.contextMenu.Update(msg)
@@ -463,7 +471,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			msgID := m.chat.SelectedMessageID()
 			isOut := m.chat.SelectedMessageIsOut()
 			if msgID != 0 {
-				m.contextMenu = components.NewContextMenu(msgID, isOut, m.keyMap)
+				replyToMsgID := m.chat.SelectedMessageReplyToMsgID()
+				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, m.keyMap)
 			}
 		}
 		return m, nil

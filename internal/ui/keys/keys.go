@@ -75,6 +75,7 @@ func DefaultKeyMap() KeyMap {
 			"t":     ActionReact,
 			"e":     ActionEdit,
 			"d":     ActionDelete,
+			"g":     ActionJumpToOriginal,
 		},
 		ContextDeleteSubMenu: {
 			"j":     ActionDown,

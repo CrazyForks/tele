@@ -73,7 +73,9 @@ func (m *ChatModel) VisibleReadMaxID() int                  { return m.msgList.V
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }
 func (m *ChatModel) ComposerHeight() int              { return m.composer.VisualHeight() }
 func (m *ChatModel) SelectedMessageID() int           { return m.msgList.SelectedMessageID() }
-func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.SelectedMessageIsOut() }
+func (m *ChatModel) SelectedMessageIsOut() bool        { return m.msgList.SelectedMessageIsOut() }
+func (m *ChatModel) SelectedMessageReplyToMsgID() int  { return m.msgList.SelectedMessageReplyToMsgID() }
+func (m *ChatModel) ScrollToMessage(id int) bool       { return m.msgList.ScrollToMessage(id) }
 func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
 func (m *ChatModel) Focused() bool                    { return m.focused }
 func (m *ChatModel) SetFocused(f bool)                { m.focused = f }

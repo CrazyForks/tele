@@ -5,7 +5,7 @@ import "time"
 type PeerType int
 
 const (
-	PeerUser    PeerType = iota
+	PeerUser PeerType = iota
 	PeerGroup
 	PeerChannel
 )
@@ -46,15 +46,16 @@ type Chat struct {
 }
 
 type Message struct {
-	ID         int
-	ChatID     int64
-	SenderID   int64
-	SenderName string
-	Text       string
-	Date       time.Time
-	IsOut      bool
-	Entities   []MessageEntity
-	Photo      *PhotoRef // nil if message has no photo
+	ID           int
+	ChatID       int64
+	SenderID     int64
+	SenderName   string
+	Text         string
+	Date         time.Time
+	IsOut        bool
+	Entities     []MessageEntity
+	Photo        *PhotoRef // nil if message has no photo
+	ReplyToMsgID int       // 0 if not a reply
 }
 
 type EventKind int
