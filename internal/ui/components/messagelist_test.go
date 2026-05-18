@@ -483,6 +483,63 @@ func TestMessageList_SelectedMessageReplyToMsgID_Empty(t *testing.T) {
 	assert.Equal(t, 0, ml.SelectedMessageReplyToMsgID())
 }
 
+func TestMessageList_SetImage_AtBottom_ReanchorsToBottom(t *testing.T) {
+	// 3 msgs: text, photo (placeholder), text. All fit in viewport (9 < 10).
+	// After image loads the photo message expands to ~30 lines; the newest message
+	// must remain visible (re-anchored to new natural bottom).
+	ml := components.NewMessageList(10, 80)
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
+		{ID: 2, ChatID: 1, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
+	}
+	ml.SetMessages(msgs)
+
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	ml.SetImage(42, img)
+
+	assert.Contains(t, stripANSI(ml.View()), "msg 3", "newest message must remain visible after image expands")
+}
+
+func TestMessageList_SetKnownImages_AtBottom_ReanchorsToBottom(t *testing.T) {
+	// Same as SetImage case but via bulk load.
+	ml := components.NewMessageList(10, 80)
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
+		{ID: 2, ChatID: 1, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
+	}
+	ml.SetMessages(msgs)
+
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	ml.SetKnownImages(map[int64]image.Image{42: img})
+
+	assert.Contains(t, stripANSI(ml.View()), "msg 3", "newest message must remain visible after bulk image load")
+}
+
+func TestMessageList_SetImage_ScrolledUp_DoesNotReanchor(t *testing.T) {
+	// When user has scrolled up, SetImage must not snap back to bottom.
+	ml := components.NewMessageList(9, 80)
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
+		{ID: 2, ChatID: 1, Text: "msg 2", Date: time.Now()},
+		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
+		{ID: 4, ChatID: 1, Text: "msg 4", Date: time.Now()},
+		{ID: 5, ChatID: 1, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+	}
+	ml.SetMessages(msgs)
+	ml.ScrollUp()
+
+	beforeStart := ml.ViewStart()
+	beforeOff := ml.LineOffset()
+
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	ml.SetImage(42, img)
+
+	assert.Equal(t, beforeStart, ml.ViewStart(), "ViewStart must not change after SetImage when scrolled up")
+	assert.Equal(t, beforeOff, ml.LineOffset(), "LineOffset must not change after SetImage when scrolled up")
+}
+
 func TestMessageList_View_ReplySnippetFirstLineOnly(t *testing.T) {
 	// viewHeight=5 fits only the reply bubble (5 lines), hiding orig from the viewport.
 	ml := components.NewMessageList(5, 80)

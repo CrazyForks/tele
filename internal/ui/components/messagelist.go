@@ -44,14 +44,27 @@ func NewMessageList(height, width int) *MessageList {
 }
 
 // SetImage caches a downloaded photo for rendering.
+// If the viewport was at the natural bottom before the image changed message heights,
+// it is re-anchored to the new natural bottom so newest messages stay visible.
 func (ml *MessageList) SetImage(photoID int64, img image.Image) {
+	botIdx, botOff := ml.positionAtBottom()
+	wasAtBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
 	ml.images[photoID] = img
+	if wasAtBottom {
+		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+	}
 }
 
 // SetKnownImages bulk-loads images from an external cache.
+// Re-anchors to the natural bottom if the viewport was there before the load.
 func (ml *MessageList) SetKnownImages(cache map[int64]image.Image) {
+	botIdx, botOff := ml.positionAtBottom()
+	wasAtBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
 	for id, img := range cache {
 		ml.images[id] = img
+	}
+	if wasAtBottom {
+		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	}
 }
 
