@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -18,14 +19,61 @@ var (
 	readStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 	indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	quoteStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	sepStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 )
+
+type itemKind int
+
+const (
+	itemMessage   itemKind = iota
+	itemSeparator          // date separator, 3 lines: blank + label + blank
+)
+
+type listItem struct {
+	kind  itemKind
+	msg   store.Message // valid when kind == itemMessage
+	label string        // valid when kind == itemSeparator, e.g. "May 18"
+}
+
+func sameDay(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
+}
+
+func formatSepLabel(t time.Time) string {
+	now := time.Now()
+	if t.Year() == now.Year() && t.Month() == now.Month() && t.Day() == now.Day() {
+		return "Today"
+	}
+	if t.Year() == now.Year() {
+		return t.Format("January 2")
+	}
+	return t.Format("January 2, 2006")
+}
+
+func buildItems(msgs []store.Message) []listItem {
+	if len(msgs) == 0 {
+		return nil
+	}
+	items := make([]listItem, 0, len(msgs)+4)
+	var prev time.Time
+	for _, msg := range msgs {
+		if !sameDay(prev, msg.Date) {
+			items = append(items, listItem{kind: itemSeparator, label: formatSepLabel(msg.Date)})
+			prev = msg.Date
+		}
+		items = append(items, listItem{kind: itemMessage, msg: msg})
+	}
+	return items
+}
 
 const indicatorChar = "┃"
 const quoteGlyph = "▌ "
 
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
-	messages        []store.Message
+	items           []listItem
 	viewStart       int // index of first (possibly partial) visible message
 	lineOffset      int // lines of messages[viewStart] to skip from the top
 	viewHeight      int
@@ -90,40 +138,68 @@ func (ml *MessageList) SetSize(width, height int) {
 }
 
 func (ml *MessageList) SetMessages(msgs []store.Message) {
-	ml.messages = msgs
+	ml.items = buildItems(msgs)
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 }
 
 // RemoveMessage removes the message with the given ID while preserving scroll position.
 func (ml *MessageList) RemoveMessage(id int) {
-	idx := -1
-	for i, msg := range ml.messages {
-		if msg.ID == id {
-			idx = i
+	found := false
+	msgs := make([]store.Message, 0, len(ml.items))
+	for _, item := range ml.items {
+		if item.kind != itemMessage {
+			continue
+		}
+		if item.msg.ID == id {
+			found = true
+		} else {
+			msgs = append(msgs, item.msg)
+		}
+	}
+	if !found {
+		return
+	}
+
+	var anchorID int
+	for i := ml.viewStart; i < len(ml.items); i++ {
+		if ml.items[i].kind == itemMessage {
+			anchorID = ml.items[i].msg.ID
 			break
 		}
 	}
-	if idx < 0 {
-		return
-	}
-	ml.messages = append(ml.messages[:idx], ml.messages[idx+1:]...)
-	if len(ml.messages) == 0 {
+
+	ml.items = buildItems(msgs)
+
+	if len(ml.items) == 0 {
 		ml.viewStart = 0
 		ml.lineOffset = 0
 		return
 	}
-	switch {
-	case idx < ml.viewStart:
-		ml.viewStart--
-	case idx == ml.viewStart:
-		ml.lineOffset = 0
-		if ml.viewStart >= len(ml.messages) {
-			ml.viewStart = len(ml.messages) - 1
+
+	if anchorID != 0 && anchorID != id {
+		for i, item := range ml.items {
+			if item.kind == itemMessage && item.msg.ID == anchorID {
+				ml.viewStart = i
+				return
+			}
 		}
+	}
+
+	if ml.viewStart >= len(ml.items) {
+		ml.viewStart = len(ml.items) - 1
+		ml.lineOffset = 0
 	}
 }
 
-func (ml *MessageList) Count() int        { return len(ml.messages) }
+func (ml *MessageList) Count() int {
+	n := 0
+	for _, item := range ml.items {
+		if item.kind == itemMessage {
+			n++
+		}
+	}
+	return n
+}
 func (ml *MessageList) ViewStart() int    { return ml.viewStart }
 func (ml *MessageList) LineOffset() int   { return ml.lineOffset }
 func (ml *MessageList) ViewHeight() int   { return ml.viewHeight }
@@ -158,29 +234,42 @@ func (ml *MessageList) PrependMessages(older []store.Message) {
 	if len(older) == 0 {
 		return
 	}
-	ml.messages = append(older, ml.messages...)
-	ml.viewStart += len(older)
+	current := make([]store.Message, 0, len(ml.items))
+	for _, item := range ml.items {
+		if item.kind == itemMessage {
+			current = append(current, item.msg)
+		}
+	}
+	oldLen := len(ml.items)
+	ml.items = buildItems(append(older, current...))
+	ml.viewStart += len(ml.items) - oldLen
 }
 
 func (ml *MessageList) OldestID() int {
-	if len(ml.messages) == 0 {
-		return 0
+	for _, item := range ml.items {
+		if item.kind == itemMessage {
+			return item.msg.ID
+		}
 	}
-	return ml.messages[0].ID
+	return 0
 }
 
 // VisibleReadMaxID returns the highest message ID that is "sufficiently visible" to count
 // as read: either more than half its lines are in the viewport, or it fills the entire
 // viewport (so more than half is impossible to show at once). Returns 0 if none qualify.
 func (ml *MessageList) VisibleReadMaxID() int {
-	if ml.viewWidth <= 0 || ml.viewHeight <= 0 || len(ml.messages) == 0 {
+	if ml.viewWidth <= 0 || ml.viewHeight <= 0 || len(ml.items) == 0 {
 		return 0
 	}
 	maxID := 0
 	linesUsed := 0
-	for i := ml.viewStart; i < len(ml.messages) && linesUsed < ml.viewHeight; i++ {
-		msg := ml.messages[i]
-		h := ml.msgHeight(msg)
+	for i := ml.viewStart; i < len(ml.items) && linesUsed < ml.viewHeight; i++ {
+		h := ml.itemHeight(i)
+		if ml.items[i].kind != itemMessage {
+			linesUsed += h
+			continue
+		}
+		msg := ml.items[i].msg
 		skipped := 0
 		if i == ml.viewStart {
 			skipped = ml.lineOffset
@@ -204,12 +293,14 @@ func (ml *MessageList) VisibleReadMaxID() int {
 // visible in the current viewport, or 0 if none is visible.
 func (ml *MessageList) LastVisiblePhotoID() int64 {
 	linesUsed := 0
-	for i := ml.viewStart; i < len(ml.messages) && linesUsed < ml.viewHeight; i++ {
-		msg := ml.messages[i]
-		if msg.Photo != nil && msg.Photo.ID != 0 {
-			return msg.Photo.ID
+	for i := ml.viewStart; i < len(ml.items) && linesUsed < ml.viewHeight; i++ {
+		if ml.items[i].kind == itemMessage {
+			msg := ml.items[i].msg
+			if msg.Photo != nil && msg.Photo.ID != 0 {
+				return msg.Photo.ID
+			}
 		}
-		linesUsed += ml.msgHeight(msg)
+		linesUsed += ml.itemHeight(i)
 	}
 	return 0
 }
@@ -219,13 +310,16 @@ func (ml *MessageList) LastVisiblePhotoID() int64 {
 // fill the space (same as positionAtBottom), keeping the first unread visible.
 // Returns false if all messages are already read (nothing to jump to).
 func (ml *MessageList) ScrollToFirstUnread(readMaxID int) bool {
-	for i, msg := range ml.messages {
-		if msg.ID > readMaxID {
+	for i, item := range ml.items {
+		if item.kind != itemMessage {
+			continue
+		}
+		if item.msg.ID > readMaxID {
 			ml.viewStart = i
 			ml.lineOffset = 0
 			lines := 0
-			for j := i; j < len(ml.messages); j++ {
-				lines += ml.msgHeight(ml.messages[j])
+			for j := i; j < len(ml.items); j++ {
+				lines += ml.itemHeight(j)
 			}
 			if lines < ml.viewHeight {
 				ml.viewStart, ml.lineOffset = ml.positionAtBottom()
@@ -247,7 +341,7 @@ func (ml *MessageList) ScrollUp() {
 	}
 	if ml.viewStart > 0 {
 		ml.viewStart--
-		h := ml.msgHeight(ml.messages[ml.viewStart])
+		h := ml.itemHeight(ml.viewStart)
 		if h > ml.viewHeight {
 			ml.lineOffset = h - ml.viewHeight
 		} else {
@@ -265,12 +359,12 @@ func (ml *MessageList) ScrollDown() {
 	if ml.viewStart > botIdx || (ml.viewStart == botIdx && ml.lineOffset >= botOff) {
 		return
 	}
-	h := ml.msgHeight(ml.messages[ml.viewStart])
+	h := ml.itemHeight(ml.viewStart)
 	if ml.lineOffset+1 < h-1 {
 		ml.lineOffset++
 		return
 	}
-	if ml.viewStart+1 < len(ml.messages) {
+	if ml.viewStart+1 < len(ml.items) {
 		ml.viewStart++
 		ml.lineOffset = 0
 	}
@@ -281,8 +375,8 @@ func (ml *MessageList) ScrollDown() {
 // filling the space that would otherwise be empty above the last full messages.
 func (ml *MessageList) positionAtBottom() (int, int) {
 	lineCount := 0
-	for i := len(ml.messages) - 1; i >= 0; i-- {
-		h := ml.msgHeight(ml.messages[i])
+	for i := len(ml.items) - 1; i >= 0; i-- {
+		h := ml.itemHeight(i)
 		if lineCount+h >= ml.viewHeight {
 			// Adding this message meets or exceeds the viewport.
 			// Show it from the offset that makes total lines == viewHeight.
@@ -347,12 +441,19 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 	return h + 2 // +2 border lines (top+bottom)
 }
 
+func (ml *MessageList) itemHeight(i int) int {
+	if ml.items[i].kind == itemSeparator {
+		return 3
+	}
+	return ml.msgHeight(ml.items[i].msg)
+}
+
 func (ml *MessageList) SetShowIndicator(v bool) { ml.showIndicator = v }
 
 func (ml *MessageList) findMessage(id int) *store.Message {
-	for i := range ml.messages {
-		if ml.messages[i].ID == id {
-			return &ml.messages[i]
+	for i := range ml.items {
+		if ml.items[i].kind == itemMessage && ml.items[i].msg.ID == id {
+			return &ml.items[i].msg
 		}
 	}
 	return nil
@@ -377,19 +478,20 @@ func (ml *MessageList) SelectedMessageReplyToMsgID() int {
 }
 
 func (ml *MessageList) ScrollToMessage(id int) bool {
-	for i, msg := range ml.messages {
-		if msg.ID == id {
-			ml.viewStart = i
-			ml.lineOffset = 0
-			lines := 0
-			for j := i; j < len(ml.messages); j++ {
-				lines += ml.msgHeight(ml.messages[j])
-			}
-			if lines < ml.viewHeight {
-				ml.viewStart, ml.lineOffset = ml.positionAtBottom()
-			}
-			return true
+	for i, item := range ml.items {
+		if item.kind != itemMessage || item.msg.ID != id {
+			continue
 		}
+		ml.viewStart = i
+		ml.lineOffset = 0
+		lines := 0
+		for j := i; j < len(ml.items); j++ {
+			lines += ml.itemHeight(j)
+		}
+		if lines < ml.viewHeight {
+			ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+		}
+		return true
 	}
 	return false
 }
@@ -402,20 +504,22 @@ func (ml *MessageList) computeSelectedMsgID() int {
 }
 
 func (ml *MessageList) computeSelectedMsg() *store.Message {
-	if len(ml.messages) == 0 {
+	if len(ml.items) == 0 {
 		return nil
 	}
 	selectedIdx := -1
 	linesUsed := 0
-	for i := ml.viewStart; i < len(ml.messages); i++ {
+	for i := ml.viewStart; i < len(ml.items); i++ {
 		skipped := 0
 		if i == ml.viewStart {
 			skipped = ml.lineOffset
 		}
-		h := ml.msgHeight(ml.messages[i])
-		firstContentVP := linesUsed + (1 - skipped)
-		if firstContentVP >= 0 && firstContentVP < ml.viewHeight {
-			selectedIdx = i
+		h := ml.itemHeight(i)
+		if ml.items[i].kind == itemMessage {
+			firstContentVP := linesUsed + (1 - skipped)
+			if firstContentVP >= 0 && firstContentVP < ml.viewHeight {
+				selectedIdx = i
+			}
 		}
 		visible := h - skipped
 		if visible < 0 {
@@ -429,7 +533,7 @@ func (ml *MessageList) computeSelectedMsg() *store.Message {
 	if selectedIdx < 0 {
 		return nil
 	}
-	return &ml.messages[selectedIdx]
+	return &ml.items[selectedIdx].msg
 }
 
 // renderMessage returns the display lines for a single message bubble.
@@ -697,11 +801,33 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	return allLines
 }
 
+func (ml *MessageList) renderSeparator(label string) []string {
+	labelW := lipgloss.Width(label)
+	fill := (ml.viewWidth - labelW - 2) / 2
+	if fill < 0 {
+		fill = 0
+	}
+	rightFill := ml.viewWidth - fill - 1 - labelW - 1
+	if rightFill < 0 {
+		rightFill = 0
+	}
+	line := sepStyle.Render(strings.Repeat("─", fill)) + " " + label + " " + sepStyle.Render(strings.Repeat("─", rightFill))
+	return []string{"", line, ""}
+}
+
+func (ml *MessageList) renderItem(i int, selected bool) []string {
+	item := ml.items[i]
+	if item.kind == itemSeparator {
+		return ml.renderSeparator(item.label)
+	}
+	return ml.renderMessage(item.msg, selected)
+}
+
 func (ml *MessageList) View() string {
 	if ml.viewWidth <= 0 || ml.viewHeight <= 0 {
 		return ""
 	}
-	if len(ml.messages) == 0 {
+	if len(ml.items) == 0 {
 		return strings.Repeat("\n", ml.viewHeight-1)
 	}
 
@@ -709,18 +835,22 @@ func (ml *MessageList) View() string {
 
 	var allLines []string
 	reachedEnd := true
-	for i := ml.viewStart; i < len(ml.messages); i++ {
-		msgLines := ml.renderMessage(ml.messages[i], ml.messages[i].ID == selectedID)
+	for i := ml.viewStart; i < len(ml.items); i++ {
+		var selected bool
+		if ml.items[i].kind == itemMessage {
+			selected = ml.items[i].msg.ID == selectedID
+		}
+		itemLines := ml.renderItem(i, selected)
 		if i == ml.viewStart && ml.lineOffset > 0 {
-			if ml.lineOffset < len(msgLines) {
-				msgLines = msgLines[ml.lineOffset:]
+			if ml.lineOffset < len(itemLines) {
+				itemLines = itemLines[ml.lineOffset:]
 			} else {
-				msgLines = nil
+				itemLines = nil
 			}
 		}
-		allLines = append(allLines, msgLines...)
+		allLines = append(allLines, itemLines...)
 		if len(allLines) >= ml.viewHeight {
-			reachedEnd = (i == len(ml.messages)-1)
+			reachedEnd = (i == len(ml.items)-1)
 			break
 		}
 	}

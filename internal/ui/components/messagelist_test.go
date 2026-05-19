@@ -48,9 +48,9 @@ func TestMessageList_ScrollUp_SmallMessage(t *testing.T) {
 	// Small message (h=3, viewHeight=3): ScrollUp enters at lineOffset=h-2=1,
 	// showing content+bottom. Never shows bottom-border-only (lineOffset=h-1).
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages(makeMessages(6)) // each h=3; positionAtBottom → viewStart=5
+	ml.SetMessages(makeMessages(6)) // each h=3; positionAtBottom → viewStart=6
 	ml.ScrollUp()
-	assert.Equal(t, 4, ml.ViewStart())
+	assert.Equal(t, 5, ml.ViewStart())
 	assert.Equal(t, 1, ml.LineOffset()) // h-2 = 1: content+bottom visible
 }
 
@@ -71,21 +71,21 @@ func TestMessageList_ScrollDown_SmallMessage_LineByLine(t *testing.T) {
 	// After scrolling up, ScrollDown goes line-by-line through small messages.
 	// For h=3: lineOffset 0 → 1 → jump to next (h-1=2 frame is always skipped).
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages(makeMessages(6)) // viewStart=5 (one message in viewport)
+	ml.SetMessages(makeMessages(6)) // viewStart=6 (one message in viewport)
 
-	// Scroll up into msg4: enter at lineOffset=1, then reveal fully
-	ml.ScrollUp() // viewStart=4, lineOffset=1
-	ml.ScrollUp() // lineOffset=0 (full msg4 visible)
-	assert.Equal(t, 4, ml.ViewStart())
+	// Scroll up into msg5: enter at lineOffset=1, then reveal fully
+	ml.ScrollUp() // viewStart=5, lineOffset=1
+	ml.ScrollUp() // lineOffset=0 (full msg5 visible)
+	assert.Equal(t, 5, ml.ViewStart())
 	assert.Equal(t, 0, ml.LineOffset())
 
-	// Scroll down: line-by-line through msg4
+	// Scroll down: line-by-line through msg5
 	ml.ScrollDown() // lineOffset: 0 → 1 (top border hidden)
-	assert.Equal(t, 4, ml.ViewStart())
+	assert.Equal(t, 5, ml.ViewStart())
 	assert.Equal(t, 1, ml.LineOffset())
 
 	ml.ScrollDown() // next would be lineOffset=2=h-1 (bad frame): skip to next message
-	assert.Equal(t, 5, ml.ViewStart())
+	assert.Equal(t, 6, ml.ViewStart())
 	assert.Equal(t, 0, ml.LineOffset())
 }
 
@@ -103,11 +103,11 @@ func TestMessageList_AtTop_FalseAfterScroll(t *testing.T) {
 
 func TestMessageList_AtTop_TrueAfterScrollingToStart(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	// 4 msgs × h=3; positionAtBottom → viewStart=3.
-	// Each message takes 2 ScrollUps (enter at lineOffset=1, then lineOffset=0).
-	// 3 messages above viewStart=3: 3 × 2 = 6 ScrollUps total.
+	// items=[sep, msg1..msg4]; positionAtBottom → viewStart=4.
+	// Each item takes 2 ScrollUps (enter at lineOffset=1, then lineOffset=0).
+	// 4 items above viewStart=4: 4 × 2 = 8 ScrollUps total.
 	ml.SetMessages(makeMessages(4))
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 8; i++ {
 		ml.ScrollUp()
 	}
 	assert.True(t, ml.AtTop())
@@ -126,14 +126,14 @@ func TestMessageList_OldestID_ZeroWhenEmpty(t *testing.T) {
 
 func TestMessageList_PrependMessages_PreservesViewStart(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages(makeMessages(1)) // 1 msg × 3 lines = viewHeight=3 → viewStart=0
+	ml.SetMessages(makeMessages(1)) // 1 msg × 3 lines = viewHeight=3 → viewStart=1
 	older := []store.Message{
 		{ID: 10, ChatID: 1, Text: "old1", Date: time.Now()},
 		{ID: 11, ChatID: 1, Text: "old2", Date: time.Now()},
 	}
 	ml.PrependMessages(older)
-	// viewStart shifts by len(older) so the same message stays on screen
-	assert.Equal(t, 2, ml.ViewStart())
+	// viewStart shifts by len(newItems)-len(oldItems) so the same message stays on screen
+	assert.Equal(t, 3, ml.ViewStart())
 }
 
 func TestMessageList_LargeMessage_ShowsBottomPortion(t *testing.T) {
@@ -156,7 +156,7 @@ func TestMessageList_LargeMessage_ScrollUpRevealsTopLines(t *testing.T) {
 	for i := 0; i < initialOffset; i++ {
 		ml.ScrollUp()
 	}
-	assert.True(t, ml.AtTop())
+	assert.Equal(t, 0, ml.LineOffset()) // scrolled to top of the large message
 	view := ml.View()
 	assert.Contains(t, stripANSI(view), "L1")
 }
@@ -194,7 +194,7 @@ func TestMessageList_ScrollToFirstUnread_ManyUnread_AtTop(t *testing.T) {
 	ml := components.NewMessageList(6, 80) // viewport = 6 lines = 2 messages
 	ml.SetMessages(makeMessages(10))        // IDs 1..10
 	ml.ScrollToFirstUnread(3)              // msgs 4..10 unread, 7 msgs × h=3 = 21 > 6
-	assert.Equal(t, 3, ml.ViewStart())     // index 3 = msg4
+	assert.Equal(t, 4, ml.ViewStart())     // index 4 = msg4
 	assert.Equal(t, 0, ml.LineOffset())
 	assert.Contains(t, stripANSI(ml.View()), "msg 4")
 }
@@ -452,13 +452,13 @@ func TestMessageList_GroupChat_LongSenderName_NoBubbleOverflow(t *testing.T) {
 }
 
 func TestMessageList_ScrollToMessage_Found(t *testing.T) {
-	// viewHeight=6: 2 msgs of h=3 fit. Scrolling to msg2 (index 1) leaves
+	// viewHeight=6: 2 msgs of h=3 fit. Scrolling to msg2 (index 2) leaves
 	// 4 msgs below (12 lines > 6), so positionAtBottom is NOT triggered.
 	ml := components.NewMessageList(6, 80)
 	ml.SetMessages(makeMessages(5)) // IDs 1..5
 	found := ml.ScrollToMessage(2)
 	assert.True(t, found)
-	assert.Equal(t, 1, ml.ViewStart()) // index 1 = msg2
+	assert.Equal(t, 2, ml.ViewStart()) // index 2 = msg2
 	assert.Equal(t, 0, ml.LineOffset())
 }
 
@@ -591,4 +591,62 @@ func TestMessageList_NotEdited_NoEditedLabel(t *testing.T) {
 		{ID: 1, ChatID: 1, Text: "normal", Date: now, IsOut: true},
 	})
 	assert.NotContains(t, ml.View(), "edited")
+}
+
+func TestMessageList_DateSeparator_FirstMessageHasSeparator(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)}
+	ml.SetMessages([]store.Message{msg})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "May 18")
+}
+
+func TestMessageList_DateSeparator_AppearsOnDayBoundary(t *testing.T) {
+	ml := components.NewMessageList(40, 40)
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, Text: "yesterday", Date: time.Date(2026, 5, 17, 23, 0, 0, 0, time.UTC)},
+		{ID: 2, ChatID: 1, Text: "today", Date: time.Date(2026, 5, 18, 9, 0, 0, 0, time.UTC)},
+	}
+	ml.SetMessages(msgs)
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "May 17")
+	assert.Contains(t, view, "May 18")
+}
+
+func TestMessageList_DateSeparator_SameDayNoExtra(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, Text: "a", Date: time.Date(2026, 5, 18, 9, 0, 0, 0, time.UTC)},
+		{ID: 2, ChatID: 1, Text: "b", Date: time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)},
+	}
+	ml.SetMessages(msgs)
+	view := stripANSI(ml.View())
+	assert.Equal(t, 1, strings.Count(view, "May 18"), "same-day messages must share a single separator")
+}
+
+func TestMessageList_DateSeparator_TodayLabel(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	now := time.Now()
+	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: now}
+	ml.SetMessages([]store.Message{msg})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "Today")
+}
+
+func TestMessageList_DateSeparator_CurrentYearNotTodayShowsDate(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	yesterday := time.Now().AddDate(0, 0, -1)
+	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: yesterday}
+	ml.SetMessages([]store.Message{msg})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, yesterday.Format("January 2"))
+	assert.NotContains(t, view, "Today")
+}
+
+func TestMessageList_DateSeparator_PreviousYearWithYear(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Date(2025, 3, 7, 12, 0, 0, 0, time.UTC)}
+	ml.SetMessages([]store.Message{msg})
+	view := stripANSI(ml.View())
+	assert.Contains(t, view, "March 7, 2025")
 }
