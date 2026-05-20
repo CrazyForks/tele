@@ -4,6 +4,7 @@ import (
 	"image"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -42,6 +43,9 @@ type ChatModel struct {
 	composerFocused bool
 	replyToMsgID    int
 	editMsgID       int
+	spinner         components.Spinner
+	loading         bool
+	logo            components.LogoLoader
 }
 
 func NewChatModel(width, height int) *ChatModel {
@@ -52,14 +56,26 @@ func NewChatModel(width, height int) *ChatModel {
 	}
 	ml := components.NewMessageList(listH, width)
 	ml.SetShowIndicator(true)
+	logo := components.NewLogoLoader(width)
 	return &ChatModel{
 		msgList:  ml,
 		composer: composer,
 		vimState: keys.NewVimState(),
 		width:    width,
 		height:   height,
+		logo:     logo,
 	}
 }
+
+// SetLoading shows or hides the loading spinner in the chat pane.
+func (m *ChatModel) SetLoading(v bool) { m.loading = v }
+
+// TickSpinner advances the spinner frame. Called by root on SpinnerTickMsg.
+func (m *ChatModel) TickSpinner() { m.spinner.Tick() }
+
+// TickLogo advances the chat-pane idle logo. Called by root on LogoTickMsg.
+func (m *ChatModel) TickLogo() { m.logo.Tick() }
+
 
 func (m *ChatModel) SetChat(chat *store.Chat) {
 	m.chat = chat
@@ -140,6 +156,7 @@ func (m *ChatModel) SetComposerValue(v string) {
 func (m *ChatModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	m.logo.SetWidth(width)
 	m.composer.SetWidth(width)
 	m.syncMsgListHeight()
 }
@@ -259,5 +276,16 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 }
 
 func (m *ChatModel) View() string {
+	if m.loading {
+		listH := m.height - m.composer.VisualHeight()
+		if listH < 1 {
+			listH = 1
+		}
+		centered := lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center, m.spinner.View()+" Loading...")
+		return centered
+	}
+	if m.chat == nil && m.msgList.Count() == 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.logo.View())
+	}
 	return m.msgList.View() + "\n" + m.composer.View()
 }

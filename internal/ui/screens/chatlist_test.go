@@ -1,6 +1,7 @@
 package screens_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,4 +107,11 @@ func TestChatList_SetChats_CursorClampsWhenChatRemoved(t *testing.T) {
 		{ID: 2, Title: "Bob"},
 	})
 	assert.Equal(t, 0, m.Cursor())
+}
+
+func TestChatList_EmptyShowsSpinner(t *testing.T) {
+	m := screens.NewChatListModel()
+	view := m.View()
+	assert.Contains(t, view, "Loading chats...")
+	assert.True(t, strings.HasPrefix(view, "["))
 }

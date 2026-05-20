@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 )
@@ -35,11 +36,15 @@ type ChatListModel struct {
 	width   int
 	height  int
 	focused bool
+	spinner components.Spinner
 }
 
 func NewChatListModel() *ChatListModel {
 	return &ChatListModel{}
 }
+
+// TickSpinner advances the spinner frame. Called by root on SpinnerTickMsg.
+func (m *ChatListModel) TickSpinner() { m.spinner.Tick() }
 
 func (m *ChatListModel) SetChats(chats []store.Chat) {
 	// preserve unread counts accumulated since last store sync
@@ -163,7 +168,7 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 
 func (m *ChatListModel) View() string {
 	if len(m.chats) == 0 {
-		return "Loading chats..."
+		return m.spinner.View() + " Loading chats..."
 	}
 	visible := m.height
 	if visible <= 0 {

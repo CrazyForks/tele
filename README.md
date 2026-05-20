@@ -1,5 +1,13 @@
 # tele
 
+```
+  _            _        
+ | |_    ___  | |   ___ 
+ | __|  / _ \ | |  / _ \
+ | |_  |  __/ | | |  __/
+  \__|  \___| |_|  \___|
+```
+
 Keyboard-driven TUI Telegram client for the terminal. Inspired by [lazygit](https://github.com/jesseduffield/lazygit).
 
 ## Install

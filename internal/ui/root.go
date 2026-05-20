@@ -93,6 +93,7 @@ type RootModel struct {
 	contextMenu        *components.ContextMenu
 	folderBar          *screens.FoldersModel
 	activeFilter       *store.FolderFilter
+	logo               components.LogoLoader
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -113,6 +114,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		historyLimit: historyLimit,
 		verbose:      verbose,
 		imageCache:   make(map[int64]image.Image),
+		logo:         components.NewLogoLoader(80),
 	}
 }
 
@@ -188,7 +190,7 @@ func (m RootModel) computeFolderUnreads() map[int]int {
 func (m RootModel) Init() tea.Cmd {
 	m.statusBar.SetVerbose(m.verbose)
 	m.statusBar.SetActivePane("chatlist")
-	return nil
+	return logoTickCmd()
 }
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -196,6 +198,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.logo.SetWidth(msg.Width)
 		m.statusBar.SetWidth(msg.Width)
 		paneH := msg.Height - 1
 		innerH := paneH - 2*borderSize
@@ -246,7 +249,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.folderBar != nil {
 			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
 		}
-		return m, nil
+		return m, spinnerTickCmd()
 
 	case screens.CloseSearchMsg:
 		m.searchModel = nil
@@ -270,6 +273,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.chat.SetFocused(true)
 		m.statusBar.SetActivePane("chat")
 		if m.tgClient != nil {
+			m.chat.SetLoading(true)
 			client := m.tgClient
 			peer := msg.Chat.Peer
 			chatID := msg.Chat.ID
@@ -289,6 +293,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.st.SetMessages(msg.ChatID, msg.Messages)
 			if msg.ChatID == m.currentChatID {
 				m.chat.SetMessages(m.st.Messages(msg.ChatID))
+				m.chat.SetLoading(false)
 				if chat, ok := m.st.GetChat(msg.ChatID); ok && chat.UnreadCount > 0 {
 					m.chat.ScrollToFirstUnread(chat.ReadInboxMaxID)
 				}
@@ -484,10 +489,26 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return nil
 		}
 
+	case components.LogoTickMsg:
+		m.logo.Tick()
+		m.chat.TickLogo()
+		return m, logoTickCmd()
+
+	case components.SpinnerTickMsg:
+		m.chatList.TickSpinner()
+		m.chat.TickSpinner()
+		if m.screen == ScreenMain {
+			return m, spinnerTickCmd()
+		}
+		return m, nil
+
 	case screens.AuthRequestMsg, screens.ConnectedMsg:
 		if m.screen == ScreenLogin {
 			newLogin, cmd := m.login.Update(msg)
 			m.login = newLogin.(screens.LoginModel)
+			if _, ok := msg.(screens.AuthRequestMsg); ok {
+				m.logo.SetState(components.LogoStateStatic)
+			}
 			return m, cmd
 		}
 		return m, nil
@@ -825,22 +846,29 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 func (m RootModel) View() tea.View {
 	var content string
 	if m.screen == ScreenLogin {
-		loginContent := m.login.View().Content
-		b := lipgloss.RoundedBorder()
-		loginLines := strings.Split(loginContent, "\n")
-		loginContentH := len(loginLines)
-		loginContentW := 0
-		for _, l := range loginLines {
-			if w := lipgloss.Width(l); w > loginContentW {
-				loginContentW = w
+		logoView := m.logo.View()
+		if m.login.CurrentStep() < 0 {
+			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n"+"connecting...")
+			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined)
+		} else {
+			loginContent := m.login.View().Content
+			b := lipgloss.RoundedBorder()
+			loginLines := strings.Split(loginContent, "\n")
+			loginContentH := len(loginLines)
+			loginContentW := 0
+			for _, l := range loginLines {
+				if w := lipgloss.Width(l); w > loginContentW {
+					loginContentW = w
+				}
 			}
+			const loginPadV, loginPadH = 1, 3
+			innerW := loginContentW + 2*loginPadH
+			innerH := loginContentH + 2*loginPadV
+			padded := lipgloss.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
+			loginBox := components.RenderBox(padded, "Telegram", "", b, innerW+2, innerH+2)
+			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n", loginBox)
+			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined)
 		}
-		const loginPadV, loginPadH = 1, 3
-		innerW := loginContentW + 2*loginPadH
-		innerH := loginContentH + 2*loginPadV
-		padded := lipgloss.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
-		loginBox := components.RenderBox(padded, "Telegram", "", b, innerW+2, innerH+2)
-		content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, loginBox)
 	} else {
 		paneH := m.height + 1
 		innerH := paneH - 2*borderSize
@@ -891,5 +919,17 @@ func (m RootModel) View() tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+func logoTickCmd() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(time.Time) tea.Msg {
+		return components.LogoTickMsg{}
+	})
+}
+
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg {
+		return components.SpinnerTickMsg{}
+	})
 }
 

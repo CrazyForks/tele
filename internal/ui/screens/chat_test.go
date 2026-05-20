@@ -266,3 +266,18 @@ func TestChat_ShiftEnter_DoesNotSend(t *testing.T) {
 	_, isSend := msg.(screens.SendMsgRequest)
 	assert.False(t, isSend, "shift+enter must not send message")
 }
+
+func TestChatModel_LoadingView_ShowsSpinner(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetLoading(true)
+	view := m.View()
+	assert.Contains(t, view, "Loading...")
+	assert.Contains(t, view, "[=") // spinner frame present somewhere in centered output
+}
+
+func TestChatModel_NotLoading_NoSpinner(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetLoading(false)
+	view := m.View()
+	assert.NotContains(t, view, "Loading...")
+}
