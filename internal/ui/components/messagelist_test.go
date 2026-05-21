@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -567,7 +568,7 @@ func TestMessageList_SetImage_ScrolledUp_DoesNotReanchor(t *testing.T) {
 func TestMessageList_View_ReplySnippetFirstLineOnly(t *testing.T) {
 	// viewHeight=5 fits only the reply bubble (5 lines), hiding orig from the viewport.
 	ml := components.NewMessageList(5, 80)
-	orig := store.Message{ID: 1, ChatID: 1, SenderName: "A", Text: "line1\nline2\nline3", Date: time.Now()}
+	orig := store.Message{ID: 1, ChatID: 1, SenderName: "Alice", Text: "line1\nline2\nline3", Date: time.Now()}
 	reply := store.Message{ID: 2, ChatID: 1, Text: "ok", Date: time.Now(), ReplyToMsgID: 1}
 	ml.SetMessages([]store.Message{orig, reply})
 	view := stripANSI(ml.View())
@@ -676,4 +677,63 @@ func TestMessageList_NoReactions_NoSeparator(t *testing.T) {
 	})
 	v := ml.View()
 	assert.NotContains(t, v, "·")
+}
+
+func TestMessageList_ReplyBubble_NameFitsWidth(t *testing.T) {
+	ml := components.NewMessageList(40, 80)
+	now := time.Now()
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, SenderName: "Aleksandra Petrovna", Text: "hi", Date: now},
+		{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 1, Date: now},
+	}
+	ml.SetMessages(msgs)
+	view := ml.View()
+
+	lines := strings.Split(view, "\n")
+
+	nameIdx := -1
+	for i, l := range lines {
+		if strings.Contains(l, "Aleksandra Petrovna") {
+			nameIdx = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, nameIdx, 1, "name preview line not found")
+
+	topBorder := lines[nameIdx-1]
+	nameLine := lines[nameIdx]
+
+	assert.Equal(t, lipgloss.Width(topBorder), lipgloss.Width(nameLine),
+		"name line must not overflow bubble border")
+}
+
+func TestMessageList_ReplyBubble_LongNameTruncated(t *testing.T) {
+	const longName = "Александра Александровна Петровна Захаренко"
+	ml := components.NewMessageList(40, 40)
+	now := time.Now()
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, SenderName: longName, Text: "hi", Date: now},
+		{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 1, Date: now},
+	}
+	ml.SetMessages(msgs)
+	view := ml.View()
+
+	for _, l := range strings.Split(view, "\n") {
+		if strings.ContainsAny(l, "╭╰│") {
+			assert.LessOrEqual(t, lipgloss.Width(l), 30,
+				"bubble line exceeds maxBubbleW: %q", l)
+		}
+	}
+	assert.Contains(t, view, "…")
+	assert.NotContains(t, view, longName)
+}
+
+func TestMessageList_ReplyBubble_NilOrig_ShowsPlaceholder(t *testing.T) {
+	ml := components.NewMessageList(40, 80)
+	msgs := []store.Message{
+		{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 999, Date: time.Now()},
+	}
+	ml.SetMessages(msgs)
+	require.NotPanics(t, func() { ml.View() })
+	assert.Contains(t, ml.View(), "Original not available")
 }

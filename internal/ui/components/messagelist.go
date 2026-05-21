@@ -89,6 +89,82 @@ func buildReactStr(reactions []store.Reaction) string {
 const indicatorChar = "┃"
 const quoteGlyph = "▌ "
 
+func replyName(orig *store.Message) string {
+	if orig.SenderName != "" {
+		return orig.SenderName
+	}
+	if orig.IsOut {
+		return "You"
+	}
+	return "?"
+}
+
+func firstLine(s string) string {
+	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+		return s[:idx]
+	}
+	return s
+}
+
+func measurePreviewBlock(senderName string, maxContentW int) int {
+	w := lipgloss.Width(quoteGlyph + inNameStyle.Render(senderName))
+	if w > maxContentW {
+		return maxContentW
+	}
+	return w
+}
+
+// renderPreviewLines returns the bubble content lines for a reply or forward
+// preview block. senderName == "" signals the original is unavailable
+// (renders a placeholder). actualW is the finalized content width for the bubble.
+func (ml *MessageList) renderPreviewLines(senderName, snippet string, actualW int, bs lipgloss.Style) []string {
+	b := lipgloss.RoundedBorder()
+	glyphW := lipgloss.Width(quoteGlyph)
+
+	if senderName == "" {
+		placeholder := quoteGlyph + quoteStyle.Render("Original not available")
+		pw := lipgloss.Width(placeholder)
+		if pw < actualW {
+			placeholder += strings.Repeat(" ", actualW-pw)
+		}
+		return []string{bs.Render(b.Left) + " " + placeholder + " " + bs.Render(b.Right)}
+	}
+
+	namePart := quoteGlyph + inNameStyle.Render(senderName)
+	nw := lipgloss.Width(namePart)
+	if nw > actualW {
+		maxNameRunes := actualW - glyphW - 1
+		if maxNameRunes < 1 {
+			maxNameRunes = 1
+		}
+		if nr := []rune(senderName); len(nr) > maxNameRunes {
+			senderName = string(nr[:maxNameRunes]) + "…"
+		}
+		namePart = quoteGlyph + inNameStyle.Render(senderName)
+		nw = lipgloss.Width(namePart)
+	}
+	if nw < actualW {
+		namePart += strings.Repeat(" ", actualW-nw)
+	}
+	nameRow := bs.Render(b.Left) + " " + namePart + " " + bs.Render(b.Right)
+
+	maxSnippetRunes := actualW - glyphW
+	if maxSnippetRunes < 1 {
+		maxSnippetRunes = 1
+	}
+	if sr := []rune(snippet); len(sr) > maxSnippetRunes {
+		snippet = string(sr[:maxSnippetRunes-1]) + "…"
+	}
+	textPart := quoteGlyph + quoteStyle.Render(snippet)
+	tw := lipgloss.Width(textPart)
+	if tw < actualW {
+		textPart += strings.Repeat(" ", actualW-tw)
+	}
+	snippetRow := bs.Render(b.Left) + " " + textPart + " " + bs.Render(b.Right)
+
+	return []string{nameRow, snippetRow}
+}
+
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
 	items           []listItem
@@ -612,11 +688,21 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		}
 	}
 
-	// Ensure bubble is wide enough for the quote glyph + minimal text.
+	// Ensure bubble is wide enough for the reply preview block.
 	if msg.ReplyToMsgID != 0 {
-		minQuoteW := lipgloss.Width(quoteGlyph) + 8
-		if actualW < minQuoteW {
-			actualW = minQuoteW
+		orig := ml.findMessage(msg.ReplyToMsgID)
+		var minW int
+		if orig != nil {
+			minW = measurePreviewBlock(replyName(orig), maxContentW)
+		} else {
+			w := lipgloss.Width(quoteGlyph + quoteStyle.Render("Original not available"))
+			if w > maxContentW {
+				w = maxContentW
+			}
+			minW = w
+		}
+		if actualW < minW {
+			actualW = minW
 		}
 	}
 
@@ -699,50 +785,13 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	var sideLines []string
 
 	if msg.ReplyToMsgID != 0 {
-		glyphW := lipgloss.Width(quoteGlyph)
 		orig := ml.findMessage(msg.ReplyToMsgID)
+		var name, snippet string
 		if orig != nil {
-			name := orig.SenderName
-			if name == "" {
-				if orig.IsOut {
-					name = "You"
-				} else {
-					name = "?"
-				}
-			}
-			namePart := quoteGlyph + inNameStyle.Render(name)
-			nw := lipgloss.Width(namePart)
-			if nw < actualW {
-				namePart += strings.Repeat(" ", actualW-nw)
-			}
-			sideLines = append(sideLines, bs.Render(b.Left)+" "+namePart+" "+bs.Render(b.Right))
-
-			maxSnippetRunes := actualW - glyphW
-			if maxSnippetRunes < 1 {
-				maxSnippetRunes = 1
-			}
-			snippet := orig.Text
-			if idx := strings.IndexByte(snippet, '\n'); idx >= 0 {
-				snippet = snippet[:idx]
-			}
-			runes := []rune(snippet)
-			if len(runes) > maxSnippetRunes {
-				snippet = string(runes[:maxSnippetRunes-1]) + "…"
-			}
-			textPart := quoteGlyph + quoteStyle.Render(snippet)
-			tw := lipgloss.Width(textPart)
-			if tw < actualW {
-				textPart += strings.Repeat(" ", actualW-tw)
-			}
-			sideLines = append(sideLines, bs.Render(b.Left)+" "+textPart+" "+bs.Render(b.Right))
-		} else {
-			placeholder := quoteGlyph + quoteStyle.Render("Original not available")
-			pw := lipgloss.Width(placeholder)
-			if pw < actualW {
-				placeholder += strings.Repeat(" ", actualW-pw)
-			}
-			sideLines = append(sideLines, bs.Render(b.Left)+" "+placeholder+" "+bs.Render(b.Right))
+			name = replyName(orig)
+			snippet = firstLine(orig.Text)
 		}
+		sideLines = append(sideLines, ml.renderPreviewLines(name, snippet, actualW, bs)...)
 	}
 
 	if msg.Photo != nil {
