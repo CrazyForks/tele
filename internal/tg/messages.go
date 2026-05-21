@@ -215,27 +215,75 @@ func buildNameMap(users []tg.UserClass) map[int64]string {
 	return m
 }
 
+func channelTitle(ch *tg.Channel) string {
+	if ch.Title != "" {
+		return ch.Title
+	}
+	return fmt.Sprintf("Channel %d", ch.ID)
+}
+
+func groupTitle(chat *tg.Chat) string {
+	if chat.Title != "" {
+		return chat.Title
+	}
+	return fmt.Sprintf("Chat %d", chat.ID)
+}
+
+func chatTitleFromClass(c tg.ChatClass) string {
+	switch v := c.(type) {
+	case *tg.Channel:
+		return channelTitle(v)
+	case *tg.Chat:
+		return groupTitle(v)
+	}
+	return ""
+}
+
+func buildChatNameMap(chats []tg.ChatClass) map[int64]string {
+	m := make(map[int64]string, len(chats))
+	for _, c := range chats {
+		switch v := c.(type) {
+		case *tg.Channel:
+			m[v.ID] = channelTitle(v)
+		case *tg.Chat:
+			m[v.ID] = groupTitle(v)
+		}
+	}
+	return m
+}
+
 func parseHistory(result tg.MessagesMessagesClass, chatID int64) []store.Message {
 	var rawMsgs []tg.MessageClass
 	var rawUsers []tg.UserClass
+	var rawChats []tg.ChatClass
 
 	switch v := result.(type) {
 	case *tg.MessagesMessages:
-		rawMsgs, rawUsers = v.Messages, v.Users
+		rawMsgs, rawUsers, rawChats = v.Messages, v.Users, v.Chats
 	case *tg.MessagesMessagesSlice:
-		rawMsgs, rawUsers = v.Messages, v.Users
+		rawMsgs, rawUsers, rawChats = v.Messages, v.Users, v.Chats
 	case *tg.MessagesChannelMessages:
-		rawMsgs, rawUsers = v.Messages, v.Users
+		rawMsgs, rawUsers, rawChats = v.Messages, v.Users, v.Chats
 	default:
 		return nil
 	}
 
 	nameMap := buildNameMap(rawUsers)
+	chatNameMap := buildChatNameMap(rawChats)
 
 	out := make([]store.Message, 0, len(rawMsgs))
 	for _, raw := range rawMsgs {
 		if msg, ok := convertMessage(raw, chatID); ok {
 			msg.SenderName = nameMap[msg.SenderID]
+			if msg.SenderName == "" && msg.SenderID == 0 && !msg.IsOut {
+				// nil FromID: sender is the chat peer (private chat → user)
+				// or the chat entity itself (channel/group anonymous post)
+				if name := nameMap[chatID]; name != "" {
+					msg.SenderName = name
+				} else {
+					msg.SenderName = chatNameMap[chatID]
+				}
+			}
 			out = append(out, msg)
 		}
 	}

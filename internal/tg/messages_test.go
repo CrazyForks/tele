@@ -245,3 +245,90 @@ func TestBuildSendRequest_WithoutReply(t *testing.T) {
 	req := buildSendRequest(peer, "hello", 123, 0)
 	assert.Nil(t, req.ReplyTo)
 }
+
+func TestParseHistory_ChannelPost_SenderNameIsChannelTitle(t *testing.T) {
+	now := time.Now()
+	raw := &tg.MessagesChannelMessages{
+		Messages: []tg.MessageClass{
+			&tg.Message{
+				ID:      1,
+				PeerID:  &tg.PeerChannel{ChannelID: 500},
+				Message: "channel post",
+				Date:    int(now.Unix()),
+				// FromID is nil — anonymous channel post
+			},
+		},
+		Users: []tg.UserClass{},
+		Chats: []tg.ChatClass{
+			&tg.Channel{ID: 500, Title: "Tech News"},
+		},
+	}
+	msgs := parseHistory(raw, 500)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "Tech News", msgs[0].SenderName)
+}
+
+func TestParseHistory_ChannelPost_OutgoingNotOverridden(t *testing.T) {
+	now := time.Now()
+	raw := &tg.MessagesChannelMessages{
+		Messages: []tg.MessageClass{
+			&tg.Message{
+				ID:      1,
+				PeerID:  &tg.PeerChannel{ChannelID: 500},
+				Message: "admin post",
+				Date:    int(now.Unix()),
+				Out:     true, // outgoing — do not set SenderName from channel
+			},
+		},
+		Chats: []tg.ChatClass{
+			&tg.Channel{ID: 500, Title: "Tech News"},
+		},
+	}
+	msgs := parseHistory(raw, 500)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "", msgs[0].SenderName, "outgoing message must not get channel title as SenderName")
+}
+
+func TestParseHistory_PrivateChat_IncomingNilFromID_SenderNameIsPeerName(t *testing.T) {
+	// In private chats, incoming messages may have FromID==nil.
+	// The peer user is in rawUsers; chatID == peer's user ID.
+	now := time.Now()
+	raw := &tg.MessagesMessages{
+		Messages: []tg.MessageClass{
+			&tg.Message{
+				ID:      1,
+				PeerID:  &tg.PeerUser{UserID: 42},
+				Message: "hey",
+				Date:    int(now.Unix()),
+				// FromID is nil — incoming private message without explicit sender
+			},
+		},
+		Users: []tg.UserClass{
+			&tg.User{ID: 42, FirstName: "Alice"},
+		},
+	}
+	msgs := parseHistory(raw, 42)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "Alice", msgs[0].SenderName)
+}
+
+func TestParseHistory_UserMessage_SenderNameFromUsers(t *testing.T) {
+	now := time.Now()
+	raw := &tg.MessagesMessages{
+		Messages: []tg.MessageClass{
+			&tg.Message{
+				ID:      1,
+				PeerID:  &tg.PeerUser{UserID: 99},
+				FromID:  &tg.PeerUser{UserID: 99},
+				Message: "hello",
+				Date:    int(now.Unix()),
+			},
+		},
+		Users: []tg.UserClass{
+			&tg.User{ID: 99, FirstName: "Alice"},
+		},
+	}
+	msgs := parseHistory(raw, 99)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "Alice", msgs[0].SenderName)
+}

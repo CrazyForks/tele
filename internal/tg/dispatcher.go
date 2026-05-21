@@ -24,6 +24,20 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 				name = fmt.Sprintf("User %d", user.ID)
 			}
 			msg.SenderName = name
+		} else if msg.SenderID == 0 && !msg.IsOut {
+			// nil FromID: sender is the chat peer — try user first (private chat),
+			// then channel or group (anonymous post)
+			if user, ok := e.Users[peerID]; ok {
+				name := strings.TrimSpace(user.FirstName + " " + user.LastName)
+				if name == "" {
+					name = fmt.Sprintf("User %d", user.ID)
+				}
+				msg.SenderName = name
+			} else if ch, ok := e.Channels[peerID]; ok {
+				msg.SenderName = channelTitle(ch)
+			} else if chat, ok := e.Chats[peerID]; ok {
+				msg.SenderName = groupTitle(chat)
+			}
 		}
 		if shouldSuppress(msg.ID) {
 			return nil
