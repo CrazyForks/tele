@@ -23,6 +23,17 @@ var (
 	sepStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 )
 
+var senderPalette = [8]struct{ light, dark color.Color }{
+	{lipgloss.Color("1"), lipgloss.Color("9")},
+	{lipgloss.Color("2"), lipgloss.Color("10")},
+	{lipgloss.Color("4"), lipgloss.Color("12")},
+	{lipgloss.Color("5"), lipgloss.Color("13")},
+	{lipgloss.Color("6"), lipgloss.Color("14")},
+	{lipgloss.Color("130"), lipgloss.Color("208")},
+	{lipgloss.Color("92"), lipgloss.Color("141")},
+	{lipgloss.Color("28"), lipgloss.Color("118")},
+}
+
 type itemKind int
 
 const (
@@ -117,7 +128,7 @@ func measurePreviewBlock(senderName string, maxContentW int) int {
 // renderPreviewLines returns the bubble content lines for a reply or forward
 // preview block. senderName == "" signals the original is unavailable
 // (renders a placeholder). actualW is the finalized content width for the bubble.
-func (ml *MessageList) renderPreviewLines(senderName, snippet string, actualW int, bs lipgloss.Style) []string {
+func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet string, actualW int, bs lipgloss.Style) []string {
 	b := lipgloss.RoundedBorder()
 	glyphW := lipgloss.Width(quoteGlyph)
 
@@ -130,7 +141,8 @@ func (ml *MessageList) renderPreviewLines(senderName, snippet string, actualW in
 		return []string{bs.Render(b.Left) + " " + placeholder + " " + bs.Render(b.Right)}
 	}
 
-	namePart := quoteGlyph + inNameStyle.Render(senderName)
+	ns := ml.senderNameStyle(senderID)
+	namePart := ns.Render(quoteGlyph) + ns.Render(senderName)
 	nw := lipgloss.Width(namePart)
 	if nw > actualW {
 		maxNameRunes := actualW - glyphW - 1
@@ -140,7 +152,7 @@ func (ml *MessageList) renderPreviewLines(senderName, snippet string, actualW in
 		if nr := []rune(senderName); len(nr) > maxNameRunes {
 			senderName = string(nr[:maxNameRunes]) + "…"
 		}
-		namePart = quoteGlyph + inNameStyle.Render(senderName)
+		namePart = ns.Render(quoteGlyph) + ns.Render(senderName)
 		nw = lipgloss.Width(namePart)
 	}
 	if nw < actualW {
@@ -155,7 +167,7 @@ func (ml *MessageList) renderPreviewLines(senderName, snippet string, actualW in
 	if sr := []rune(snippet); len(sr) > maxSnippetRunes {
 		snippet = string(sr[:maxSnippetRunes-1]) + "…"
 	}
-	textPart := quoteGlyph + quoteStyle.Render(snippet)
+	textPart := ns.Render(quoteGlyph) + quoteStyle.Render(snippet)
 	tw := lipgloss.Width(textPart)
 	if tw < actualW {
 		textPart += strings.Repeat(" ", actualW-tw)
@@ -167,15 +179,16 @@ func (ml *MessageList) renderPreviewLines(senderName, snippet string, actualW in
 
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
-	items           []listItem
-	viewStart       int // index of first (possibly partial) visible message
-	lineOffset      int // lines of messages[viewStart] to skip from the top
-	viewHeight      int
-	viewWidth       int
-	isGroup         bool
-	outboxReadMaxID int
-	images          map[int64]image.Image
-	showIndicator   bool
+	items             []listItem
+	viewStart         int // index of first (possibly partial) visible message
+	lineOffset        int // lines of messages[viewStart] to skip from the top
+	viewHeight        int
+	viewWidth         int
+	isGroup           bool
+	outboxReadMaxID   int
+	images            map[int64]image.Image
+	showIndicator     bool
+	hasDarkBackground bool
 }
 
 func NewMessageList(height, width int) *MessageList {
@@ -312,6 +325,17 @@ func (ml *MessageList) ViewHeight() int   { return ml.viewHeight }
 func (ml *MessageList) AtTop() bool       { return ml.viewStart == 0 && ml.lineOffset == 0 }
 func (ml *MessageList) SetIsGroup(v bool)         { ml.isGroup = v }
 func (ml *MessageList) SetOutboxReadMaxID(id int) { ml.outboxReadMaxID = id }
+func (ml *MessageList) SetDarkBackground(isDark bool) { ml.hasDarkBackground = isDark }
+
+func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
+	idx := senderID % 8
+	if idx < 0 {
+		idx = -idx
+	}
+	pair := senderPalette[idx]
+	fg := lipgloss.LightDark(ml.hasDarkBackground)(pair.light, pair.dark)
+	return lipgloss.NewStyle().Foreground(fg).Bold(true)
+}
 
 func (ml *MessageList) ScrollToBottom() {
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
@@ -748,7 +772,7 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		if name == "" {
 			name = "?"
 		}
-		titleW := lipgloss.Width(" " + inNameStyle.Render(name) + " ")
+		titleW := lipgloss.Width(" " + ml.senderNameStyle(msg.SenderID).Render(name) + " ")
 		if innerW < titleW+1 {
 			innerW = titleW + 1
 			actualW = innerW - 2
@@ -764,7 +788,7 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 			if name == "" {
 				name = "?"
 			}
-			senderStyled = inNameStyle.Render(name)
+			senderStyled = ml.senderNameStyle(msg.SenderID).Render(name)
 		}
 		var titleStr string
 		if senderStyled != "" {
@@ -792,12 +816,14 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 
 	if msg.ReplyToMsgID != 0 {
 		orig := ml.findMessage(msg.ReplyToMsgID)
+		var origSenderID int64
 		var name, snippet string
 		if orig != nil {
+			origSenderID = orig.SenderID
 			name = replyName(orig)
 			snippet = firstLine(orig.Text)
 		}
-		sideLines = append(sideLines, ml.renderPreviewLines(name, snippet, actualW, bs)...)
+		sideLines = append(sideLines, ml.renderPreviewLines(origSenderID, name, snippet, actualW, bs)...)
 		if msg.Text != "" || msg.Photo != nil {
 			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
 		}

@@ -797,3 +797,136 @@ func TestMessageList_View_ReplyHasBlankLineSeparator(t *testing.T) {
 	assert.Greater(t, textIdx-nameIdx, 2,
 		"expected blank separator line between reply preview and message body")
 }
+
+// ansiOpenBeforeName returns the last ANSI escape sequence opening (e.g. "\x1b[1;32m")
+// that appears immediately before name in rawLine. Returns "" if not found.
+func ansiOpenBeforeName(rawLine, name string) string {
+	pos := strings.Index(rawLine, name)
+	if pos < 0 {
+		return ""
+	}
+	prefix := rawLine[:pos]
+	lastEsc := strings.LastIndex(prefix, "\x1b[")
+	if lastEsc < 0 {
+		return ""
+	}
+	return prefix[lastEsc:]
+}
+
+func TestMessageList_GroupChat_SenderColors_DifferentIDs(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetIsGroup(true)
+	now := time.Now()
+	ml.SetMessages([]store.Message{
+		{ID: 1, ChatID: 1, SenderID: 0, SenderName: "Alice", Text: "msg1", Date: now},
+		{ID: 2, ChatID: 1, SenderID: 1, SenderName: "Bob", Text: "msg2", Date: now},
+	})
+	raw := ml.View()
+
+	var aliceLine, bobLine string
+	for _, l := range strings.Split(raw, "\n") {
+		plain := stripANSI(l)
+		if strings.Contains(plain, "Alice") {
+			aliceLine = l
+		}
+		if strings.Contains(plain, "Bob") {
+			bobLine = l
+		}
+	}
+	require.NotEmpty(t, aliceLine, "Alice not found in view")
+	require.NotEmpty(t, bobLine, "Bob not found in view")
+
+	aliceANSI := ansiOpenBeforeName(aliceLine, "Alice")
+	bobANSI := ansiOpenBeforeName(bobLine, "Bob")
+	require.NotEmpty(t, aliceANSI, "Alice has no ANSI color before name")
+	require.NotEmpty(t, bobANSI, "Bob has no ANSI color before name")
+	assert.NotEqual(t, aliceANSI, bobANSI, "different senders must render different colors")
+}
+
+func TestMessageList_GroupChat_SenderColors_SameID(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetIsGroup(true)
+	now := time.Now()
+	ml.SetMessages([]store.Message{
+		{ID: 1, ChatID: 1, SenderID: 42, SenderName: "Alice", Text: "first", Date: now},
+		{ID: 2, ChatID: 1, SenderID: 42, SenderName: "Alice", Text: "second", Date: now},
+	})
+	raw := ml.View()
+
+	var lines []string
+	for _, l := range strings.Split(raw, "\n") {
+		if strings.Contains(stripANSI(l), "Alice") {
+			lines = append(lines, l)
+		}
+	}
+	require.Len(t, lines, 2, "expected two lines containing Alice")
+	assert.Equal(t,
+		ansiOpenBeforeName(lines[0], "Alice"),
+		ansiOpenBeforeName(lines[1], "Alice"),
+		"same sender must render same color in both bubbles")
+}
+
+func TestMessageList_ReplyPreview_GlyphAndName_SenderColor(t *testing.T) {
+	now := time.Now()
+	ml := components.NewMessageList(40, 80)
+	ml.SetMessages([]store.Message{
+		{ID: 1, ChatID: 1, SenderID: 5, SenderName: "Carol", Text: "original", Date: now},
+		{ID: 2, ChatID: 1, Text: "reply", ReplyToMsgID: 1, Date: now},
+	})
+	raw := ml.View()
+
+	// Find the reply preview name row: plain text contains both ▌ and Carol
+	var glyphNameLine string
+	for _, l := range strings.Split(raw, "\n") {
+		plain := stripANSI(l)
+		if strings.Contains(plain, "▌") && strings.Contains(plain, "Carol") {
+			glyphNameLine = l
+			break
+		}
+	}
+	require.NotEmpty(t, glyphNameLine, "reply preview name row not found")
+
+	// ▌ must be immediately preceded by an ANSI escape (i.e., the byte before ▌ is 'm')
+	glyphPos := strings.Index(glyphNameLine, "▌")
+	require.Positive(t, glyphPos)
+	assert.Equal(t, byte('m'), glyphNameLine[glyphPos-1],
+		"▌ glyph must be preceded by an ANSI color escape (sender-colored)")
+}
+
+func TestMessageList_SenderColor_DarkVsLight(t *testing.T) {
+	now := time.Now()
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, SenderID: 0, SenderName: "Alice", Text: "hi", Date: now},
+	}
+
+	mlDark := components.NewMessageList(20, 80)
+	mlDark.SetIsGroup(true)
+	mlDark.SetDarkBackground(true)
+	mlDark.SetMessages(msgs)
+
+	mlLight := components.NewMessageList(20, 80)
+	mlLight.SetIsGroup(true)
+	mlLight.SetDarkBackground(false)
+	mlLight.SetMessages(msgs)
+
+	darkLine := ""
+	for _, l := range strings.Split(mlDark.View(), "\n") {
+		if strings.Contains(stripANSI(l), "Alice") {
+			darkLine = l
+			break
+		}
+	}
+	lightLine := ""
+	for _, l := range strings.Split(mlLight.View(), "\n") {
+		if strings.Contains(stripANSI(l), "Alice") {
+			lightLine = l
+			break
+		}
+	}
+	require.NotEmpty(t, darkLine)
+	require.NotEmpty(t, lightLine)
+	assert.NotEqual(t,
+		ansiOpenBeforeName(darkLine, "Alice"),
+		ansiOpenBeforeName(lightLine, "Alice"),
+		"dark and light backgrounds must use different colors for the same sender")
+}

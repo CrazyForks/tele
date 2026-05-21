@@ -105,6 +105,7 @@ func (m *ChatModel) EditMsgID() int    { return m.editMsgID }
 func (m *ChatModel) SetDarkBackground(isDark bool) {
 	m.composer.SetDarkBackground(isDark)
 	m.logo.SetDarkBackground(isDark)
+	m.msgList.SetDarkBackground(isDark)
 }
 
 func (m *ChatModel) clearPendingAction() {
