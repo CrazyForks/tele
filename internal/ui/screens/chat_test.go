@@ -251,6 +251,22 @@ func TestChat_SendMessage_ClearsReplyStateAfterSend(t *testing.T) {
 	assert.Equal(t, 0, m.ReplyToMsgID())
 }
 
+func TestChat_AltEnter_DoesNotSend(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	m.SetChat(chat)
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	m.SetComposerValue("hello")
+
+	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
+	_ = newPane
+	require.NotNil(t, cmd, "alt+enter should produce a cmd (textarea handled the key)")
+	msg := cmd()
+	_, isSend := msg.(screens.SendMsgRequest)
+	assert.False(t, isSend, "alt+enter must not send message")
+}
+
 func TestChat_ShiftEnter_DoesNotSend(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
