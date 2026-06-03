@@ -12,11 +12,9 @@ import (
 const maxComposerLines = 5
 
 type Composer struct {
-	ta              textarea.Model
-	replyPreview    string
-	focused         bool
-	width           int
-	visualLines     int
+	ta                textarea.Model
+	replyPreview      string
+	focused           bool
 	hasDarkBackground bool
 }
 
@@ -25,6 +23,7 @@ func NewComposer(width int) *Composer {
 	ta.ShowLineNumbers = false
 	ta.Prompt = "> "
 	ta.MaxHeight = maxComposerLines
+	ta.DynamicHeight = true
 	// Modifier+Enter combos (shift+enter, alt+enter) require a terminal that supports an extended
 	// key protocol (Kitty keyboard protocol, or XTerm's modifyOtherKeys). Legacy terminals such as
 	// macOS Terminal.app and MinTTY (Git for Windows) silently drop these keys, so neither binding
@@ -37,15 +36,12 @@ func NewComposer(width int) *Composer {
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "shift+enter"))
 	ta.KeyMap.Paste = key.NewBinding() // handled at root level via readClipboardCmd → tea.PasteMsg
 	ta.CharLimit = 4096
-	ta.SetHeight(1)
 	ta.SetWidth(width - 2)
-	return &Composer{ta: ta, width: width, visualLines: 1}
+	return &Composer{ta: ta}
 }
 
 func (c *Composer) SetWidth(w int) {
-	c.width = w
 	c.ta.SetWidth(w - 2)
-	c.recomputeHeight()
 }
 
 // Focus activates the composer cursor. Returns a blink Cmd that must be
@@ -66,14 +62,11 @@ func (c *Composer) Value() string { return c.ta.Value() }
 
 func (c *Composer) SetValue(v string) {
 	c.ta.SetValue(v)
-	c.recomputeHeight()
 }
 
 func (c *Composer) Reset() {
 	c.ta.Reset()
 	c.replyPreview = ""
-	c.visualLines = 1
-	c.ta.SetHeight(1)
 }
 
 func (c *Composer) SetReplyPreview(preview string) { c.replyPreview = preview }
@@ -82,44 +75,11 @@ func (c *Composer) ClearReplyPreview()             { c.replyPreview = "" }
 // VisualHeight returns the total number of terminal rows that View() occupies:
 // textarea lines + 2 border rows + preview lines (0 if no preview).
 func (c *Composer) VisualHeight() int {
-	h := c.visualLines + 2
+	h := c.ta.Height() + 2
 	if c.replyPreview != "" {
 		h += strings.Count(c.replyPreview, "\n") + 2
 	}
 	return h
-}
-
-// recomputeHeight counts visual lines in the current value (accounting for
-// word-wrap at the available typing width) and calls ta.SetHeight accordingly.
-func (c *Composer) recomputeHeight() {
-	available := c.width - 4 // -2 lipgloss border chars, -2 prompt "> "
-	if available < 1 {
-		available = 1
-	}
-	val := c.ta.Value()
-	if val == "" {
-		c.visualLines = 1
-		c.ta.SetHeight(1)
-		return
-	}
-	logicalLines := strings.Split(val, "\n")
-	total := 0
-	for _, line := range logicalLines {
-		n := lipgloss.Width(line)
-		if n == 0 {
-			total++
-		} else {
-			total += (n + available - 1) / available
-		}
-	}
-	if total < 1 {
-		total = 1
-	}
-	if total > maxComposerLines {
-		total = maxComposerLines
-	}
-	c.visualLines = total
-	c.ta.SetHeight(total)
 }
 
 func (c *Composer) View() string {
@@ -130,9 +90,13 @@ func (c *Composer) View() string {
 		content = c.ta.View()
 	}
 
+	// Do not set an explicit Width here: the textarea already pads every line
+	// to its full inner width, producing a perfect content rectangle. Letting
+	// lipgloss re-wrap that content via .Width() causes off-by-one overflow and
+	// spurious soft-wraps at the wrap boundary (styled trailing spaces land on
+	// the width edge), so we let the border size itself to the content instead.
 	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Width(c.width - 2)
+		Border(lipgloss.RoundedBorder())
 	if c.focused {
 		fg := lipgloss.LightDark(c.hasDarkBackground)(lipgloss.Color("19"), lipgloss.Color("12"))
 		style = style.BorderForeground(fg)
@@ -145,6 +109,5 @@ func (c *Composer) Init() tea.Cmd { return nil }
 func (c *Composer) Update(msg tea.Msg) (*Composer, tea.Cmd) {
 	var cmd tea.Cmd
 	c.ta, cmd = c.ta.Update(msg)
-	c.recomputeHeight()
 	return c, cmd
 }
