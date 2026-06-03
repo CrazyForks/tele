@@ -101,6 +101,7 @@ func (m *ChatModel) PrependMessages(older []store.Message)             { m.msgLi
 func (m *ChatModel) SetImage(photoID int64, img image.Image)           { m.msgList.SetImage(photoID, img) }
 func (m *ChatModel) SetKnownImages(cache map[int64]image.Image)        { m.msgList.SetKnownImages(cache) }
 func (m *ChatModel) SetOutboxReadMaxID(id int)             { m.msgList.SetOutboxReadMaxID(id) }
+func (m *ChatModel) SetInboxReadMaxID(id int)              { m.msgList.SetInboxReadMaxID(id) }
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool { return m.msgList.ScrollToFirstUnread(readMaxID) }
 func (m *ChatModel) VisibleReadMaxID() int                  { return m.msgList.VisibleReadMaxID() }
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }

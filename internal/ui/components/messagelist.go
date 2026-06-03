@@ -22,6 +22,7 @@ var (
 	indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	quoteStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	sepStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	unreadSepStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 )
 
 var senderPalette = [8]struct{ light, dark color.Color }{
@@ -38,14 +39,15 @@ var senderPalette = [8]struct{ light, dark color.Color }{
 type itemKind int
 
 const (
-	itemMessage   itemKind = iota
-	itemSeparator          // date separator, 3 lines: blank + label + blank
+	itemMessage         itemKind = iota
+	itemDateSeparator            // date separator, 3 lines: blank + label + blank
+	itemUnreadSeparator          // "New Messages" divider
 )
 
 type listItem struct {
 	kind  itemKind
 	msg   store.Message // valid when kind == itemMessage
-	label string        // valid when kind == itemSeparator, e.g. "May 18"
+	label string        // valid when kind == itemDateSeparator, e.g. "May 18"
 }
 
 func sameDay(a, b time.Time) bool {
@@ -65,16 +67,21 @@ func formatSepLabel(t time.Time) string {
 	return t.Format("January 2, 2006")
 }
 
-func buildItems(msgs []store.Message) []listItem {
+func (ml *MessageList) buildItems(msgs []store.Message) []listItem {
 	if len(msgs) == 0 {
 		return nil
 	}
 	items := make([]listItem, 0, len(msgs)+4)
 	var prev time.Time
+	unreadInserted := false
 	for _, msg := range msgs {
 		if !sameDay(prev, msg.Date) {
-			items = append(items, listItem{kind: itemSeparator, label: formatSepLabel(msg.Date)})
+			items = append(items, listItem{kind: itemDateSeparator, label: formatSepLabel(msg.Date)})
 			prev = msg.Date
+		}
+		if !unreadInserted && ml.inboxReadMaxID > 0 && msg.ID > ml.inboxReadMaxID {
+			items = append(items, listItem{kind: itemUnreadSeparator})
+			unreadInserted = true
 		}
 		items = append(items, listItem{kind: itemMessage, msg: msg})
 	}
@@ -98,8 +105,10 @@ func buildReactStr(reactions []store.Reaction) string {
 	return " " + strings.Join(parts, sep) + " "
 }
 
-const indicatorChar = "┃"
-const quoteGlyph = "▌ "
+const (
+	indicatorChar = "┃"
+	quoteGlyph    = "▌ "
+)
 
 func replyName(orig *store.Message) string {
 	if orig.SenderName != "" {
@@ -183,6 +192,7 @@ type MessageList struct {
 	viewWidth         int
 	isGroup           bool
 	outboxReadMaxID   int
+	inboxReadMaxID    int
 	images            map[int64]image.Image
 	showIndicator     bool
 	hasDarkBackground bool
@@ -242,7 +252,7 @@ func (ml *MessageList) SetSize(width, height int) {
 }
 
 func (ml *MessageList) SetMessages(msgs []store.Message) {
-	ml.items = buildItems(msgs)
+	ml.items = ml.buildItems(msgs)
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 }
 
@@ -250,7 +260,7 @@ func (ml *MessageList) SetMessages(msgs []store.Message) {
 // Use for in-place data updates (e.g. reactions) where the message count is unchanged.
 func (ml *MessageList) SetMessagesKeepScroll(msgs []store.Message) {
 	vs, lo := ml.viewStart, ml.lineOffset
-	ml.items = buildItems(msgs)
+	ml.items = ml.buildItems(msgs)
 	if vs >= len(ml.items) {
 		vs = max(0, len(ml.items)-1)
 		lo = 0
@@ -284,7 +294,7 @@ func (ml *MessageList) RemoveMessage(id int) {
 		}
 	}
 
-	ml.items = buildItems(msgs)
+	ml.items = ml.buildItems(msgs)
 
 	if len(ml.items) == 0 {
 		ml.viewStart = 0
@@ -316,12 +326,13 @@ func (ml *MessageList) Count() int {
 	}
 	return n
 }
-func (ml *MessageList) ViewStart() int    { return ml.viewStart }
-func (ml *MessageList) LineOffset() int   { return ml.lineOffset }
-func (ml *MessageList) ViewHeight() int   { return ml.viewHeight }
-func (ml *MessageList) AtTop() bool       { return ml.viewStart == 0 && ml.lineOffset == 0 }
-func (ml *MessageList) SetIsGroup(v bool)         { ml.isGroup = v }
-func (ml *MessageList) SetOutboxReadMaxID(id int) { ml.outboxReadMaxID = id }
+func (ml *MessageList) ViewStart() int                { return ml.viewStart }
+func (ml *MessageList) LineOffset() int               { return ml.lineOffset }
+func (ml *MessageList) ViewHeight() int               { return ml.viewHeight }
+func (ml *MessageList) AtTop() bool                   { return ml.viewStart == 0 && ml.lineOffset == 0 }
+func (ml *MessageList) SetIsGroup(v bool)             { ml.isGroup = v }
+func (ml *MessageList) SetOutboxReadMaxID(id int)     { ml.outboxReadMaxID = id }
+func (ml *MessageList) SetInboxReadMaxID(id int)      { ml.inboxReadMaxID = id }
 func (ml *MessageList) SetDarkBackground(isDark bool) { ml.hasDarkBackground = isDark }
 
 func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
@@ -368,7 +379,7 @@ func (ml *MessageList) PrependMessages(older []store.Message) {
 		}
 	}
 	oldLen := len(ml.items)
-	ml.items = buildItems(append(older, current...))
+	ml.items = ml.buildItems(append(older, current...))
 	ml.viewStart += len(ml.items) - oldLen
 }
 
@@ -417,8 +428,9 @@ func (ml *MessageList) VisibleReadMaxID() int {
 }
 
 // ScrollToFirstUnread positions the viewport at the first message with ID > readMaxID.
-// If the remaining messages don't fill the viewport, older messages are pulled in to
-// fill the space (same as positionAtBottom), keeping the first unread visible.
+// If an itemUnreadSeparator immediately precedes that message it is included at the top
+// so the divider is always visible. If the remaining messages don't fill the viewport,
+// older messages are pulled in to fill the space (same as positionAtBottom).
 // Returns false if all messages are already read (nothing to jump to).
 func (ml *MessageList) ScrollToFirstUnread(readMaxID int) bool {
 	for i, item := range ml.items {
@@ -426,10 +438,14 @@ func (ml *MessageList) ScrollToFirstUnread(readMaxID int) bool {
 			continue
 		}
 		if item.msg.ID > readMaxID {
-			ml.viewStart = i
+			start := i
+			if i > 0 && ml.items[i-1].kind == itemUnreadSeparator {
+				start = i - 1
+			}
+			ml.viewStart = start
 			ml.lineOffset = 0
 			lines := 0
-			for j := i; j < len(ml.items); j++ {
+			for j := start; j < len(ml.items); j++ {
 				lines += ml.itemHeight(j)
 			}
 			if lines < ml.viewHeight {
@@ -559,7 +575,7 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 }
 
 func (ml *MessageList) itemHeight(i int) int {
-	if ml.items[i].kind == itemSeparator {
+	if ml.items[i].kind == itemDateSeparator || ml.items[i].kind == itemUnreadSeparator {
 		return 3
 	}
 	return ml.msgHeight(ml.items[i].msg)
@@ -926,10 +942,28 @@ func (ml *MessageList) renderSeparator(label string) []string {
 	return []string{"", line, ""}
 }
 
+func (ml *MessageList) renderUnreadSeparator() []string {
+	const label = "New Messages"
+	labelW := lipgloss.Width(label)
+	fill := (ml.viewWidth - labelW - 2) / 2
+	if fill < 0 {
+		fill = 0
+	}
+	rightFill := ml.viewWidth - fill - 1 - labelW - 1
+	if rightFill < 0 {
+		rightFill = 0
+	}
+	line := unreadSepStyle.Render(strings.Repeat("─", fill)) + " " + unreadSepStyle.Render(label) + " " + unreadSepStyle.Render(strings.Repeat("─", rightFill))
+	return []string{"", line, ""}
+}
+
 func (ml *MessageList) renderItem(i int, selected bool) []string {
 	item := ml.items[i]
-	if item.kind == itemSeparator {
+	if item.kind == itemDateSeparator {
 		return ml.renderSeparator(item.label)
+	}
+	if item.kind == itemUnreadSeparator {
+		return ml.renderUnreadSeparator()
 	}
 	return ml.renderMessage(item.msg, selected)
 }

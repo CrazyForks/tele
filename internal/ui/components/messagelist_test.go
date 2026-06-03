@@ -954,3 +954,62 @@ func TestMessageList_ReplyPreview_CJKSenderNameTruncated(t *testing.T) {
 	require.NotEmpty(t, previewLine, "reply preview name row not found")
 	assert.Contains(t, previewLine, "…")
 }
+
+func TestMessageList_NoUnreadSeparator_WhenReadMaxIDZero(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(6))
+	view := ml.View()
+	assert.NotContains(t, view, "New Messages")
+}
+
+func TestMessageList_UnreadSeparator_AppearsAfterSetInboxReadMaxID(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetInboxReadMaxID(3)
+	ml.SetMessages(makeMessages(6)) // IDs 1-6, same day
+	view := ml.View()
+	assert.Contains(t, view, "New Messages")
+}
+
+func TestMessageList_UnreadSeparator_NotCountedAsMessage(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetInboxReadMaxID(3)
+	ml.SetMessages(makeMessages(6))
+	assert.Equal(t, 6, ml.Count())
+}
+
+func TestMessageList_NoUnreadSeparator_WhenAllMessagesRead(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetInboxReadMaxID(100) // higher than all message IDs
+	ml.SetMessages(makeMessages(6)) // IDs 1-6
+	view := ml.View()
+	assert.NotContains(t, view, "New Messages")
+}
+
+func TestMessageList_UnreadSeparator_VisibleWhenManyUnread(t *testing.T) {
+	// When unread messages exceed the viewport height, ScrollToFirstUnread must
+	// include the separator at the top rather than hiding it above the boundary.
+	ml := components.NewMessageList(6, 40) // small viewport: fits ~2 messages
+	ml.SetInboxReadMaxID(2)
+	ml.SetMessages(makeMessages(10)) // IDs 1-10; sep before msg 3, msgs 3-10 are unread
+	ml.ScrollToFirstUnread(2)
+	view := ml.View()
+	assert.Contains(t, view, "New Messages")
+}
+
+func TestMessageList_UnreadSepAppearsAfterDateSep_WhenFirstUnreadStartsNewDay(t *testing.T) {
+	ml := components.NewMessageList(30, 40)
+	yesterday := time.Now().Add(-24 * time.Hour)
+	today := time.Now()
+	msgs := []store.Message{
+		{ID: 1, ChatID: 1, Text: "read msg", Date: yesterday},
+		{ID: 2, ChatID: 1, Text: "unread msg", Date: today},
+	}
+	ml.SetInboxReadMaxID(1)
+	ml.SetMessages(msgs)
+	view := ml.View()
+	require.Contains(t, view, "New Messages")
+	require.Contains(t, view, "Today")
+	todayIdx := strings.Index(view, "Today")
+	unreadIdx := strings.Index(view, "New Messages")
+	assert.Less(t, todayIdx, unreadIdx, "date separator should appear before unread separator")
+}

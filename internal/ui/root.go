@@ -335,6 +335,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.st != nil {
 			m.st.SetMessages(msg.ChatID, msg.Messages)
 			if msg.ChatID == m.currentChatID {
+				if chat, ok := m.st.GetChat(msg.ChatID); ok {
+					m.chat.SetInboxReadMaxID(chat.ReadInboxMaxID)
+				}
 				m.chat.SetMessages(m.st.Messages(msg.ChatID))
 				m.chat.SetLoading(false)
 				if chat, ok := m.st.GetChat(msg.ChatID); ok && chat.UnreadCount > 0 {
