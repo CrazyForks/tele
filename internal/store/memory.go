@@ -215,3 +215,5 @@ func (s *memoryStore) SetFolderFilters(filters []FolderFilter) {
 	copy(cp, filters)
 	s.folderFilters = cp
 }
+
+func (s *memoryStore) ClearForNewAccount(_ int64) {}

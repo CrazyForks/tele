@@ -96,7 +96,9 @@ func (a *App) Run() error {
 	// Start gotd in background goroutine
 	tgErr := make(chan error, 1)
 	go func() {
-		tgErr <- a.client.Connect(ctx, a.cfg, authFlow, readyCh)
+		tgErr <- a.client.Connect(ctx, a.cfg, authFlow, readyCh, func(userID int64) {
+			a.st.ClearForNewAccount(userID)
+		})
 	}()
 
 	// Build bubbletea model

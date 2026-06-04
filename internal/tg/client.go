@@ -45,7 +45,8 @@ func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace boo
 
 // Connect starts the gotd client. Call in a goroutine — blocks until ctx is cancelled.
 // Closes readyCh once auth is complete and the updates loop has started.
-func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFlow, readyCh chan<- struct{}) error {
+// onAuth is called with the authenticated user ID before readyCh is closed; may be nil.
+func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64)) error {
 	sess := NewFileSession(cfg.Telegram.SessionFile)
 
 	dispatcher := tg.NewUpdateDispatcher()
@@ -93,6 +94,10 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 			return err
 		}
 		c.log.Info("authenticated", zap.Int64("user_id", self.ID))
+
+		if onAuth != nil {
+			onAuth(self.ID)
+		}
 
 		c.mu.Lock()
 		c.api = tc.API()
