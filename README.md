@@ -23,8 +23,7 @@
   <a href="#roadmap">Roadmap</a>
 </p>
 
-<!-- TODO: record a demo GIF and save to assets/demo.gif -->
-<!-- ![tele demo](./assets/demo.gif) -->
+![tele demo](./assets/demo.gif)
 
 > **Status:** Active development. Already usable for daily messaging — private chats, groups, replies, reactions. Some Telegram features are still in progress.
 
