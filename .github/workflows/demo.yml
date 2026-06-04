@@ -37,6 +37,9 @@ jobs:
             history_limit: 50
           EOF
 
+      - name: Install ffmpeg
+        run: sudo apt-get install -y ffmpeg
+
       - uses: charmbracelet/vhs-action@v2
         with:
           path: demo.tape
