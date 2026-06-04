@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/sorokin-vladimir/tele/internal/app"
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -24,7 +26,8 @@ var (
 
 func main() {
 	cfgPath := flag.String("config", "~/.config/tele/config.yml", "path to config file")
-	verbose := flag.Bool("v", false, "debug logging")
+	verbose := flag.Bool("e", false, "debug logging")
+	trace := flag.Bool("trace", false, "log sensitive metadata (peer IDs, message lengths) — never use in shared environments")
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -66,19 +69,25 @@ func main() {
 		fmt.Fprintf(os.Stderr, "state dir: %v\n", err)
 		os.Exit(1)
 	}
-	logCfg := zap.NewProductionConfig()
-	logCfg.OutputPaths = []string{filepath.Join(sd, "tele.log")}
+	level := zap.NewAtomicLevelAt(zap.InfoLevel)
 	if *verbose {
-		logCfg.Level.SetLevel(zap.DebugLevel)
+		level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	}
-	log, err := logCfg.Build()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
-		os.Exit(1)
-	}
+	w := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   filepath.Join(sd, "tele.log"),
+		MaxSize:    10,
+		MaxBackups: 3,
+		Compress:   false,
+	})
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		w,
+		level,
+	)
+	log := zap.New(core)
 	defer log.Sync() //nolint:errcheck
 
-	a, err := app.New(cfg, log, *verbose)
+	a, err := app.New(cfg, log, *verbose, *trace)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		os.Exit(1)

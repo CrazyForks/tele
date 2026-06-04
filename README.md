@@ -127,6 +127,17 @@ Then prompts for:
 
 ---
 
+## Flags
+
+| Flag               | Description                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| `--config <path>`  | Path to config file (default `~/.config/tele/config.yml`)                                      |
+| `-e`               | Enable debug logging                                                                            |
+| `--trace`          | Log sensitive metadata (peer IDs, message lengths). Never use on shared or synced file systems |
+| `--version`        | Print version and exit                                                                          |
+
+---
+
 ## Keybindings
 
 | Key             | Action                            |

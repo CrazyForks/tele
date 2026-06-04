@@ -22,7 +22,7 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 		return nil, fmt.Errorf("not connected")
 	}
 
-	c.log.Debug("GetHistory", zap.Int64("peer_id", peer.ID), zap.Int("offsetID", offsetID), zap.Int("limit", limit))
+	c.traceLog.Debug("GetHistory", zap.Int64("peer_id", peer.ID), zap.Int("offsetID", offsetID), zap.Int("limit", limit))
 	inputPeer := peerToInput(peer)
 	var msgs []store.Message
 	err := WithRetry(ctx, func() error {
@@ -32,11 +32,11 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 			OffsetID: offsetID,
 		})
 		if err != nil {
-			c.log.Error("MessagesGetHistory failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
+			c.log.Error("MessagesGetHistory failed", zap.Error(err))
 			return err
 		}
 		msgs = parseHistory(result, peer.ID)
-		c.log.Debug("GetHistory done", zap.Int64("peer_id", peer.ID), zap.Int("count", len(msgs)))
+		c.traceLog.Debug("GetHistory done", zap.Int64("peer_id", peer.ID), zap.Int("count", len(msgs)))
 		return nil
 	})
 	return msgs, err
@@ -50,7 +50,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 		return 0, fmt.Errorf("not connected")
 	}
 
-	c.log.Debug("SendMessage", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
+	c.traceLog.Debug("SendMessage", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
 	inputPeer := peerToInput(peer)
 	var realID int
 	err := WithRetry(ctx, func() error {
@@ -62,7 +62,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 
 		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID))
 		if err != nil {
-			c.log.Error("MessagesSendMessage failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
+			c.log.Error("MessagesSendMessage failed", zap.Error(err))
 			return err
 		}
 		realID = extractSentMessageID(updates, randomID)
@@ -71,7 +71,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 			c.suppressIDs[realID] = struct{}{}
 			c.suppressMu.Unlock()
 		}
-		c.log.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID), zap.Int("real_id", realID))
+		c.traceLog.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID), zap.Int("real_id", realID))
 		return nil
 	})
 	return realID, err
@@ -119,7 +119,7 @@ func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []
 	if api == nil {
 		return fmt.Errorf("not connected")
 	}
-	c.log.Debug("DeleteMessages", zap.Int64("peer_id", peer.ID), zap.Int("count", len(ids)), zap.Bool("revoke", revoke))
+	c.traceLog.Debug("DeleteMessages", zap.Int64("peer_id", peer.ID), zap.Int("count", len(ids)), zap.Bool("revoke", revoke))
 	return WithRetry(ctx, func() error {
 		if peer.Type == store.PeerChannel || peer.Type == store.PeerSuperGroup {
 			// Channel/supergroup messages are always deleted for all members; revoke is N/A.
@@ -144,7 +144,7 @@ func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int
 	if api == nil {
 		return fmt.Errorf("not connected")
 	}
-	c.log.Debug("EditMessage", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID))
+	c.traceLog.Debug("EditMessage", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID))
 	return WithRetry(ctx, func() error {
 		_, err := api.MessagesEditMessage(ctx, &tg.MessagesEditMessageRequest{
 			Peer:    peerToInput(peer),
@@ -152,7 +152,7 @@ func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int
 			Message: text,
 		})
 		if err != nil {
-			c.log.Error("MessagesEditMessage failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
+			c.log.Error("MessagesEditMessage failed", zap.Error(err))
 		}
 		return err
 	})
@@ -165,7 +165,7 @@ func (c *GotdClient) SendReaction(ctx context.Context, peer store.Peer, msgID in
 	if api == nil {
 		return fmt.Errorf("not connected")
 	}
-	c.log.Debug("SendReaction", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.String("emoji", emoji))
+	c.traceLog.Debug("SendReaction", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.String("emoji", emoji))
 	return WithRetry(ctx, func() error {
 		_, err := api.MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
 			Peer:     peerToInput(peer),
@@ -173,7 +173,7 @@ func (c *GotdClient) SendReaction(ctx context.Context, peer store.Peer, msgID in
 			Reaction: buildReactionArg(emoji),
 		})
 		if err != nil {
-			c.log.Error("MessagesSendReaction failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
+			c.log.Error("MessagesSendReaction failed", zap.Error(err))
 		}
 		return err
 	})
@@ -446,7 +446,7 @@ func (c *GotdClient) SetTyping(ctx context.Context, peer store.Peer, action stor
 		Action: typingActionToTG(action),
 	})
 	if err != nil {
-		c.log.Debug("SetTyping failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
+		c.traceLog.Debug("SetTyping failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
 	}
 	return err
 }

@@ -22,16 +22,22 @@ type GotdClient struct {
 	events       chan store.Event
 	peers        map[int64]store.Peer
 	log          *zap.Logger
+	traceLog     *zap.Logger
 	suppressMu   sync.Mutex
 	suppressIDs  map[int]struct{}
 	stateStorage updates.StateStorage
 }
 
-func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage) *GotdClient {
+func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace bool) *GotdClient {
+	traceLog := zap.NewNop()
+	if trace {
+		traceLog = log
+	}
 	return &GotdClient{
 		events:       make(chan store.Event, 64),
 		peers:        make(map[int64]store.Peer),
 		log:          log,
+		traceLog:     traceLog,
 		suppressIDs:  make(map[int]struct{}),
 		stateStorage: stateStorage,
 	}
@@ -86,7 +92,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 			c.log.Error("Self() failed", zap.Error(err))
 			return err
 		}
-		c.log.Info("authenticated", zap.Int64("user_id", self.ID), zap.String("username", self.Username))
+		c.log.Info("authenticated", zap.Int64("user_id", self.ID))
 
 		c.mu.Lock()
 		c.api = tc.API()

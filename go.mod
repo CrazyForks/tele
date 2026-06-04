@@ -16,6 +16,8 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.28.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+	modernc.org/sqlite v1.51.0
 )
 
 require (
@@ -89,6 +91,5 @@ require (
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.51.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )

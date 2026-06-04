@@ -66,7 +66,7 @@ type App struct {
 	currentChatID int64
 }
 
-func New(cfg *config.Config, log *zap.Logger, verbose bool) (*App, error) {
+func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, error) {
 	statePath := filepath.Join(filepath.Dir(cfg.Telegram.SessionFile), "state.db")
 	sqliteStore, err := store.NewSQLite(statePath, log)
 	if err != nil {
@@ -77,7 +77,7 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool) (*App, error) {
 		cfg:      cfg,
 		log:      log,
 		st:       sqliteStore,
-		client:   internaltg.NewGotdClient(log, stateStorage),
+		client:   internaltg.NewGotdClient(log, stateStorage, trace),
 		verbose:  verbose,
 		notifier: beeepNotifier{},
 	}, nil
