@@ -130,7 +130,6 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		}
 		return m, nil
 	}
-	return m, nil
 }
 
 func (m *SearchModel) filter() {
