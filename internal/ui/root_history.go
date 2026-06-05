@@ -119,7 +119,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			img = m.imageCache[msg.PhotoID]
 		}
 		if img != nil {
-			go openInViewer(img)
+			go openInViewer(img, m.tmpDir)
 		}
 		return m, nil
 	}

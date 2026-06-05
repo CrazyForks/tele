@@ -820,3 +820,9 @@ func TestRoot_Esc_NormalMode_ClosesChatReturnsToChatList(t *testing.T) {
 
 	assert.Equal(t, ui.FocusChatList, m.CurrentFocus())
 }
+
+func TestRoot_SetTmpDir(t *testing.T) {
+	m := ui.NewRootModel(nil, nil, 50, false)
+	m.SetTmpDir("/tmp/tele-test")
+	assert.Equal(t, "/tmp/tele-test", m.TmpDir())
+}

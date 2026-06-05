@@ -104,6 +104,7 @@ type RootModel struct {
 	activeFilter       *store.FolderFilter
 	logo               components.LogoLoader
 	typingSerial       int
+	tmpDir             string
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -168,6 +169,14 @@ func (m *RootModel) SetLoginModel(lm screens.LoginModel) {
 // SetOnChatOpen registers a callback invoked whenever the user opens a chat.
 func (m *RootModel) SetOnChatOpen(fn func(int64)) {
 	m.onChatOpen = fn
+}
+
+func (m *RootModel) SetTmpDir(dir string) {
+	m.tmpDir = dir
+}
+
+func (m RootModel) TmpDir() string {
+	return m.tmpDir
 }
 
 func (m RootModel) filteredChats() []store.Chat {
@@ -409,7 +418,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				img = m.imageCache[photoID]
 			}
 			if img != nil {
-				go openInViewer(img)
+				go openInViewer(img, m.tmpDir)
 			}
 		}
 		return m, nil
@@ -457,12 +466,13 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func openInViewer(img image.Image) {
-	f, err := os.CreateTemp("", "tele-photo-*.jpg")
+func openInViewer(img image.Image, tmpDir string) {
+	f, err := os.CreateTemp(tmpDir, "tele-photo-*.jpg")
 	if err != nil {
 		return
 	}
 	name := f.Name()
+	_ = os.Chmod(name, 0600)
 	if err := jpeg.Encode(f, img, nil); err != nil {
 		_ = f.Close()
 		_ = os.Remove(name)

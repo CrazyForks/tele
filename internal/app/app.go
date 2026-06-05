@@ -90,6 +90,13 @@ func (a *App) Run() error {
 		defer func() { _ = sc.Close() }()
 	}
 
+	tmpDir, err := os.MkdirTemp("", "tele-*")
+	if err != nil {
+		a.log.Warn("failed to create temp dir for viewer photos", zap.Error(err))
+		tmpDir = ""
+	}
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
+
 	authFlow := internaltg.NewAuthFlow()
 	readyCh := make(chan struct{})
 
@@ -108,6 +115,7 @@ func (a *App) Run() error {
 	root.SetOnChatOpen(func(id int64) {
 		atomic.StoreInt64(&a.currentChatID, id)
 	})
+	root.SetTmpDir(tmpDir)
 
 	prog := tea.NewProgram(root)
 
@@ -181,7 +189,7 @@ func (a *App) Run() error {
 		}
 	}()
 
-	_, err := prog.Run()
+	_, err = prog.Run()
 	cancel()
 
 	// Wait for tg client goroutine
