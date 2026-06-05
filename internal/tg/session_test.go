@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
 func TestFileSession_StoreLoad(t *testing.T) {
@@ -28,7 +28,7 @@ func TestFileSession_StoreLoad(t *testing.T) {
 
 func TestFileSession_LoadMissing(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "tele_nonexistent_test_session.json")
-	os.Remove(path)
+	_ = os.Remove(path)
 
 	s := internaltg.NewFileSession(path)
 	data, err := s.LoadSession(context.Background())

@@ -136,9 +136,9 @@ func (m *ChatListModel) SetCursorByID(id int64) {
 		}
 	}
 }
-func (m *ChatListModel) Context() keys.Context       { return keys.ContextChatList }
-func (m *ChatListModel) Focused() bool               { return m.focused }
-func (m *ChatListModel) SetFocused(f bool)           { m.focused = f }
+func (m *ChatListModel) Context() keys.Context { return keys.ContextChatList }
+func (m *ChatListModel) Focused() bool         { return m.focused }
+func (m *ChatListModel) SetFocused(f bool)     { m.focused = f }
 
 func (m *ChatListModel) SetSize(width, height int) {
 	m.width = width

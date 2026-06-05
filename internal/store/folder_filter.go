@@ -21,22 +21,11 @@ func (f FolderFilter) Matches(chat Chat) bool {
 	}
 
 	// Must match at least one category flag
-	categoryMatched := false
-	if f.Contacts && chat.IsContact && !chat.IsBot {
-		categoryMatched = true
-	}
-	if f.NonContacts && chat.Peer.IsUser() && !chat.IsContact && !chat.IsBot {
-		categoryMatched = true
-	}
-	if f.Groups && chat.Peer.IsGroup() {
-		categoryMatched = true
-	}
-	if f.Broadcasts && chat.Peer.IsChannel() {
-		categoryMatched = true
-	}
-	if f.Bots && chat.IsBot {
-		categoryMatched = true
-	}
+	categoryMatched := (f.Contacts && chat.IsContact && !chat.IsBot) ||
+		(f.NonContacts && chat.Peer.IsUser() && !chat.IsContact && !chat.IsBot) ||
+		(f.Groups && chat.Peer.IsGroup()) ||
+		(f.Broadcasts && chat.Peer.IsChannel()) ||
+		(f.Bots && chat.IsBot)
 	if !categoryMatched {
 		return false
 	}

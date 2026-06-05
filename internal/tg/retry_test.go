@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
 func TestWithRetry_SuccessOnFirstCall(t *testing.T) {

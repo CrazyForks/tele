@@ -4,9 +4,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/stretchr/testify/assert"
 )
 
 // stripANSI removes ANSI escape sequences so we can assert plain text content.

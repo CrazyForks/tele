@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"go.uber.org/zap"
+	_ "modernc.org/sqlite"
 )
 
 const schema = `
@@ -75,11 +75,11 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		return nil, err
 	}
 	if _, err := db.Exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	if _, err := db.Exec(schema); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	s := &SQLiteStore{
@@ -89,7 +89,7 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		log:      log,
 	}
 	if err := s.loadChats(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return s, nil
@@ -108,7 +108,7 @@ func (s *SQLiteStore) loadChats() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var c Chat
 		var lastMsgJSON []byte
@@ -397,7 +397,7 @@ func (s *SQLiteStore) ClearForNewAccount(ownerID int64) {
 		return
 	}
 	var storedID int64
-	fmt.Sscan(raw, &storedID)
+	_, _ = fmt.Sscan(raw, &storedID)
 	if storedID == ownerID {
 		return
 	}

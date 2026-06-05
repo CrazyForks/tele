@@ -3,8 +3,8 @@ package keys_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestVimState_BasicMotions(t *testing.T) {

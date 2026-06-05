@@ -16,7 +16,7 @@ func newTestSQLite(t *testing.T) *store.SQLiteStore {
 	t.Helper()
 	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "state.db"), zap.NewNop())
 	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -32,11 +32,11 @@ func TestSQLite_SetChat_PersistsSurvivesReopen(t *testing.T) {
 		Title: "Hello",
 		Peer:  store.Peer{ID: 42, Type: store.PeerUser, AccessHash: 999},
 	})
-	s.Close()
+	_ = s.Close()
 
 	s2, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 
 	chat, ok := s2.GetChat(42)
 	assert.True(t, ok)
@@ -63,11 +63,11 @@ func TestSQLite_LastMessage_PersistsSurvivesReopen(t *testing.T) {
 			Date:   now,
 		},
 	})
-	s.Close()
+	_ = s.Close()
 
 	s2, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 
 	chat, ok := s2.GetChat(1)
 	assert.True(t, ok)
@@ -90,11 +90,11 @@ func TestSQLite_FolderFilters_PersistsSurvivesReopen(t *testing.T) {
 	s, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
 	s.SetFolderFilters(filters)
-	s.Close()
+	_ = s.Close()
 
 	s2, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 
 	got := s2.FolderFilters()
 	require.Len(t, got, 2)

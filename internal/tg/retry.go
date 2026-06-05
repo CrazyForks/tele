@@ -13,7 +13,7 @@ const maxRetries = 4
 // WithRetry calls fn up to maxRetries times with exponential backoff.
 // On FLOOD_WAIT errors it respects the wait duration Telegram requires.
 func WithRetry(ctx context.Context, fn func() error) error {
-	var delay time.Duration = 500 * time.Millisecond
+	delay := 500 * time.Millisecond
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err

@@ -81,7 +81,6 @@ func (m *ChatModel) TickSpinner() { m.spinner.Tick() }
 // TickLogo advances the chat-pane idle logo. Called by root on LogoTickMsg.
 func (m *ChatModel) TickLogo() { m.logo.Tick() }
 
-
 func (m *ChatModel) SetChat(chat *store.Chat) {
 	m.typingBase = ""
 	m.lastTypingAt = time.Time{}
@@ -94,26 +93,30 @@ func (m *ChatModel) SetChat(chat *store.Chat) {
 		m.msgList.SetOutboxReadMaxID(0)
 	}
 }
-func (m *ChatModel) SetMessages(msgs []store.Message)                  { m.msgList.SetMessages(msgs) }
-func (m *ChatModel) SetMessagesKeepScroll(msgs []store.Message)        { m.msgList.SetMessagesKeepScroll(msgs) }
-func (m *ChatModel) RemoveMessage(id int)                              { m.msgList.RemoveMessage(id) }
-func (m *ChatModel) PrependMessages(older []store.Message)             { m.msgList.PrependMessages(older) }
-func (m *ChatModel) SetImage(photoID int64, img image.Image)           { m.msgList.SetImage(photoID, img) }
-func (m *ChatModel) SetKnownImages(cache map[int64]image.Image)        { m.msgList.SetKnownImages(cache) }
-func (m *ChatModel) SetOutboxReadMaxID(id int)             { m.msgList.SetOutboxReadMaxID(id) }
-func (m *ChatModel) SetInboxReadMaxID(id int)              { m.msgList.SetInboxReadMaxID(id) }
-func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool { return m.msgList.ScrollToFirstUnread(readMaxID) }
-func (m *ChatModel) VisibleReadMaxID() int                  { return m.msgList.VisibleReadMaxID() }
+func (m *ChatModel) SetMessages(msgs []store.Message) { m.msgList.SetMessages(msgs) }
+func (m *ChatModel) SetMessagesKeepScroll(msgs []store.Message) {
+	m.msgList.SetMessagesKeepScroll(msgs)
+}
+func (m *ChatModel) RemoveMessage(id int)                       { m.msgList.RemoveMessage(id) }
+func (m *ChatModel) PrependMessages(older []store.Message)      { m.msgList.PrependMessages(older) }
+func (m *ChatModel) SetImage(photoID int64, img image.Image)    { m.msgList.SetImage(photoID, img) }
+func (m *ChatModel) SetKnownImages(cache map[int64]image.Image) { m.msgList.SetKnownImages(cache) }
+func (m *ChatModel) SetOutboxReadMaxID(id int)                  { m.msgList.SetOutboxReadMaxID(id) }
+func (m *ChatModel) SetInboxReadMaxID(id int)                   { m.msgList.SetInboxReadMaxID(id) }
+func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool {
+	return m.msgList.ScrollToFirstUnread(readMaxID)
+}
+func (m *ChatModel) VisibleReadMaxID() int            { return m.msgList.VisibleReadMaxID() }
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }
 func (m *ChatModel) ComposerValue() string            { return m.composer.Value() }
 func (m *ChatModel) ComposerHeight() int              { return m.composer.VisualHeight() }
 func (m *ChatModel) SelectedMessageID() int           { return m.msgList.SelectedMessageID() }
-func (m *ChatModel) SelectedMessageIsOut() bool        { return m.msgList.SelectedMessageIsOut() }
-func (m *ChatModel) SelectedMessageReplyToMsgID() int  { return m.msgList.SelectedMessageReplyToMsgID() }
-func (m *ChatModel) SelectedMessagePhotoID() int64     { return m.msgList.SelectedMessagePhotoID() }
-func (m *ChatModel) ScrollToMessage(id int) bool       { return m.msgList.ScrollToMessage(id) }
-func (m *ChatModel) ReplyToMsgID() int { return m.replyToMsgID }
-func (m *ChatModel) EditMsgID() int    { return m.editMsgID }
+func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.SelectedMessageIsOut() }
+func (m *ChatModel) SelectedMessageReplyToMsgID() int { return m.msgList.SelectedMessageReplyToMsgID() }
+func (m *ChatModel) SelectedMessagePhotoID() int64    { return m.msgList.SelectedMessagePhotoID() }
+func (m *ChatModel) ScrollToMessage(id int) bool      { return m.msgList.ScrollToMessage(id) }
+func (m *ChatModel) ReplyToMsgID() int                { return m.replyToMsgID }
+func (m *ChatModel) EditMsgID() int                   { return m.editMsgID }
 
 // SetTypingLabel sets the active typing label and resets the animation frame.
 func (m *ChatModel) SetTypingLabel(base string) {
@@ -180,9 +183,9 @@ func (m *ChatModel) FocusComposer() tea.Cmd {
 	return m.composer.Focus()
 }
 
-func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
-func (m *ChatModel) Focused() bool                    { return m.focused }
-func (m *ChatModel) SetFocused(f bool)                { m.focused = f }
+func (m *ChatModel) Context() keys.Context { return keys.ContextChat }
+func (m *ChatModel) Focused() bool         { return m.focused }
+func (m *ChatModel) SetFocused(f bool)     { m.focused = f }
 func (m *ChatModel) SetComposerValue(v string) {
 	m.composer.SetValue(v)
 	m.syncMsgListHeight()

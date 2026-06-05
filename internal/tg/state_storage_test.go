@@ -18,7 +18,7 @@ func newTestStateStorage(t *testing.T) updates.StateStorage {
 	t.Helper()
 	s, err := store.NewSQLite(filepath.Join(t.TempDir(), "state.db"), zap.NewNop())
 	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return internaltg.NewSQLiteStateStorage(s.DB())
 }
 

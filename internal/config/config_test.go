@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/sorokin-vladimir/tele/internal/config"
 )
 
 func TestLoad_ValidYAML(t *testing.T) {

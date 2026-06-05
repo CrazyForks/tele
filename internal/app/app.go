@@ -87,7 +87,7 @@ func (a *App) Run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if sc, ok := a.st.(interface{ Close() error }); ok {
-		defer sc.Close()
+		defer func() { _ = sc.Close() }()
 	}
 
 	authFlow := internaltg.NewAuthFlow()
@@ -185,11 +185,9 @@ func (a *App) Run() error {
 	cancel()
 
 	// Wait for tg client goroutine
-	select {
-	case tgErr := <-tgErr:
-		if tgErr != nil && err == nil {
-			return fmt.Errorf("telegram: %w", tgErr)
-		}
+	tgClientErr := <-tgErr
+	if tgClientErr != nil && err == nil {
+		return fmt.Errorf("telegram: %w", tgClientErr)
 	}
 	return err
 }

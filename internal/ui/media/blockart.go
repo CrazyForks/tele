@@ -47,14 +47,14 @@ func RenderBlockArt(img image.Image, cols int) []string {
 		for x := sb.Min.X; x < sb.Min.X+width; x++ {
 			topC, _ := colorful.MakeColor(scaled.At(x, y0))
 			botC, _ := colorful.MakeColor(scaled.At(x, y1))
-			line.WriteString(fmt.Sprintf("\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm▄",
+			fmt.Fprintf(&line, "\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm▄",
 				clamp(int(topC.R*255), 0, 255),
 				clamp(int(topC.G*255), 0, 255),
 				clamp(int(topC.B*255), 0, 255),
 				clamp(int(botC.R*255), 0, 255),
 				clamp(int(botC.G*255), 0, 255),
 				clamp(int(botC.B*255), 0, 255),
-			))
+			)
 		}
 		line.WriteString("\x1b[0m")
 		lines = append(lines, line.String())

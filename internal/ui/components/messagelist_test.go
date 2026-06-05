@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func makeMessages(n int) []store.Message {
@@ -181,7 +181,7 @@ func TestMessageList_ScrollToFirstUnread_PositionsAtFirstUnread(t *testing.T) {
 	// When the first unread and all following messages fit in the viewport,
 	// positionAtBottom fills upward — first unread must still be visible.
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages(makeMessages(5)) // IDs 1..5
+	ml.SetMessages(makeMessages(5))    // IDs 1..5
 	found := ml.ScrollToFirstUnread(3) // msgs with ID>3 are unread: msg4, msg5
 	assert.True(t, found)
 	plain := stripANSI(ml.View())
@@ -193,7 +193,7 @@ func TestMessageList_ScrollToFirstUnread_ManyUnread_AtTop(t *testing.T) {
 	// When many unread messages overflow the viewport, the first unread is at
 	// the top (viewStart points exactly to the first unread message index).
 	ml := components.NewMessageList(6, 80) // viewport = 6 lines = 2 messages
-	ml.SetMessages(makeMessages(10))        // IDs 1..10
+	ml.SetMessages(makeMessages(10))       // IDs 1..10
 	ml.ScrollToFirstUnread(3)              // msgs 4..10 unread, 7 msgs × h=3 = 21 > 6
 	assert.Equal(t, 4, ml.ViewStart())     // index 4 = msg4
 	assert.Equal(t, 0, ml.LineOffset())
@@ -202,14 +202,14 @@ func TestMessageList_ScrollToFirstUnread_ManyUnread_AtTop(t *testing.T) {
 
 func TestMessageList_ScrollToFirstUnread_AllReadReturnsFalse(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages(makeMessages(5)) // IDs 1..5
+	ml.SetMessages(makeMessages(5))     // IDs 1..5
 	found := ml.ScrollToFirstUnread(10) // all read
 	assert.False(t, found)
 }
 
 func TestMessageList_ScrollToFirstUnread_AllUnread(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages(makeMessages(5)) // IDs 1..5
+	ml.SetMessages(makeMessages(5))    // IDs 1..5
 	found := ml.ScrollToFirstUnread(0) // none read
 	assert.True(t, found)
 	assert.Equal(t, 0, ml.ViewStart())
@@ -741,11 +741,11 @@ func TestMessageList_ReplyBubble_NilOrig_ShowsPlaceholder(t *testing.T) {
 func TestMessageList_View_PhotoTextHasBlankLineSeparator(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	msg := store.Message{
-		ID:    1,
+		ID:     1,
 		ChatID: 1,
-		Photo: &store.PhotoRef{ID: 77},
-		Text:  "caption text",
-		Date:  time.Now(),
+		Photo:  &store.PhotoRef{ID: 77},
+		Text:   "caption text",
+		Date:   time.Now(),
 	}
 	ml.SetMessages([]store.Message{msg})
 	view := stripANSI(ml.View())
@@ -979,7 +979,7 @@ func TestMessageList_UnreadSeparator_NotCountedAsMessage(t *testing.T) {
 
 func TestMessageList_NoUnreadSeparator_WhenAllMessagesRead(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
-	ml.SetInboxReadMaxID(100) // higher than all message IDs
+	ml.SetInboxReadMaxID(100)       // higher than all message IDs
 	ml.SetMessages(makeMessages(6)) // IDs 1-6
 	view := ml.View()
 	assert.NotContains(t, view, "New Messages")

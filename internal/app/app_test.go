@@ -3,9 +3,9 @@ package app
 import (
 	"testing"
 
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 type mockNotifier struct {
@@ -59,7 +59,7 @@ func TestMaybeNotify_TruncatesLongText(t *testing.T) {
 	require.Len(t, n.calls, 1)
 	body := n.calls[0].body
 	runes := []rune(body)
-	assert.Equal(t, 101, len(runes))           // 100 chars + U+2026 ellipsis
+	assert.Equal(t, 101, len(runes))          // 100 chars + U+2026 ellipsis
 	assert.Equal(t, "…", string(runes[100:])) // last rune is ellipsis
 }
 

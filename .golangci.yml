@@ -5,8 +5,11 @@ run:
 
 linters:
   enable:
-    - gofmt
     - govet
     - errcheck
     - staticcheck
     - misspell
+
+formatters:
+  enable:
+    - gofmt

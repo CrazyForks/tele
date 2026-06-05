@@ -3,8 +3,8 @@ package ui
 import (
 	"strings"
 
-	xansi "github.com/charmbracelet/x/ansi"
 	"charm.land/lipgloss/v2"
+	xansi "github.com/charmbracelet/x/ansi"
 )
 
 // stampOverlay writes overlayLines into baseLines starting at (top, left).

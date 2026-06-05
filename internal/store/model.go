@@ -59,7 +59,7 @@ type Chat struct {
 }
 
 type FolderFilter struct {
-	ID    int    // Telegram filter ID; 0 = "All Chats" sentinel
+	ID    int // Telegram filter ID; 0 = "All Chats" sentinel
 	Title string
 	Emoji string
 

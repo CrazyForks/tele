@@ -229,16 +229,6 @@ func groupTitle(chat *tg.Chat) string {
 	return fmt.Sprintf("Chat %d", chat.ID)
 }
 
-func chatTitleFromClass(c tg.ChatClass) string {
-	switch v := c.(type) {
-	case *tg.Channel:
-		return channelTitle(v)
-	case *tg.Chat:
-		return groupTitle(v)
-	}
-	return ""
-}
-
 func buildChatNameMap(chats []tg.ChatClass) map[int64]string {
 	m := make(map[int64]string, len(chats))
 	for _, c := range chats {

@@ -3,8 +3,8 @@ package layout_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSplitHorizontal_Normal(t *testing.T) {

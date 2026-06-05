@@ -5,9 +5,9 @@ import (
 	"image"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
+	"github.com/stretchr/testify/assert"
 )
 
 type mockClient struct {

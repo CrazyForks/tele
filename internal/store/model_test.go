@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestPeer_TypeHelpers(t *testing.T) {

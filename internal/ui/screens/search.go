@@ -72,8 +72,8 @@ func arrowSym(key string) string {
 	}
 }
 
-func (m *SearchModel) Cursor() int          { return m.cursor }
-func (m *SearchModel) Query() string        { return m.query }
+func (m *SearchModel) Cursor() int           { return m.cursor }
+func (m *SearchModel) Query() string         { return m.query }
 func (m *SearchModel) Results() []store.Chat { return m.results }
 
 func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {

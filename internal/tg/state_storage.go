@@ -93,7 +93,7 @@ func (s *sqliteStateStorage) ForEachChannels(ctx context.Context, userID int64, 
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var channelID int64
 		var pts int

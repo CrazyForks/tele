@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLogin_AuthRequest_UpdatesPrompt(t *testing.T) {

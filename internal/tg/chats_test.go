@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestConvertUser_ToChat(t *testing.T) {

@@ -464,11 +464,11 @@ func openInViewer(img image.Image) {
 	}
 	name := f.Name()
 	if err := jpeg.Encode(f, img, nil); err != nil {
-		f.Close()
-		os.Remove(name)
+		_ = f.Close()
+		_ = os.Remove(name)
 		return
 	}
-	f.Close()
+	_ = f.Close()
 
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
