@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,10 +14,19 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
+func newTestDispatcher(t *testing.T, suppress func(int) bool) (*tg.UpdateDispatcher, chan store.Event, chan store.Event) {
+	t.Helper()
+	mustDeliver := make(chan store.Event, 4)
+	droppable := make(chan store.Event, 4)
+	d := tg.NewUpdateDispatcher()
+	setupDispatcher(&d, mustDeliver, droppable, zap.NewNop(), suppress)
+	return &d, mustDeliver, droppable
+}
+
+func noSuppress(int) bool { return false }
+
 func TestSetupDispatcher_NewMessage(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
 
 	ctx := context.Background()
 	rawMsg := &tg.Message{
@@ -26,7 +37,6 @@ func TestSetupDispatcher_NewMessage(t *testing.T) {
 	}
 	update := &tg.UpdateNewMessage{Message: rawMsg, Pts: 1, PtsCount: 1}
 
-	// Handle requires an UpdatesClass; wrap the update in tg.Updates.
 	err := dispatcher.Handle(ctx, &tg.Updates{
 		Updates: []tg.UpdateClass{update},
 		Users:   nil,
@@ -35,7 +45,7 @@ func TestSetupDispatcher_NewMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case evt := <-events:
+	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 		assert.Equal(t, "test update", evt.Message.Text)
 	case <-time.After(time.Second):
@@ -44,12 +54,9 @@ func TestSetupDispatcher_NewMessage(t *testing.T) {
 }
 
 func TestSetupDispatcher_ServiceMessageIgnored(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
 
 	ctx := context.Background()
-	// UpdateNewMessage wrapping a service message should not emit an event.
 	svcMsg := &tg.MessageService{ID: 1}
 	update := &tg.UpdateNewMessage{Message: svcMsg, Pts: 1, PtsCount: 1}
 
@@ -59,7 +66,7 @@ func TestSetupDispatcher_ServiceMessageIgnored(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case <-events:
+	case <-mustDeliver:
 		t.Fatal("unexpected event for service message")
 	case <-time.After(100 * time.Millisecond):
 		// expected: no event
@@ -67,10 +74,8 @@ func TestSetupDispatcher_ServiceMessageIgnored(t *testing.T) {
 }
 
 func TestSetupDispatcher_SuppressesID(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
 	suppressed := map[int]bool{7: true}
-	setupDispatcher(&dispatcher, events, func(id int) bool {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, func(id int) bool {
 		return suppressed[id]
 	})
 
@@ -87,7 +92,7 @@ func TestSetupDispatcher_SuppressesID(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case <-events:
+	case <-mustDeliver:
 		t.Fatal("suppressed message must not reach events channel")
 	case <-time.After(100 * time.Millisecond):
 		// expected: no event
@@ -95,10 +100,8 @@ func TestSetupDispatcher_SuppressesID(t *testing.T) {
 }
 
 func TestSetupDispatcher_SuppressesID_ConsumeOnce(t *testing.T) {
-	events := make(chan store.Event, 2)
-	dispatcher := tg.NewUpdateDispatcher()
 	suppressed := map[int]bool{7: true}
-	setupDispatcher(&dispatcher, events, func(id int) bool {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, func(id int) bool {
 		if suppressed[id] {
 			delete(suppressed, id)
 			return true
@@ -122,7 +125,7 @@ func TestSetupDispatcher_SuppressesID_ConsumeOnce(t *testing.T) {
 	// First delivery: suppressed
 	handle()
 	select {
-	case <-events:
+	case <-mustDeliver:
 		t.Fatal("first delivery must be suppressed")
 	case <-time.After(50 * time.Millisecond):
 	}
@@ -130,7 +133,7 @@ func TestSetupDispatcher_SuppressesID_ConsumeOnce(t *testing.T) {
 	// Second delivery of the same ID: must pass through
 	handle()
 	select {
-	case evt := <-events:
+	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 	case <-time.After(time.Second):
 		t.Fatal("second delivery must not be suppressed")
@@ -138,9 +141,7 @@ func TestSetupDispatcher_SuppressesID_ConsumeOnce(t *testing.T) {
 }
 
 func TestSetupDispatcher_UserStatusOnline_EmitsPresenceEvent(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, _, droppable := newTestDispatcher(t, noSuppress)
 
 	ctx := context.Background()
 	upd := &tg.UpdateUserStatus{
@@ -153,7 +154,7 @@ func TestSetupDispatcher_UserStatusOnline_EmitsPresenceEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case evt := <-events:
+	case evt := <-droppable:
 		assert.Equal(t, store.EventUserPresence, evt.Kind)
 		assert.Equal(t, int64(42), evt.ChatID)
 		assert.True(t, evt.Online)
@@ -163,9 +164,7 @@ func TestSetupDispatcher_UserStatusOnline_EmitsPresenceEvent(t *testing.T) {
 }
 
 func TestSetupDispatcher_UserStatusOffline_EmitsPresenceEvent(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, _, droppable := newTestDispatcher(t, noSuppress)
 
 	ctx := context.Background()
 	upd := &tg.UpdateUserStatus{
@@ -178,7 +177,7 @@ func TestSetupDispatcher_UserStatusOffline_EmitsPresenceEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case evt := <-events:
+	case evt := <-droppable:
 		assert.Equal(t, store.EventUserPresence, evt.Kind)
 		assert.Equal(t, int64(42), evt.ChatID)
 		assert.False(t, evt.Online)
@@ -188,9 +187,7 @@ func TestSetupDispatcher_UserStatusOffline_EmitsPresenceEvent(t *testing.T) {
 }
 
 func TestSetupDispatcher_PrivateMessage_NilFromID_SenderNameIsPeerName(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
 
 	ctx := context.Background()
 	rawMsg := &tg.Message{
@@ -209,7 +206,7 @@ func TestSetupDispatcher_PrivateMessage_NilFromID_SenderNameIsPeerName(t *testin
 	require.NoError(t, err)
 
 	select {
-	case evt := <-events:
+	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 		assert.Equal(t, "Alice", evt.Message.SenderName)
 	case <-time.After(time.Second):
@@ -218,9 +215,7 @@ func TestSetupDispatcher_PrivateMessage_NilFromID_SenderNameIsPeerName(t *testin
 }
 
 func TestSetupDispatcher_NewChannelMessage_SenderNameIsChannelTitle(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
 
 	ctx := context.Background()
 	rawMsg := &tg.Message{
@@ -239,7 +234,7 @@ func TestSetupDispatcher_NewChannelMessage_SenderNameIsChannelTitle(t *testing.T
 	require.NoError(t, err)
 
 	select {
-	case evt := <-events:
+	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 		assert.Equal(t, "Tech News", evt.Message.SenderName)
 	case <-time.After(time.Second):
@@ -264,9 +259,7 @@ func TestConvertTypingAction_Unknown(t *testing.T) {
 }
 
 func TestSetupDispatcher_UserTyping_EmitsTypingEvent(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, _, droppable := newTestDispatcher(t, noSuppress)
 
 	upd := &tg.UpdateUserTyping{
 		UserID: 55,
@@ -276,7 +269,7 @@ func TestSetupDispatcher_UserTyping_EmitsTypingEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case evt := <-events:
+	case evt := <-droppable:
 		assert.Equal(t, store.EventTyping, evt.Kind)
 		assert.Equal(t, int64(55), evt.ChatID)
 		assert.Equal(t, store.TypingActionTyping, evt.TypingAction)
@@ -286,9 +279,7 @@ func TestSetupDispatcher_UserTyping_EmitsTypingEvent(t *testing.T) {
 }
 
 func TestSetupDispatcher_ChatUserTyping_EmitsTypingEvent(t *testing.T) {
-	events := make(chan store.Event, 1)
-	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+	dispatcher, _, droppable := newTestDispatcher(t, noSuppress)
 
 	upd := &tg.UpdateChatUserTyping{
 		ChatID: 100,
@@ -298,7 +289,7 @@ func TestSetupDispatcher_ChatUserTyping_EmitsTypingEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case evt := <-events:
+	case evt := <-droppable:
 		assert.Equal(t, store.EventTyping, evt.Kind)
 		assert.Equal(t, int64(100), evt.ChatID)
 		assert.Equal(t, store.TypingActionUploadPhoto, evt.TypingAction)

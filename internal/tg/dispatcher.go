@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
+
+	"go.uber.org/zap"
 
 	"github.com/gotd/td/tg"
 
@@ -11,7 +14,20 @@ import (
 )
 
 // shouldSuppress is called for every incoming message; it must be non-blocking.
-func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event, shouldSuppress func(id int) bool) {
+func setupDispatcher(
+	dispatcher *tg.UpdateDispatcher,
+	mustDeliver chan<- store.Event,
+	droppable chan<- store.Event,
+	log *zap.Logger,
+	shouldSuppress func(id int) bool,
+) {
+	var drops atomic.Int64
+
+	logDrop := func(kind string) {
+		n := drops.Add(1)
+		log.Warn("droppable event dropped", zap.String("kind", kind), zap.Int64("total_drops", n))
+	}
+
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNewMessage) error {
 		peerID := extractPeerID(upd.Message)
 		msg, ok := convertMessage(upd.Message, peerID)
@@ -43,8 +59,8 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 			return nil
 		}
 		select {
-		case events <- store.Event{Kind: store.EventNewMessage, Message: msg}:
-		default: // drop if buffer full
+		case mustDeliver <- store.Event{Kind: store.EventNewMessage, Message: msg}:
+		case <-ctx.Done():
 		}
 		return nil
 	})
@@ -55,16 +71,16 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 			return nil
 		}
 		select {
-		case events <- store.Event{Kind: store.EventReadInbox, ChatID: chatID, ReadMaxID: upd.MaxID}:
-		default:
+		case mustDeliver <- store.Event{Kind: store.EventReadInbox, ChatID: chatID, ReadMaxID: upd.MaxID}:
+		case <-ctx.Done():
 		}
 		return nil
 	})
 
 	dispatcher.OnReadChannelInbox(func(ctx context.Context, e tg.Entities, upd *tg.UpdateReadChannelInbox) error {
 		select {
-		case events <- store.Event{Kind: store.EventReadInbox, ChatID: upd.ChannelID, ReadMaxID: upd.MaxID}:
-		default:
+		case mustDeliver <- store.Event{Kind: store.EventReadInbox, ChatID: upd.ChannelID, ReadMaxID: upd.MaxID}:
+		case <-ctx.Done():
 		}
 		return nil
 	})
@@ -76,29 +92,29 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 		}
 		reactions := convertReactions(upd.Reactions)
 		select {
-		case events <- store.Event{
+		case mustDeliver <- store.Event{
 			Kind:      store.EventReactionsUpdate,
 			ChatID:    chatID,
 			MsgID:     upd.MsgID,
 			Reactions: reactions,
 		}:
-		default:
+		case <-ctx.Done():
 		}
 		return nil
 	})
 
 	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, upd *tg.UpdateDeleteMessages) error {
 		select {
-		case events <- store.Event{Kind: store.EventDeleteMessages, MsgIDs: upd.Messages}:
-		default:
+		case mustDeliver <- store.Event{Kind: store.EventDeleteMessages, MsgIDs: upd.Messages}:
+		case <-ctx.Done():
 		}
 		return nil
 	})
 
 	dispatcher.OnDeleteChannelMessages(func(ctx context.Context, e tg.Entities, upd *tg.UpdateDeleteChannelMessages) error {
 		select {
-		case events <- store.Event{Kind: store.EventDeleteMessages, ChatID: upd.ChannelID, MsgIDs: upd.Messages}:
-		default:
+		case mustDeliver <- store.Event{Kind: store.EventDeleteMessages, ChatID: upd.ChannelID, MsgIDs: upd.Messages}:
+		case <-ctx.Done():
 		}
 		return nil
 	})
@@ -106,8 +122,9 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 	dispatcher.OnUserStatus(func(ctx context.Context, e tg.Entities, upd *tg.UpdateUserStatus) error {
 		_, online := upd.Status.(*tg.UserStatusOnline)
 		select {
-		case events <- store.Event{Kind: store.EventUserPresence, ChatID: upd.UserID, Online: online}:
+		case droppable <- store.Event{Kind: store.EventUserPresence, ChatID: upd.UserID, Online: online}:
 		default:
+			logDrop("user_presence")
 		}
 		return nil
 	})
@@ -115,8 +132,9 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 	dispatcher.OnUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateUserTyping) error {
 		action := convertTypingAction(upd.Action)
 		select {
-		case events <- store.Event{Kind: store.EventTyping, ChatID: upd.UserID, TypingAction: action}:
+		case droppable <- store.Event{Kind: store.EventTyping, ChatID: upd.UserID, TypingAction: action}:
 		default:
+			logDrop("user_typing")
 		}
 		return nil
 	})
@@ -124,8 +142,9 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 	dispatcher.OnChatUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateChatUserTyping) error {
 		action := convertTypingAction(upd.Action)
 		select {
-		case events <- store.Event{Kind: store.EventTyping, ChatID: upd.ChatID, TypingAction: action}:
+		case droppable <- store.Event{Kind: store.EventTyping, ChatID: upd.ChatID, TypingAction: action}:
 		default:
+			logDrop("chat_typing")
 		}
 		return nil
 	})
@@ -133,8 +152,9 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateChannelUserTyping) error {
 		action := convertTypingAction(upd.Action)
 		select {
-		case events <- store.Event{Kind: store.EventTyping, ChatID: upd.ChannelID, TypingAction: action}:
+		case droppable <- store.Event{Kind: store.EventTyping, ChatID: upd.ChannelID, TypingAction: action}:
 		default:
+			logDrop("channel_typing")
 		}
 		return nil
 	})

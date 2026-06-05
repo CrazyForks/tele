@@ -19,7 +19,9 @@ import (
 type GotdClient struct {
 	mu           sync.RWMutex
 	api          *tg.Client
-	events       chan store.Event
+	mustDeliver  chan store.Event
+	droppable    chan store.Event
+	updates      chan store.Event
 	peers        map[int64]store.Peer
 	log          *zap.Logger
 	traceLog     *zap.Logger
@@ -34,7 +36,9 @@ func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace boo
 		traceLog = log
 	}
 	return &GotdClient{
-		events:       make(chan store.Event, 64),
+		mustDeliver:  make(chan store.Event, 256),
+		droppable:    make(chan store.Event, 64),
+		updates:      make(chan store.Event, 32),
 		peers:        make(map[int64]store.Peer),
 		log:          log,
 		traceLog:     traceLog,
@@ -50,7 +54,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	sess := NewFileSession(cfg.Telegram.SessionFile)
 
 	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, c.events, func(id int) bool {
+	setupDispatcher(&dispatcher, c.mustDeliver, c.droppable, c.log, func(id int) bool {
 		c.suppressMu.Lock()
 		defer c.suppressMu.Unlock()
 		if _, ok := c.suppressIDs[id]; ok {
@@ -71,7 +75,28 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	// present (the pending buffer never flushes), so we extract them from the raw
 	// wire message and emit the event immediately, then hand the update on to the
 	// manager as usual.
-	hook := newOutboxHook(manager, c.events, c.log)
+	hook := newOutboxHook(manager, c.mustDeliver, c.log)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case evt := <-c.mustDeliver:
+				select {
+				case c.updates <- evt:
+				case <-ctx.Done():
+					return
+				}
+			case evt := <-c.droppable:
+				select {
+				case c.updates <- evt:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
 
 	tc := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
 		UpdateHandler:  hook,
@@ -113,5 +138,5 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 }
 
 func (c *GotdClient) Updates() <-chan store.Event {
-	return c.events
+	return c.updates
 }
