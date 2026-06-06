@@ -109,6 +109,11 @@ ui:
 
 photos:
   eager_full_quality: true  # download full resolution in background on chat open
+
+# keybindings:                 # override default keys; see README for action/context names
+#   chat:                      # context: global | folders | chatlist | chat | composer | search | context_menu | delete_submenu
+#     reply: "R"               # one key per action replaces that action's defaults
+#     go_top: ["g g", "gg"]    # a chord is space-separated key tokens ("g g" = press g then g)
 `
 
 func expandTilde(path string) string {

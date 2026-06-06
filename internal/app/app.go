@@ -17,6 +17,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
@@ -109,8 +110,12 @@ func (a *App) Run() error {
 	}()
 
 	// Build bubbletea model
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), a.cfg.KeybindingOverrides())
+	for _, w := range warns {
+		a.log.Warn("keybindings: " + w)
+	}
 	root := ui.NewRootModel(a.client, a.st, a.cfg.UI.HistoryLimit, a.verbose)
-	root = root.WithConfig(a.cfg)
+	root = root.WithConfig(a.cfg).WithKeyMap(km)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
 	root.SetOnChatOpen(func(id int64) {
 		atomic.StoreInt64(&a.currentChatID, id)

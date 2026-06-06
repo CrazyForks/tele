@@ -444,6 +444,25 @@ func TestRoot_ContextMenu_EscCloses(t *testing.T) {
 	assert.False(t, m.ContextMenuOpen())
 }
 
+func TestWithKeyMap_RebindOpensContextMenu(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
+		"chat": {"open_context_menu": {"m"}},
+	})
+	require.Empty(t, warns)
+	m = m.WithKeyMap(km)
+
+	// "m" now opens the context menu (was "space").
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	m = newM.(ui.RootModel)
+	assert.True(t, m.ContextMenuOpen())
+}
+
 func TestRoot_DeleteMsgRequest_RemovesFromStore(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)

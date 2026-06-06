@@ -58,3 +58,34 @@ func TestLoad_MissingFile(t *testing.T) {
 	_, err := config.Load("/nonexistent/config.yml")
 	assert.Error(t, err)
 }
+
+func TestLoad_KeybindingsScalarAndSequence(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(f, []byte(`
+telegram:
+  api_id: 1
+  api_hash: x
+keybindings:
+  chat:
+    reply: "R"
+    go_top: ["g g", "gg"]
+`), 0600))
+
+	cfg, err := config.Load(f)
+	require.NoError(t, err)
+
+	ov := cfg.KeybindingOverrides()
+	assert.Equal(t, []string{"R"}, ov["chat"]["reply"])
+	assert.Equal(t, []string{"g g", "gg"}, ov["chat"]["go_top"])
+}
+
+func TestKeybindingOverrides_AbsentSectionIsNil(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(f, []byte("telegram:\n  api_id: 1\n  api_hash: x\n"), 0600))
+
+	cfg, err := config.Load(f)
+	require.NoError(t, err)
+	assert.Nil(t, cfg.KeybindingOverrides())
+}

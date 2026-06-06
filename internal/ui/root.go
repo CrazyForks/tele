@@ -75,40 +75,40 @@ type FolderFiltersMsg struct {
 type clearTypingMsg struct{ serial int }
 
 type RootModel struct {
-	screen             Screen
-	focus              Focus
-	width              int
-	height             int
-	hasDarkBackground  bool
-	chatList           *screens.ChatListModel
-	chat               *screens.ChatModel
-	login              screens.LoginModel
-	statusBar          *components.StatusBar
-	vimState           *keys.VimState
-	keyMap             keys.KeyMap
-	matcher            *keys.Matcher
-	tgClient           internaltg.Client
-	st                 store.Store
-	currentChatID      int64
-	historyLimit       int
-	verbose            bool
-	cfg                *config.Config
-	imageCache         map[int64]image.Image
-	fullImageCache     map[int64]image.Image
-	imageMode          media.Mode
-	kittyStore         *media.KittyStore
-	lastPhotoCols      int
-	searchModel        *screens.SearchModel
-	onChatOpen         func(int64)
-	nextSentinel       int
-	contextMenu        *components.ContextMenu
-	reactionPicker     *components.ReactionPicker
-	reactionTargetID   int
-	folderBar          *screens.FoldersModel
-	activeFilter       *store.FolderFilter
-	logo               components.LogoLoader
-	typingSerial       int
-	tmpDir             string
+	screen            Screen
+	focus             Focus
+	width             int
+	height            int
+	hasDarkBackground bool
+	chatList          *screens.ChatListModel
+	chat              *screens.ChatModel
+	login             screens.LoginModel
+	statusBar         *components.StatusBar
+	vimState          *keys.VimState
+	keyMap            keys.KeyMap
+	matcher           *keys.Matcher
+	tgClient          internaltg.Client
+	st                store.Store
+	currentChatID     int64
+	historyLimit      int
+	verbose           bool
+	cfg               *config.Config
+	imageCache        map[int64]image.Image
+	fullImageCache    map[int64]image.Image
+	imageMode         media.Mode
+	kittyStore        *media.KittyStore
+	lastPhotoCols     int
+	searchModel       *screens.SearchModel
+	onChatOpen        func(int64)
+	nextSentinel      int
+	contextMenu       *components.ContextMenu
+	reactionPicker    *components.ReactionPicker
+	reactionTargetID  int
+	folderBar         *screens.FoldersModel
+	activeFilter      *store.FolderFilter
+	logo              components.LogoLoader
+	typingSerial      int
+	tmpDir            string
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -163,6 +163,14 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	if m.imageMode == media.ModeKitty {
 		m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
 	}
+	return m
+}
+
+// WithKeyMap replaces the keymap and rebuilds the matcher and status-bar hints.
+func (m RootModel) WithKeyMap(km keys.KeyMap) RootModel {
+	m.keyMap = km
+	m.matcher = keys.NewMatcher(km)
+	m.statusBar.SetKeyMap(km)
 	return m
 }
 

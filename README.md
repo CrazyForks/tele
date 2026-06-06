@@ -167,6 +167,35 @@ ui:
   theme: default
 ```
 
+### Customizing keybindings
+
+Override default keys in the `keybindings:` section of `~/.config/tele/config.yml`.
+Bindings are grouped by **context**, then by **action**:
+
+```yaml
+keybindings:
+  chat:
+    reply: "R"              # a single key
+    go_top: ["g g", "gg"]   # several keys for one action
+  chatlist:
+    confirm: "l"
+```
+
+- **Replace semantics:** the keys you list become the *only* keys for that
+  action in that context. Actions you don't mention keep their defaults.
+- **Chords:** a multi-key sequence is written as space-separated key tokens —
+  `"g g"` means press `g` then `g`. Tokens use the terminal key names
+  (`ctrl+d`, `enter`, `esc`, `space`, `up`, ...).
+- **Conflicts** (an unknown action/context, an empty key, a key reused for two
+  actions, or a single key that shadows a chord) are logged as warnings on
+  startup and skipped or applied last-wins; a bad section never crashes the app.
+
+**Contexts:** `global`, `folders`, `chatlist`, `chat`, `composer`, `search`,
+`context_menu`, `delete_submenu`.
+
+See [docs/keybindings.md](docs/keybindings.md#configurable-actions) for the full
+list of action names and what each one does.
+
 ---
 
 ## Roadmap
