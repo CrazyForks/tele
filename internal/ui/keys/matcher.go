@@ -53,6 +53,9 @@ func (m *Matcher) Reset() { m.pending = "" }
 // Action is ActionNone and the caller should take no action and await the next
 // key.
 func (m *Matcher) Resolve(ctx Context, key string) (Action, MatchResult) {
+	// Translate a non-Latin layout key to its Latin equivalent so bindings
+	// (stored as Latin) fire on the same physical key in any layout.
+	key = normalizeKey(key)
 	seq := key
 	if m.pending != "" {
 		seq = m.pending + " " + key

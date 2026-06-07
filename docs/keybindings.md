@@ -104,3 +104,8 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 > Key tokens use the terminal names: letters/digits as-is (`r`, `G`, `2`),
 > modifiers like `ctrl+d`, and named keys `enter`, `esc`, `space`, `up`, `down`,
 > `left`, `right`.
+
+> **Keyboard layout:** letter bindings also fire on the **same physical key**
+> under a Russian (ЙЦУКЕН) layout — e.g. `r`/Reply works whether the key types
+> `r` or `к`. Bindings are still written with Latin keys; no duplication needed.
+> (Only the Russian layout is mapped today.)

@@ -2,8 +2,20 @@ package keys
 
 import "sort"
 
-// Resolve returns the Action for the given key in ctx, falling back to ContextGlobal.
+// Resolve returns the Action for the given key in ctx, falling back to
+// ContextGlobal. If the raw key matches nothing, it is retried after translating
+// a non-Latin keyboard layout to its Latin equivalent (same physical key).
 func (km KeyMap) Resolve(ctx Context, key string) Action {
+	if a := km.resolveExact(ctx, key); a != ActionNone {
+		return a
+	}
+	if nk := normalizeKey(key); nk != key {
+		return km.resolveExact(ctx, nk)
+	}
+	return ActionNone
+}
+
+func (km KeyMap) resolveExact(ctx Context, key string) Action {
 	if ctxMap, ok := km[ctx]; ok {
 		if action, ok := ctxMap[key]; ok {
 			return action
