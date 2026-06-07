@@ -74,6 +74,12 @@ const (
 	MediaOther // generic fallback (contact, poll, dice, …)
 )
 
+// IsVideo reports whether the kind is a playable video (regular or round note),
+// both of which render an inline thumbnail preview and open in an external player.
+func (k MediaKind) IsVideo() bool {
+	return k == MediaVideo || k == MediaVideoNote
+}
+
 // MediaRef is the display-level description of a message's media. PhotoRef
 // remains the download-capable reference and is set only for photos.
 type MediaRef struct {

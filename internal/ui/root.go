@@ -595,11 +595,14 @@ func extFromMime(mime string) string {
 	}
 }
 
-func downloadVideoThumbCmd(client internaltg.Client, ref store.DocumentRef) tea.Cmd {
+func downloadVideoThumbCmd(client internaltg.Client, ref store.DocumentRef, crop bool) tea.Cmd {
 	return func() tea.Msg {
 		img, err := client.DownloadDocumentThumb(context.Background(), ref)
 		if err != nil || img == nil {
 			return nil
+		}
+		if crop {
+			img = media.CircleCrop(img) // round video note → circle
 		}
 		// Reuse the photo-ready path; the cache is keyed by id (here the document id).
 		return PhotoReadyMsg{PhotoID: ref.ID, Image: img}
@@ -632,9 +635,12 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 			}
 		}
 		// Video thumbnails reuse the inline-image cache, keyed by document id.
-		if msg.Media != nil && msg.Media.Kind == store.MediaVideo && msg.Document != nil && msg.Document.ThumbSize != "" {
+		if msg.Media != nil && msg.Media.Kind.IsVideo() && msg.Document != nil && msg.Document.ThumbSize != "" {
 			if _, ok := m.imageCache[msg.Document.ID]; !ok {
-				cmds = append(cmds, downloadVideoThumbCmd(m.tgClient, *msg.Document))
+				// Round video notes are cropped to a circle, but only in Kitty mode
+				// (PNG alpha); block-art has no transparency, so keep it square there.
+				crop := msg.Media.Kind == store.MediaVideoNote && m.imageMode == media.ModeKitty
+				cmds = append(cmds, downloadVideoThumbCmd(m.tgClient, *msg.Document, crop))
 			}
 		}
 	}

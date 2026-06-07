@@ -1103,6 +1103,18 @@ func TestMessageList_VideoThumbnail_ShowsPlayOverlay(t *testing.T) {
 	assert.NotContains(t, view, "🎥 video", "text placeholder is replaced by the thumbnail")
 }
 
+func TestMessageList_VideoNoteThumbnail_ShowsPlayOverlay(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1,
+		Media:    &store.MediaRef{Kind: store.MediaVideoNote, Duration: 8},
+		Document: &store.DocumentRef{ID: 77, ThumbSize: "m"},
+	}})
+	ml.SetImage(77, image.NewRGBA(image.Rect(0, 0, 12, 12)))
+	view := ml.View()
+	assert.Contains(t, view, "▶ 0:08", "round video shows play affordance + duration")
+	assert.NotContains(t, view, "⭕ video note", "text placeholder replaced by the thumbnail")
+}
+
 func TestMessageList_AudioMetadata(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{

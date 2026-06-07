@@ -296,7 +296,7 @@ func PreviewImageID(msg store.Message) (int64, bool) {
 	switch {
 	case msg.Media.Kind == store.MediaPhoto && msg.Photo != nil:
 		return msg.Photo.ID, true
-	case msg.Media.Kind == store.MediaVideo && msg.Document != nil && msg.Document.ThumbSize != "":
+	case msg.Media.Kind.IsVideo() && msg.Document != nil && msg.Document.ThumbSize != "":
 		return msg.Document.ID, true
 	}
 	return 0, false
@@ -305,7 +305,7 @@ func PreviewImageID(msg store.Message) (int64, bool) {
 // videoOverlayLabel returns the play affordance shown under a video thumbnail,
 // or "" for non-video media.
 func videoOverlayLabel(m *store.MediaRef) string {
-	if m != nil && m.Kind == store.MediaVideo {
+	if m != nil && m.Kind.IsVideo() {
 		return "▶ " + formatDuration(m.Duration)
 	}
 	return ""
@@ -726,7 +726,7 @@ func (ml *MessageList) SelectedMessagePhotoID() int64 {
 // is a playable video, for opening in an external player.
 func (ml *MessageList) SelectedMessageVideo() (store.DocumentRef, bool) {
 	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
-		msg.Media.Kind == store.MediaVideo && msg.Document != nil {
+		msg.Media.Kind.IsVideo() && msg.Document != nil {
 		return *msg.Document, true
 	}
 	return store.DocumentRef{}, false
