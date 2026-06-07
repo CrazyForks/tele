@@ -81,6 +81,7 @@ func DefaultKeyMap() KeyMap {
 			"r":      ActionReply,
 			"e":      ActionEdit,
 			"o":      ActionOpenInViewer,
+			"p":      ActionPlayVoice,
 		},
 		ContextComposer: {
 			"enter": ActionConfirm,
@@ -100,6 +101,7 @@ func DefaultKeyMap() KeyMap {
 			"d":     ActionDelete,
 			"g":     ActionJumpToOriginal,
 			"o":     ActionOpenInViewer,
+			"p":     ActionPlayVoice,
 		},
 		ContextDeleteSubMenu: {
 			"j":     ActionDown,

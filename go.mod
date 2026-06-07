@@ -8,11 +8,13 @@ require (
 	charm.land/lipgloss/v2 v2.0.3
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/x/ansi v0.11.7
+	github.com/ebitengine/oto/v3 v3.4.0
 	github.com/gen2brain/beeep v0.11.2
 	github.com/gotd/td v0.144.0
 	github.com/lucasb-eyer/go-colorful v1.4.0
 	github.com/mattn/go-runewidth v0.0.23
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
+	github.com/pion/opus v0.0.0-20260601214817-71d58474cec8
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.28.0
@@ -36,6 +38,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/ebitengine/purego v0.9.0 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect

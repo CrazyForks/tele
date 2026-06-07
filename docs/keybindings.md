@@ -34,7 +34,8 @@
 | `e`       | Edit own message               |
 | `d`       | Delete own message             |
 | `g`       | Jump to original (for replies) |
-| `o`       | Open photo in external viewer  |
+| `o`       | Open photo/video in external app |
+| `p`       | Play voice message (in-app)    |
 | `Space`   | Context menu                   |
 
 ## Compose (insert mode)
@@ -82,7 +83,8 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `normal`            | Leave insert mode / close the chat       |
 | `search`            | Open chat search                         |
 | `open_context_menu` | Open the message context menu            |
-| `open_in_viewer`    | Open the selected photo in an external viewer |
+| `open_in_viewer`    | Open the selected photo/video in an external app |
+| `play_voice`        | Play the selected voice message in-app    |
 | `reply`             | Reply to the selected message            |
 | `edit`              | Edit the selected (own) message          |
 
@@ -92,6 +94,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | ------------------ | ------------------------------------- |
 | `cancel`           | Dismiss the current menu or picker    |
 | `react`            | React to the selected message         |
+| `play_voice`       | Play the selected voice message       |
 | `edit`             | Edit the selected message             |
 | `delete`           | Delete the selected message           |
 | `delete_revoke`    | Delete for everyone                   |

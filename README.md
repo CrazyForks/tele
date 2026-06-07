@@ -58,7 +58,7 @@ It also runs lean — typically ~35MB RSS at idle vs several hundred MB for desk
 | Keyboard-first       | ✅         | ⚠️ partial       | ⚠️ partial |
 | Works over SSH       | ✅         | ❌               | ❌         |
 | Single static binary | ✅         | ❌               | ❌         |
-| Full media support   | ⚠️ photos  | ✅               | ✅         |
+| Full media support   | ⚠️ photos, voice, video | ✅    | ✅         |
 | Voice/video calls    | ❌ planned | ✅               | ✅         |
 
 ---
@@ -72,6 +72,13 @@ Vim-inspired navigation (`j/k`, `gg/G`, insert mode, etc.)
 ### 💬 Full Telegram support
 
 Private chats, groups, channels, replies, reactions, edits.
+
+### 🎞 Rich media in the terminal
+
+- **Photos** — rendered inline in high quality via the Kitty graphics protocol, with an ANSI block-art fallback; press `o` to open in an external viewer.
+- **Voice messages** — amplitude waveform with duration, and **in-app playback** (`p`) with an animated playhead. Pure-Go decode (Opus/Ogg) and audio output — no cgo.
+- **Video & round video (кружки)** — inline thumbnail preview with a `▶` / duration overlay (round notes shown as a circle); press `o` to play in the system player.
+- **Audio (music)** — performer / title / duration; other media types show a labelled placeholder.
 
 ### 🧠 Terminal-native design
 
@@ -147,6 +154,7 @@ Then prompts for:
 | `r`             | Reply                             |
 | `e` / `d`       | Edit / delete message             |
 | `t`             | React                             |
+| `o` / `p`       | Open media externally / play voice |
 | `/`             | Search chats                      |
 | `0` / `1` / `2` | Focus panes                       |
 | `q`             | Quit                              |
@@ -170,7 +178,9 @@ ui:
 ### Customizing keybindings
 
 Override default keys in the `keybindings:` section of `~/.config/tele/config.yml`.
-Bindings are grouped by **context**, then by **action**:
+The generated config already lists **every action with its current default keys**,
+commented out — just uncomment a line and change the key(s). Bindings are grouped
+by **context**, then by **action**:
 
 ```yaml
 keybindings:

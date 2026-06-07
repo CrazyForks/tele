@@ -1103,6 +1103,18 @@ func TestMessageList_VideoThumbnail_ShowsPlayOverlay(t *testing.T) {
 	assert.NotContains(t, view, "🎥 video", "text placeholder is replaced by the thumbnail")
 }
 
+func TestMessageList_VoicePlayback_ShowsLivePosition(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1,
+		Media:    &store.MediaRef{Kind: store.MediaVoice, Duration: 15, Waveform: []byte{0x1F, 0x7C}},
+		Document: &store.DocumentRef{ID: 55},
+	}})
+	assert.Contains(t, ml.View(), "0:15", "total duration before playback")
+
+	ml.SetVoicePlayback(55, 0.5, 7)
+	assert.Contains(t, ml.View(), "0:07", "live position while the voice plays")
+}
+
 func TestMessageList_VideoNoteThumbnail_ShowsPlayOverlay(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetMessages([]store.Message{{ID: 1,

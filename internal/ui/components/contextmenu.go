@@ -43,6 +43,9 @@ type OpenInViewerRequest struct {
 	PhotoID int64
 }
 
+// PlayVoiceRequest is emitted when the user selects "Play" for a voice message.
+type PlayVoiceRequest struct{}
+
 type menuState int
 
 const (
@@ -77,24 +80,26 @@ type ContextMenu struct {
 	replyToMsgID int
 	photoID      int64
 	hasVideo     bool
+	hasVoice     bool
 	keyMap       keys.KeyMap
 }
 
-func NewContextMenu(msgID int, isOut bool, replyToMsgID int, photoID int64, hasVideo bool, km keys.KeyMap) *ContextMenu {
+func NewContextMenu(msgID int, isOut bool, replyToMsgID int, photoID int64, hasVideo, hasVoice bool, km keys.KeyMap) *ContextMenu {
 	return &ContextMenu{
-		items:        mainItems(isOut, replyToMsgID != 0, photoID != 0, hasVideo),
+		items:        mainItems(isOut, replyToMsgID != 0, photoID != 0, hasVideo, hasVoice),
 		msgID:        msgID,
 		isOut:        isOut,
 		replyToMsgID: replyToMsgID,
 		photoID:      photoID,
 		hasVideo:     hasVideo,
+		hasVoice:     hasVoice,
 		keyMap:       km,
 	}
 }
 
 func (cm *ContextMenu) Cursor() int { return cm.cursor }
 
-func mainItems(isOut bool, isReply bool, hasPhoto bool, hasVideo bool) []menuItem {
+func mainItems(isOut bool, isReply bool, hasPhoto bool, hasVideo bool, hasVoice bool) []menuItem {
 	var items []menuItem
 	if isReply {
 		items = append(items, menuItem{label: "Jump to original", action: keys.ActionJumpToOriginal})
@@ -111,6 +116,8 @@ func mainItems(isOut bool, isReply bool, hasPhoto bool, hasVideo bool) []menuIte
 		items = append(items, menuItem{label: "Open in viewer", action: keys.ActionOpenInViewer})
 	case hasVideo:
 		items = append(items, menuItem{label: "Open in player", action: keys.ActionOpenInViewer})
+	case hasVoice:
+		items = append(items, menuItem{label: "Play", action: keys.ActionPlayVoice})
 	}
 	items = append(items, menuItem{label: "Delete", action: keys.ActionDelete})
 	return items
@@ -173,7 +180,7 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 	case keys.ActionCancel:
 		if cm.state == stateDeleteSub {
 			cm.state = stateMain
-			cm.items = mainItems(cm.isOut, cm.replyToMsgID != 0, cm.photoID != 0, cm.hasVideo)
+			cm.items = mainItems(cm.isOut, cm.replyToMsgID != 0, cm.photoID != 0, cm.hasVideo, cm.hasVoice)
 			cm.cursor = 0
 			return cm, nil
 		}
@@ -226,6 +233,8 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 	case keys.ActionOpenInViewer:
 		photoID := cm.photoID
 		return nil, func() tea.Msg { return OpenInViewerRequest{PhotoID: photoID} }
+	case keys.ActionPlayVoice:
+		return nil, func() tea.Msg { return PlayVoiceRequest{} }
 	}
 	return cm, nil
 }

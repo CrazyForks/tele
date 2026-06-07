@@ -96,9 +96,12 @@ func (m *ChatModel) SetMessages(msgs []store.Message) { m.msgList.SetMessages(ms
 func (m *ChatModel) SetMessagesKeepScroll(msgs []store.Message) {
 	m.msgList.SetMessagesKeepScroll(msgs)
 }
-func (m *ChatModel) RemoveMessage(id int)                       { m.msgList.RemoveMessage(id) }
-func (m *ChatModel) PrependMessages(older []store.Message)      { m.msgList.PrependMessages(older) }
-func (m *ChatModel) SetImage(photoID int64, img image.Image)    { m.msgList.SetImage(photoID, img) }
+func (m *ChatModel) RemoveMessage(id int)                    { m.msgList.RemoveMessage(id) }
+func (m *ChatModel) PrependMessages(older []store.Message)   { m.msgList.PrependMessages(older) }
+func (m *ChatModel) SetImage(photoID int64, img image.Image) { m.msgList.SetImage(photoID, img) }
+func (m *ChatModel) SetVoicePlayback(docID int64, progress float64, posSecs int) {
+	m.msgList.SetVoicePlayback(docID, progress, posSecs)
+}
 func (m *ChatModel) SetKnownImages(cache map[int64]image.Image) { m.msgList.SetKnownImages(cache) }
 func (m *ChatModel) SetRenderer(r media.Renderer)               { m.msgList.SetRenderer(r) }
 func (m *ChatModel) PhotoContentCols() int                      { return m.msgList.PhotoContentCols() }
@@ -120,6 +123,9 @@ func (m *ChatModel) SelectedMessageReplyToMsgID() int { return m.msgList.Selecte
 func (m *ChatModel) SelectedMessagePhotoID() int64    { return m.msgList.SelectedMessagePhotoID() }
 func (m *ChatModel) SelectedMessageVideo() (store.DocumentRef, bool) {
 	return m.msgList.SelectedMessageVideo()
+}
+func (m *ChatModel) SelectedMessageVoice() (store.DocumentRef, bool) {
+	return m.msgList.SelectedMessageVoice()
 }
 func (m *ChatModel) ScrollToMessage(id int) bool { return m.msgList.ScrollToMessage(id) }
 func (m *ChatModel) ReplyToMsgID() int           { return m.replyToMsgID }

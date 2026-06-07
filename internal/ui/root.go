@@ -17,6 +17,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
 
+	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -67,6 +68,15 @@ type kittyTransmittedMsg struct {
 	photoID int64
 	cols    int
 }
+
+// voicePlayReadyMsg carries a downloaded voice file ready to be played.
+type voicePlayReadyMsg struct {
+	docID int64
+	data  []byte
+}
+
+// voiceTickMsg drives the voice playback position/playhead updates.
+type voiceTickMsg struct{}
 
 // retransmitTickMsg fires after the photo-width debounce window. Only the tick
 // whose gen matches the latest scheduled one performs the retransmit; earlier
@@ -127,6 +137,7 @@ type RootModel struct {
 	logo              components.LogoLoader
 	typingSerial      int
 	tmpDir            string
+	voicePlayer       *audio.Player
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -291,7 +302,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		PhotoReadyMsg,
 		FullPhotoReadyMsg,
 		kittyTransmittedMsg,
-		components.OpenInViewerRequest:
+		components.OpenInViewerRequest,
+		components.PlayVoiceRequest,
+		voicePlayReadyMsg,
+		voiceTickMsg:
 		return m.updateNetworkMsg(msg)
 	// UI/layout/animation messages
 	case tea.BackgroundColorMsg,
@@ -467,6 +481,10 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if action == keys.ActionPlayVoice && m.focus == FocusChat {
+		return m.handlePlayVoice()
+	}
+
 	if action == keys.ActionOpenContextMenu && m.focus == FocusChat {
 		if m.chat != nil {
 			msgID := m.chat.SelectedMessageID()
@@ -475,7 +493,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				replyToMsgID := m.chat.SelectedMessageReplyToMsgID()
 				photoID := m.chat.SelectedMessagePhotoID()
 				_, hasVideo := m.chat.SelectedMessageVideo()
-				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, photoID, hasVideo, m.keyMap)
+				_, hasVoice := m.chat.SelectedMessageVoice()
+				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, photoID, hasVideo, hasVoice, m.keyMap)
 			}
 		}
 		return m, nil
@@ -593,6 +612,40 @@ func extFromMime(mime string) string {
 	default:
 		return ".mp4"
 	}
+}
+
+// handlePlayVoice toggles or starts in-app playback of the selected voice
+// message. Degrades silently when no audio device is available.
+func (m RootModel) handlePlayVoice() (RootModel, tea.Cmd) {
+	ref, ok := m.chat.SelectedMessageVoice()
+	if !ok {
+		return m, nil
+	}
+	if m.voicePlayer == nil {
+		pl, err := audio.NewPlayer()
+		if err != nil {
+			return m, nil // no audio device
+		}
+		m.voicePlayer = pl
+	}
+	if m.voicePlayer.Toggle(ref.ID) {
+		return m, nil // same message: paused/resumed
+	}
+	return m, downloadVoiceCmd(m.tgClient, ref)
+}
+
+func downloadVoiceCmd(client internaltg.Client, ref store.DocumentRef) tea.Cmd {
+	return func() tea.Msg {
+		data, err := client.DownloadDocument(context.Background(), ref)
+		if err != nil || len(data) == 0 {
+			return nil
+		}
+		return voicePlayReadyMsg{docID: ref.ID, data: data}
+	}
+}
+
+func voiceTickCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return voiceTickMsg{} })
 }
 
 func downloadVideoThumbCmd(client internaltg.Client, ref store.DocumentRef, crop bool) tea.Cmd {

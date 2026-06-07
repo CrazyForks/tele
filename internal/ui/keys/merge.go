@@ -22,7 +22,7 @@ func KnownActions() map[Action]bool {
 		ActionSearch: true, ActionOpenInViewer: true, ActionOpenContextMenu: true,
 		ActionCancel: true, ActionReply: true, ActionReact: true, ActionEdit: true,
 		ActionDelete: true, ActionDeleteRevoke: true, ActionDeleteMe: true,
-		ActionJumpToOriginal: true,
+		ActionJumpToOriginal: true, ActionPlayVoice: true,
 	}
 }
 

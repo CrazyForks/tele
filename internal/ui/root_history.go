@@ -136,6 +136,29 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			return m, openDocumentCmd(m.tgClient, ref, m.tmpDir)
 		}
 		return m, nil
+
+	case components.PlayVoiceRequest:
+		return m.handlePlayVoice()
+
+	case voicePlayReadyMsg:
+		if m.voicePlayer != nil {
+			if err := m.voicePlayer.Play(msg.docID, msg.data); err == nil {
+				return m, voiceTickCmd()
+			}
+		}
+		return m, nil
+
+	case voiceTickMsg:
+		if m.voicePlayer == nil {
+			return m, nil
+		}
+		docID, progress, pos, active := m.voicePlayer.State()
+		if active {
+			m.chat.SetVoicePlayback(docID, progress, pos)
+			return m, voiceTickCmd()
+		}
+		m.chat.SetVoicePlayback(0, 0, 0)
+		return m, nil
 	}
 	return m, nil
 }

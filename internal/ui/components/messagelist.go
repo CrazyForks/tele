@@ -197,6 +197,20 @@ type MessageList struct {
 	showIndicator     bool
 	hasDarkBackground bool
 	renderer          media.Renderer
+
+	// Voice playback state: the document being played, its progress (0..1) and
+	// current position in seconds. playingVoiceID == 0 means nothing is playing.
+	playingVoiceID int64
+	voiceProgress  float64
+	voicePosition  int
+}
+
+// SetVoicePlayback marks a voice message (by document id) as currently playing,
+// driving the animated waveform playhead and live position. Pass docID 0 to clear.
+func (ml *MessageList) SetVoicePlayback(docID int64, progress float64, posSecs int) {
+	ml.playingVoiceID = docID
+	ml.voiceProgress = progress
+	ml.voicePosition = posSecs
 }
 
 func NewMessageList(height, width int) *MessageList {
@@ -732,6 +746,16 @@ func (ml *MessageList) SelectedMessageVideo() (store.DocumentRef, bool) {
 	return store.DocumentRef{}, false
 }
 
+// SelectedMessageVoice returns the document ref of the selected message when it
+// is a voice message, for in-app playback.
+func (ml *MessageList) SelectedMessageVoice() (store.DocumentRef, bool) {
+	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
+		msg.Media.Kind == store.MediaVoice && msg.Document != nil {
+		return *msg.Document, true
+	}
+	return store.DocumentRef{}, false
+}
+
 func (ml *MessageList) ScrollToMessage(id int) bool {
 	for i, item := range ml.items {
 		if item.kind != itemMessage || item.msg.ID != id {
@@ -993,6 +1017,11 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 			if overlay := videoOverlayLabel(msg.Media); overlay != "" {
 				sideLines = append(sideLines, labelLine(overlay, actualW, b, bs))
 			}
+		} else if msg.Media.Kind == store.MediaVoice && msg.Document != nil &&
+			msg.Document.ID == ml.playingVoiceID {
+			// Voice currently playing: waveform with playhead + live position.
+			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition)
+			sideLines = append(sideLines, labelLine(label, actualW, b, bs))
 		} else {
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 		}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -25,6 +26,16 @@ func voiceLabel(m *store.MediaRef) string {
 		return "🎤 voice"
 	}
 	return "🎤 " + bars + " " + formatDuration(m.Duration)
+}
+
+// voicePlayingLabel renders a voice message that is currently playing: the
+// waveform with a progress playhead and the live position (instead of total).
+func voicePlayingLabel(m *store.MediaRef, progress float64, posSecs int) string {
+	bars := renderWaveformProgress(decodeWaveform(m.Waveform), maxWaveformBars, progress)
+	if bars == "" {
+		return "🎤 voice " + formatDuration(posSecs)
+	}
+	return "🎤 " + bars + " " + formatDuration(posSecs)
 }
 
 // audioLabel renders an audio (music) message as performer/title or filename,
@@ -68,6 +79,33 @@ func decodeWaveform(packed []byte) []byte {
 		out[i] = byte(v & 0x1F)
 	}
 	return out
+}
+
+// waveformPlayedStyle colours the already-played portion of a voice waveform.
+var waveformPlayedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+
+// renderWaveformProgress draws the waveform with the played fraction (0..1)
+// highlighted, for an animated playback playhead. The bar glyphs are identical
+// to renderWaveform; only the leading played run is styled.
+func renderWaveformProgress(samples []byte, width int, progress float64) string {
+	bars := []rune(renderWaveform(samples, width))
+	if len(bars) == 0 {
+		return ""
+	}
+	if progress < 0 {
+		progress = 0
+	}
+	if progress > 1 {
+		progress = 1
+	}
+	played := int(float64(len(bars))*progress + 0.5)
+	if played <= 0 {
+		return string(bars)
+	}
+	if played > len(bars) {
+		played = len(bars)
+	}
+	return waveformPlayedStyle.Render(string(bars[:played])) + string(bars[played:])
 }
 
 // renderWaveform draws amplitude samples as a Unicode block sparkline of the

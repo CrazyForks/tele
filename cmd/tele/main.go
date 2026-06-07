@@ -15,6 +15,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/app"
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 // Injected at build time via -ldflags. Fall back to config file values if zero.
@@ -98,7 +99,7 @@ func main() {
 	}
 }
 
-const defaultConfig = `telegram:
+const defaultConfigHead = `telegram:
   api_id: 0
   api_hash: ""
 
@@ -110,11 +111,16 @@ ui:
 photos:
   eager_full_quality: true  # download full resolution in background on chat open
 
-# keybindings:                 # override default keys; see README for action/context names
-#   chat:                      # context: global | folders | chatlist | chat | composer | search | context_menu | delete_submenu
-#     reply: "R"               # one key per action replaces that action's defaults
-#     go_top: ["g g", "gg"]    # a chord is space-separated key tokens ("g g" = press g then g)
+# Keybindings — every action with its current default keys (see docs/keybindings.md).
+# Uncomment a line and change its key(s) to override that action in that context.
+# One key replaces the defaults; a chord is space-separated tokens ("g g" = g then g).
 `
+
+// defaultConfig is the head plus the generated, fully-commented keybindings
+// reference, so the written config stays in sync with the actual defaults.
+func defaultConfig() string {
+	return defaultConfigHead + keys.DefaultKeybindingsYAML()
+}
 
 func expandTilde(path string) string {
 	if strings.HasPrefix(path, "~/") {
@@ -153,5 +159,5 @@ func ensureConfig(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(defaultConfig), 0600)
+	return os.WriteFile(path, []byte(defaultConfig()), 0600)
 }
