@@ -22,5 +22,8 @@ GEMINI.md
 # Dev build
 /tele
 
+# GoReleaser output
+/dist/
+
 demo.gif
 !assets/demo.gif

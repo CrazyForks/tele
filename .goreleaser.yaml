@@ -12,6 +12,7 @@ builds:
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
       - arm64
@@ -24,10 +25,15 @@ builds:
 archives:
   - id: tarballs
     formats: [tar.gz]
+    # Windows users get a .zip (with tele.exe) instead of a tarball.
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "tele_{{ .Os }}_{{ .Arch }}"
     files:
       - config.yml.example
   - id: binaries
+    # Raw downloadable binary per OS/arch; Windows gets tele-windows-amd64.exe.
     formats: [binary]
     name_template: "tele-{{ .Os }}-{{ .Arch }}"
 
