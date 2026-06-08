@@ -125,6 +125,40 @@ func TestSQLite_Chats_OrderMatchesMemory(t *testing.T) {
 	assert.Equal(t, int64(1), chats[2].ID)
 }
 
+func TestSQLite_Chats_ReordersAfterAppendMessage(t *testing.T) {
+	s := newTestSQLite(t)
+	now := time.Now()
+	s.SetChat(store.Chat{ID: 1, Title: "A", LastMessage: &store.Message{Date: now}})
+	s.SetChat(store.Chat{ID: 2, Title: "B", LastMessage: &store.Message{Date: now.Add(-1 * time.Hour)}})
+
+	// A is newest, so it leads initially.
+	require.Equal(t, int64(1), s.Chats()[0].ID)
+
+	// A newer message in B must move it to the top on the next read.
+	s.AppendMessage(store.Message{ID: 9, ChatID: 2, Date: now.Add(1 * time.Hour)})
+	assert.Equal(t, int64(2), s.Chats()[0].ID)
+}
+
+func TestSQLite_Chats_ReflectsFreshUnreadAndOnlineWithoutReorder(t *testing.T) {
+	s := newTestSQLite(t)
+	now := time.Now()
+	s.SetChat(store.Chat{ID: 1, Title: "A", LastMessage: &store.Message{Date: now}})
+	s.SetChat(store.Chat{ID: 2, Title: "B", LastMessage: &store.Message{Date: now.Add(-1 * time.Hour)}})
+
+	// Prime the order cache.
+	require.Equal(t, int64(1), s.Chats()[0].ID)
+
+	// Mutations that do not affect ordering must still be reflected in the
+	// cached view (the cache stores order only; field values are read fresh).
+	s.IncrementChatUnread(1)
+	s.UpdateChatOnline(1, true)
+
+	chats := s.Chats()
+	require.Equal(t, int64(1), chats[0].ID) // order unchanged
+	assert.Equal(t, 1, chats[0].UnreadCount)
+	assert.True(t, chats[0].Online)
+}
+
 func TestSQLite_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
 	s := newTestSQLite(t)
 	s.SetChat(store.Chat{ID: 1, Title: "Alice"})

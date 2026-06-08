@@ -62,6 +62,13 @@ type SQLiteStore struct {
 	messages map[int64][]Message
 	db       *sql.DB
 	log      *zap.Logger
+
+	// sortedIDs caches chat IDs in display order; orderDirty marks it stale.
+	// Only the order is cached — field values are always read fresh from the
+	// chats map, so non-ordering mutations (online, unread, read state) need no
+	// re-sort. See issue #71.
+	sortedIDs  []int64
+	orderDirty bool
 }
 
 // NewSQLite opens (or creates) the SQLite file at path and returns a ready store.
@@ -92,10 +99,11 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		return nil, err
 	}
 	s := &SQLiteStore{
-		chats:    make(map[int64]Chat),
-		messages: make(map[int64][]Message),
-		db:       db,
-		log:      log,
+		chats:      make(map[int64]Chat),
+		messages:   make(map[int64][]Message),
+		db:         db,
+		log:        log,
+		orderDirty: true, // build the sorted view lazily on first Chats() call
 	}
 	if err := s.loadChats(); err != nil {
 		_ = db.Close()
@@ -187,24 +195,41 @@ func (s *SQLiteStore) GetChat(id int64) (Chat, bool) {
 func (s *SQLiteStore) SetChat(chat Chat) {
 	s.mu.Lock()
 	s.chats[chat.ID] = chat
+	s.orderDirty = true // title/pin/last-message may change ordering
 	s.mu.Unlock()
 	s.persistChat(chat)
 }
 
 func (s *SQLiteStore) Chats() []Chat {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]Chat, 0, len(s.chats))
-	for _, c := range s.chats {
-		out = append(out, c)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.orderDirty {
+		s.rebuildSortedIDsLocked()
+		s.orderDirty = false
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Pinned != out[j].Pinned {
-			return out[i].Pinned
+	out := make([]Chat, 0, len(s.sortedIDs))
+	for _, id := range s.sortedIDs {
+		if c, ok := s.chats[id]; ok {
+			out = append(out, c)
 		}
-		return sqliteLastMsgTime(out[i]).After(sqliteLastMsgTime(out[j]))
-	})
+	}
 	return out
+}
+
+// rebuildSortedIDsLocked recomputes the cached display order. Caller holds the lock.
+func (s *SQLiteStore) rebuildSortedIDsLocked() {
+	ids := make([]int64, 0, len(s.chats))
+	for id := range s.chats {
+		ids = append(ids, id)
+	}
+	sort.SliceStable(ids, func(i, j int) bool {
+		a, b := s.chats[ids[i]], s.chats[ids[j]]
+		if a.Pinned != b.Pinned {
+			return a.Pinned
+		}
+		return sqliteLastMsgTime(a).After(sqliteLastMsgTime(b))
+	})
+	s.sortedIDs = ids
 }
 
 func sqliteLastMsgTime(c Chat) time.Time {
@@ -245,6 +270,7 @@ func (s *SQLiteStore) AppendMessage(msg Message) {
 		m := msg
 		chat.LastMessage = &m
 		s.chats[msg.ChatID] = chat
+		s.orderDirty = true // newer last-message moves the chat in the list
 	}
 	s.mu.Unlock()
 	if ok {
@@ -449,6 +475,8 @@ func (s *SQLiteStore) ClearForNewAccount(ownerID int64) {
 	s.mu.Lock()
 	s.chats = make(map[int64]Chat)
 	s.messages = make(map[int64][]Message)
+	s.sortedIDs = nil
+	s.orderDirty = true
 	s.mu.Unlock()
 
 	if _, err = s.db.Exec(`DELETE FROM chats`); err != nil {
