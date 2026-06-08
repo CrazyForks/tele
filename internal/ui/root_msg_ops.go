@@ -15,6 +15,7 @@ type sentMsgConfirmedMsg struct {
 	chatID     int64
 	sentinelID int
 	realID     int
+	failed     bool
 }
 
 type reactionFailedMsg struct {
@@ -59,7 +60,7 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 	return m, func() tea.Msg {
 		realID, err := client.SendMessage(context.Background(), peer, text, replyToMsgID)
 		if err != nil {
-			realID = 0
+			return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: 0, failed: true}
 		}
 		return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: realID}
 	}
@@ -76,6 +77,9 @@ func (m RootModel) handleSentMsgConfirmed(msg sentMsgConfirmedMsg) (RootModel, t
 	}
 	if msg.chatID == m.currentChatID {
 		m.chat.SetMessages(m.st.Messages(msg.chatID))
+	}
+	if msg.failed {
+		return m, func() tea.Msg { return StatusErrMsg{Text: "send failed", Sev: components.SeverityWarning} }
 	}
 	return m, nil
 }
@@ -178,7 +182,7 @@ func (m RootModel) handleReactionFailed(msg reactionFailedMsg) (RootModel, tea.C
 			m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
 		}
 	}
-	return m, nil
+	return m, func() tea.Msg { return StatusErrMsg{Text: "reaction failed", Sev: components.SeverityWarning} }
 }
 
 func (m RootModel) handleDeleteMsg(msg components.DeleteMsgRequest) (RootModel, tea.Cmd) {

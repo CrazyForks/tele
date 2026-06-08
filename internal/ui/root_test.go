@@ -23,6 +23,8 @@ type mockTGClient struct {
 	history           []store.Message
 	historyErr        error
 	sendFunc          func() int
+	sendErr           error
+	reactionErr       error
 	lastReplyToMsgID  int
 	downloadPhotoFunc func() (image.Image, error)
 	refreshFunc       func(msgID int) (store.Message, error)
@@ -46,6 +48,9 @@ func (m *mockTGClient) RefreshMessage(_ context.Context, _ store.Peer, msgID int
 }
 func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string, replyToMsgID int) (int, error) {
 	m.lastReplyToMsgID = replyToMsgID
+	if m.sendErr != nil {
+		return 0, m.sendErr
+	}
 	if m.sendFunc != nil {
 		return m.sendFunc(), nil
 	}
@@ -71,7 +76,7 @@ func (m *mockTGClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, 
 	return nil
 }
 func (m *mockTGClient) SendReaction(_ context.Context, _ store.Peer, _ int, _ string) error {
-	return nil
+	return m.reactionErr
 }
 
 func (m *mockTGClient) SetTyping(_ context.Context, _ store.Peer, _ store.TypingAction) error {
@@ -80,6 +85,44 @@ func (m *mockTGClient) SetTyping(_ context.Context, _ store.Peer, _ store.Typing
 func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Event) }
 
 var _ internaltg.Client = (*mockTGClient)(nil)
+
+func TestRoot_SendFailure_SurfacesErrorAndRemovesSentinel(t *testing.T) {
+	mc := &mockTGClient{sendErr: errors.New("offline")}
+	m, st := newRootWithOpenChat(t, mc)
+
+	_, cmd := m.Update(screens.SendMsgRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Text: "hi"})
+	require.Len(t, st.Messages(1), 1) // optimistic sentinel inserted
+	require.NotNil(t, cmd)
+
+	var sawErr bool
+	for _, msg := range drainMsgs(cmd()) { // run the SendMessage cmd
+		nm, c2 := m.Update(msg)
+		m = nm.(ui.RootModel)
+		if c2 != nil {
+			if _, ok := c2().(ui.StatusErrMsg); ok {
+				sawErr = true
+			}
+		}
+	}
+	assert.True(t, sawErr, "send failure should surface a StatusErrMsg")
+	assert.Empty(t, st.Messages(1), "failed sentinel should be rolled back")
+}
+
+func TestRoot_ReactionFailure_SurfacesError(t *testing.T) {
+	mc := &mockTGClient{reactionErr: errors.New("offline")}
+	m, st := newRootWithOpenChat(t, mc)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hi", Date: time.Now()})
+	m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+
+	_, cmd := m.Update(components.ReactConfirmedMsg{Emoji: "👍"})
+	require.NotNil(t, cmd)
+
+	failMsg := cmd() // reactionFailedMsg
+	_, c2 := m.Update(failMsg)
+	require.NotNil(t, c2)
+	_, ok := c2().(ui.StatusErrMsg)
+	assert.True(t, ok, "reaction failure should surface a StatusErrMsg")
+}
 
 func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {
 	mc := &mockTGClient{}
