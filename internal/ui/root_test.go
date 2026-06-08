@@ -965,6 +965,26 @@ func TestRoot_EventUserPresence_UpdatesChatOnline(t *testing.T) {
 	assert.True(t, chat.Online)
 }
 
+func TestRoot_EventUserPresence_NoopWhenOnlineUnchanged(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, Online: true})
+	m := ui.NewRootModel(nil, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+	m.ChatList().SetChats(st.Chats())
+
+	newM, cmd := m.Update(store.Event{
+		Kind:   store.EventUserPresence,
+		ChatID: 1,
+		Online: true, // same as stored
+	})
+	_ = newM.(ui.RootModel)
+
+	assert.Nil(t, cmd)
+	chat, ok := st.GetChat(1)
+	require.True(t, ok)
+	assert.True(t, chat.Online)
+}
+
 func TestRoot_PasteMsg_WhenComposerFocused_InsertsText(t *testing.T) {
 	m, _ := newRootWithOpenChat(t, &mockTGClient{})
 	// enter insert mode → focuses composer

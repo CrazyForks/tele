@@ -124,3 +124,37 @@ func TestSQLite_Chats_OrderMatchesMemory(t *testing.T) {
 	assert.Equal(t, int64(2), chats[1].ID) // newest
 	assert.Equal(t, int64(1), chats[2].ID)
 }
+
+func TestSQLite_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	assert.True(t, s.UpdateChatOnline(1, true))
+}
+
+func TestSQLite_UpdateChatOnline_ReturnsFalseWhenUnchanged(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Title: "Alice", Online: true})
+	assert.False(t, s.UpdateChatOnline(1, true))
+}
+
+func TestSQLite_UpdateChatOnline_ReturnsFalseWhenMissing(t *testing.T) {
+	s := newTestSQLite(t)
+	assert.False(t, s.UpdateChatOnline(999, true))
+}
+
+func TestSQLite_UpdateChatReadMaxID_ReturnsTrueWhenAdvanced(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 5})
+	assert.True(t, s.UpdateChatReadMaxID(1, 10))
+}
+
+func TestSQLite_UpdateChatReadMaxID_ReturnsFalseWhenNotAdvanced(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 10})
+	assert.False(t, s.UpdateChatReadMaxID(1, 10))
+}
+
+func TestSQLite_UpdateChatReadMaxID_ReturnsFalseWhenMissing(t *testing.T) {
+	s := newTestSQLite(t)
+	assert.False(t, s.UpdateChatReadMaxID(999, 10))
+}

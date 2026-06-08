@@ -16,9 +16,9 @@ type Store interface {
 	RemoveMessage(chatID int64, msgID int)
 	RemoveMessages(chatID int64, msgIDs []int)
 	IncrementChatUnread(chatID int64)
-	UpdateChatReadMaxID(chatID int64, maxID int)
+	UpdateChatReadMaxID(chatID int64, maxID int) bool
 	UpdateChatOutboxReadMaxID(chatID int64, maxID int)
-	UpdateChatOnline(userID int64, online bool)
+	UpdateChatOnline(userID int64, online bool) bool
 	FolderFilters() []FolderFilter
 	SetFolderFilters(filters []FolderFilter)
 	ClearForNewAccount(ownerID int64)

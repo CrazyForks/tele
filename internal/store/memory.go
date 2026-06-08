@@ -186,12 +186,12 @@ func (s *memoryStore) IncrementChatUnread(chatID int64) {
 	s.chats[chatID] = chat
 }
 
-func (s *memoryStore) UpdateChatReadMaxID(chatID int64, maxID int) {
+func (s *memoryStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	chat, ok := s.chats[chatID]
 	if !ok || maxID <= chat.ReadInboxMaxID {
-		return
+		return false
 	}
 	chat.ReadInboxMaxID = maxID
 	unread := 0
@@ -202,6 +202,7 @@ func (s *memoryStore) UpdateChatReadMaxID(chatID int64, maxID int) {
 	}
 	chat.UnreadCount = unread
 	s.chats[chatID] = chat
+	return true
 }
 
 func (s *memoryStore) UpdateChatOutboxReadMaxID(chatID int64, maxID int) {
@@ -215,15 +216,16 @@ func (s *memoryStore) UpdateChatOutboxReadMaxID(chatID int64, maxID int) {
 	s.chats[chatID] = chat
 }
 
-func (s *memoryStore) UpdateChatOnline(userID int64, online bool) {
+func (s *memoryStore) UpdateChatOnline(userID int64, online bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	chat, ok := s.chats[userID]
-	if !ok {
-		return
+	if !ok || chat.Online == online {
+		return false
 	}
 	chat.Online = online
 	s.chats[userID] = chat
+	return true
 }
 
 func (s *memoryStore) FolderFilters() []FolderFilter {

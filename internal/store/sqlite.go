@@ -343,12 +343,12 @@ func (s *SQLiteStore) IncrementChatUnread(chatID int64) {
 	s.persistChat(chat)
 }
 
-func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) {
+func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
 	s.mu.Lock()
 	chat, ok := s.chats[chatID]
 	if !ok || maxID <= chat.ReadInboxMaxID {
 		s.mu.Unlock()
-		return
+		return false
 	}
 	chat.ReadInboxMaxID = maxID
 	unread := 0
@@ -361,6 +361,7 @@ func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) {
 	s.chats[chatID] = chat
 	s.mu.Unlock()
 	s.persistChat(chat)
+	return true
 }
 
 func (s *SQLiteStore) UpdateChatOutboxReadMaxID(chatID int64, maxID int) {
@@ -376,17 +377,18 @@ func (s *SQLiteStore) UpdateChatOutboxReadMaxID(chatID int64, maxID int) {
 	s.persistChat(chat)
 }
 
-func (s *SQLiteStore) UpdateChatOnline(userID int64, online bool) {
+func (s *SQLiteStore) UpdateChatOnline(userID int64, online bool) bool {
 	s.mu.Lock()
 	chat, ok := s.chats[userID]
-	if !ok {
+	if !ok || chat.Online == online {
 		s.mu.Unlock()
-		return
+		return false
 	}
 	chat.Online = online
 	s.chats[userID] = chat
 	s.mu.Unlock()
 	s.persistChat(chat)
+	return true
 }
 
 func (s *SQLiteStore) FolderFilters() []FolderFilter {

@@ -20,13 +20,17 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		// elsewhere and arrive via getDifference catch-up. The store value is later
 		// overwritten by authoritative GetDialogs server state, so it must not be
 		// shadowed by a sticky list badge.
+		unreadChanged := false
 		if msg.Message.ChatID != m.currentChatID && !msg.Message.IsOut {
 			if chat, ok := m.st.GetChat(msg.Message.ChatID); ok && msg.Message.ID > chat.ReadInboxMaxID {
 				m.st.IncrementChatUnread(msg.Message.ChatID)
+				unreadChanged = true
 			}
 		}
 		m.chatList.SetChats(m.filteredChats())
-		if m.folderBar != nil {
+		// Folder unread counts only depend on per-chat unread; recompute solely
+		// when this message actually bumped a chat's unread count.
+		if m.folderBar != nil && unreadChanged {
 			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
 		}
 		if msg.Message.ChatID == m.currentChatID {
@@ -34,12 +38,13 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 			return m, tea.Batch(m.markReadCmd(), m.pendingDownloadCmds([]store.Message{msg.Message}))
 		}
 	case store.EventReadInbox:
-		m.st.UpdateChatReadMaxID(msg.ChatID, msg.ReadMaxID)
-		if chat, ok := m.st.GetChat(msg.ChatID); ok {
-			m.chatList.SetChatUnread(msg.ChatID, chat.UnreadCount)
-		}
-		if m.folderBar != nil {
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+		if m.st.UpdateChatReadMaxID(msg.ChatID, msg.ReadMaxID) {
+			if chat, ok := m.st.GetChat(msg.ChatID); ok {
+				m.chatList.SetChatUnread(msg.ChatID, chat.UnreadCount)
+			}
+			if m.folderBar != nil {
+				m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+			}
 		}
 	case store.EventReadOutbox:
 		m.st.UpdateChatOutboxReadMaxID(msg.ChatID, msg.ReadMaxID)
@@ -66,11 +71,13 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		}
 		m.chatList.SetChats(m.filteredChats())
 	case store.EventUserPresence:
-		m.st.UpdateChatOnline(msg.ChatID, msg.Online)
-		m.chatList.SetChats(m.filteredChats())
-		if m.folderBar != nil {
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+		// Presence cannot change unread counts, so the folder bar is never
+		// touched here. Skip all UI work when the online state did not flip —
+		// presence updates stream continuously for every online contact.
+		if !m.st.UpdateChatOnline(msg.ChatID, msg.Online) {
+			return m, nil
 		}
+		m.chatList.SetChats(m.filteredChats())
 		if msg.ChatID == m.currentChatID {
 			if chat, ok := m.st.GetChat(msg.ChatID); ok {
 				m.chat.SetChat(&chat)

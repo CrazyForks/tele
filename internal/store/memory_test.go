@@ -217,6 +217,40 @@ func TestMemory_UpdateChatOnline_NoopWhenMissing(t *testing.T) {
 	})
 }
 
+func TestMemory_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	assert.True(t, s.UpdateChatOnline(1, true))
+}
+
+func TestMemory_UpdateChatOnline_ReturnsFalseWhenUnchanged(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 1, Title: "Alice", Online: true})
+	assert.False(t, s.UpdateChatOnline(1, true))
+}
+
+func TestMemory_UpdateChatOnline_ReturnsFalseWhenMissing(t *testing.T) {
+	s := store.NewMemory()
+	assert.False(t, s.UpdateChatOnline(999, true))
+}
+
+func TestMemory_UpdateChatReadMaxID_ReturnsTrueWhenAdvanced(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 5})
+	assert.True(t, s.UpdateChatReadMaxID(1, 10))
+}
+
+func TestMemory_UpdateChatReadMaxID_ReturnsFalseWhenNotAdvanced(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 10})
+	assert.False(t, s.UpdateChatReadMaxID(1, 10))
+}
+
+func TestMemory_UpdateChatReadMaxID_ReturnsFalseWhenMissing(t *testing.T) {
+	s := store.NewMemory()
+	assert.False(t, s.UpdateChatReadMaxID(999, 10))
+}
+
 func TestMemory_UpdateMessageReactions_ReplacesExisting(t *testing.T) {
 	s := store.NewMemory()
 	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "hi",
