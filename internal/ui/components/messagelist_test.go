@@ -1046,6 +1046,42 @@ func TestMessageList_NoUnreadSeparator_WhenAllMessagesRead(t *testing.T) {
 	assert.NotContains(t, view, "New Messages")
 }
 
+func TestMessageList_NoUnreadSeparator_BeforeOwnOutgoingMessage(t *testing.T) {
+	// Sending an outgoing message (ID > inboxReadMaxID) must not anchor the
+	// "New Messages" divider — it only marks the first incoming unread message.
+	now := time.Now()
+	ml := components.NewMessageList(20, 40)
+	ml.SetInboxReadMaxID(3)
+	ml.SetMessages([]store.Message{
+		{ID: 1, ChatID: 1, Text: "read", Date: now},
+		{ID: 2, ChatID: 1, Text: "read", Date: now},
+		{ID: 3, ChatID: 1, Text: "read", Date: now},
+		{ID: 4, ChatID: 1, Text: "my reply", Date: now, IsOut: true},
+	})
+	view := ml.View()
+	assert.NotContains(t, view, "New Messages")
+}
+
+func TestMessageList_UnreadSeparator_AnchorsToFirstIncoming_SkippingOutgoing(t *testing.T) {
+	// An outgoing message before the first incoming unread one must be skipped:
+	// the divider anchors to the incoming message, not the outgoing one.
+	now := time.Now()
+	ml := components.NewMessageList(20, 40)
+	ml.SetInboxReadMaxID(3)
+	ml.SetMessages([]store.Message{
+		{ID: 3, ChatID: 1, Text: "read", Date: now},
+		{ID: 4, ChatID: 1, Text: "my reply", Date: now, IsOut: true},
+		{ID: 5, ChatID: 1, Text: "incoming unread", Date: now},
+	})
+	view := ml.View()
+	require.Contains(t, view, "New Messages")
+	sepIdx := strings.Index(view, "New Messages")
+	outIdx := strings.Index(view, "my reply")
+	incIdx := strings.Index(view, "incoming unread")
+	assert.Less(t, outIdx, sepIdx, "outgoing message must render above the divider")
+	assert.Less(t, sepIdx, incIdx, "divider must render above the first incoming unread message")
+}
+
 func TestMessageList_UnreadSeparator_VisibleWhenManyUnread(t *testing.T) {
 	// When unread messages exceed the viewport height, ScrollToFirstUnread must
 	// include the separator at the top rather than hiding it above the boundary.

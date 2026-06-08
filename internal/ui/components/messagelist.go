@@ -79,7 +79,9 @@ func (ml *MessageList) buildItems(msgs []store.Message) []listItem {
 			items = append(items, listItem{kind: itemDateSeparator, label: formatSepLabel(msg.Date)})
 			prev = msg.Date
 		}
-		if !unreadInserted && ml.inboxReadMaxID > 0 && msg.ID > ml.inboxReadMaxID {
+		// The divider marks the first incoming unread message; own outgoing
+		// messages never anchor it, even though their ID exceeds inboxReadMaxID.
+		if !unreadInserted && !msg.IsOut && ml.inboxReadMaxID > 0 && msg.ID > ml.inboxReadMaxID {
 			items = append(items, listItem{kind: itemUnreadSeparator})
 			unreadInserted = true
 		}
