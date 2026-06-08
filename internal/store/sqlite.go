@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS folder_filters (
 );
 `
 
+// MaxMessagesPerChat bounds how many recent messages are kept in memory per
+// chat. The store is a bounded cache of the recent tail; older history is
+// re-fetched from the server on demand. See issue #73.
+const MaxMessagesPerChat = 500
+
 // SQLiteStore is a write-through Store backed by a SQLite file.
 // Reads are served from an in-memory map; every chat write also persists to disk.
 // Message operations are in-memory only.
@@ -278,11 +283,27 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []Message) {
 		delete(s.msgChat, m.ID)
 	}
 	s.messages[chatID] = cp
+	s.capMessagesLocked(chatID)
 	if chat, ok := s.chats[chatID]; ok && sharedPtsBox(chat.Peer) {
-		for _, m := range cp {
+		for _, m := range s.messages[chatID] {
 			s.msgChat[m.ID] = chatID
 		}
 	}
+}
+
+// capMessagesLocked trims a chat's message slice to the newest MaxMessagesPerChat,
+// dropping the oldest from the front and clearing their index entries. Caller
+// holds the lock. See issue #73.
+func (s *SQLiteStore) capMessagesLocked(chatID int64) {
+	msgs := s.messages[chatID]
+	if len(msgs) <= MaxMessagesPerChat {
+		return
+	}
+	drop := len(msgs) - MaxMessagesPerChat
+	for _, m := range msgs[:drop] {
+		delete(s.msgChat, m.ID)
+	}
+	s.messages[chatID] = msgs[drop:]
 }
 
 func (s *SQLiteStore) AppendMessage(msg Message) {
@@ -299,6 +320,7 @@ func (s *SQLiteStore) AppendMessage(msg Message) {
 			s.msgChat[msg.ID] = msg.ChatID
 		}
 	}
+	s.capMessagesLocked(msg.ChatID)
 	s.mu.Unlock()
 	if ok {
 		s.persistChat(chat)

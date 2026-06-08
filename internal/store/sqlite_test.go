@@ -186,6 +186,36 @@ func TestSQLite_RemoveMessagesByID_IgnoresChannelMessages(t *testing.T) {
 	require.Len(t, s.Messages(1), 1) // untouched — not addressable without ChatID
 }
 
+func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	const total = store.MaxMessagesPerChat + 100
+	for i := 1; i <= total; i++ {
+		s.AppendMessage(store.Message{ID: i, ChatID: 1})
+	}
+	msgs := s.Messages(1)
+	require.Len(t, msgs, store.MaxMessagesPerChat)
+	// Oldest trimmed from the front, newest retained at the back.
+	assert.Equal(t, total-store.MaxMessagesPerChat+1, msgs[0].ID)
+	assert.Equal(t, total, msgs[len(msgs)-1].ID)
+	// A trimmed message must no longer be resolvable via the index.
+	assert.Empty(t, s.RemoveMessagesByID([]int{1}))
+}
+
+func TestSQLite_SetMessages_CapsHistory(t *testing.T) {
+	s := newTestSQLite(t)
+	const total = store.MaxMessagesPerChat + 100
+	msgs := make([]store.Message, total)
+	for i := range msgs {
+		msgs[i] = store.Message{ID: i + 1, ChatID: 1}
+	}
+	s.SetMessages(1, msgs)
+	got := s.Messages(1)
+	require.Len(t, got, store.MaxMessagesPerChat)
+	assert.Equal(t, total-store.MaxMessagesPerChat+1, got[0].ID) // kept the newest tail
+	assert.Equal(t, total, got[len(got)-1].ID)
+}
+
 func TestSQLite_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
 	s := newTestSQLite(t)
 	s.SetChat(store.Chat{ID: 1, Title: "Alice"})
