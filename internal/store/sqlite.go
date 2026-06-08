@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS folder_filters (
 // re-fetched from the server on demand. See issue #73.
 const MaxMessagesPerChat = 500
 
+// persistFlushInterval is how often write-behind chat-row changes (read state,
+// last message) are coalesced and flushed to disk. See issue #91.
+const persistFlushInterval = 2 * time.Second
+
 // SQLiteStore is a write-through Store backed by a SQLite file.
 // Reads are served from an in-memory map; every chat write also persists to disk.
 // Message operations are in-memory only.
@@ -80,6 +84,15 @@ type SQLiteStore struct {
 	// where message IDs are globally unique); channels/supergroups have their own
 	// ID space and are deleted with an explicit ChatID. See issue #72.
 	msgChat map[int]int64
+
+	// dirtyPersist holds chat IDs whose row changed via a high-frequency
+	// write-behind mutation (read state, last message) and awaits a coalesced
+	// flush. flushStop signals the flusher goroutine to exit; flushDone is closed
+	// when it has. See issue #91.
+	dirtyPersist map[int64]struct{}
+	flushStop    chan struct{}
+	flushDone    chan struct{}
+	closeOnce    sync.Once
 }
 
 // sharedPtsBox reports whether a peer's messages live in the account's common
@@ -117,25 +130,82 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		return nil, err
 	}
 	s := &SQLiteStore{
-		chats:      make(map[int64]Chat),
-		messages:   make(map[int64][]Message),
-		msgChat:    make(map[int]int64),
-		db:         db,
-		log:        log,
-		orderDirty: true, // build the sorted view lazily on first Chats() call
+		chats:        make(map[int64]Chat),
+		messages:     make(map[int64][]Message),
+		msgChat:      make(map[int]int64),
+		dirtyPersist: make(map[int64]struct{}),
+		flushStop:    make(chan struct{}),
+		flushDone:    make(chan struct{}),
+		db:           db,
+		log:          log,
+		orderDirty:   true, // build the sorted view lazily on first Chats() call
 	}
 	if err := s.loadChats(); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
+	go s.runFlusher()
 	return s, nil
+}
+
+// runFlusher periodically flushes coalesced write-behind chat-row changes until
+// Close signals it to stop. See issue #91.
+func (s *SQLiteStore) runFlusher() {
+	defer close(s.flushDone)
+	ticker := time.NewTicker(persistFlushInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.Flush()
+		case <-s.flushStop:
+			return
+		}
+	}
+}
+
+// Flush persists every chat marked dirty by write-behind mutations. Snapshots
+// are taken under the lock; the disk writes run without it.
+func (s *SQLiteStore) Flush() {
+	s.mu.Lock()
+	if len(s.dirtyPersist) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	pending := make([]Chat, 0, len(s.dirtyPersist))
+	for id := range s.dirtyPersist {
+		if c, ok := s.chats[id]; ok {
+			pending = append(pending, c)
+		}
+	}
+	s.dirtyPersist = make(map[int64]struct{})
+	s.mu.Unlock()
+
+	for _, c := range pending {
+		s.persistChat(c)
+	}
+}
+
+// markDirtyLocked queues a chat for the next write-behind flush. Caller holds the lock.
+func (s *SQLiteStore) markDirtyLocked(chatID int64) {
+	s.dirtyPersist[chatID] = struct{}{}
 }
 
 // DB returns the underlying *sql.DB for sharing with other storage adapters (e.g. state storage).
 func (s *SQLiteStore) DB() *sql.DB { return s.db }
 
-// Close closes the underlying database connection.
-func (s *SQLiteStore) Close() error { return s.db.Close() }
+// Close stops the write-behind flusher, persists any pending chat state, and
+// closes the underlying database connection. It is idempotent.
+func (s *SQLiteStore) Close() error {
+	var err error
+	s.closeOnce.Do(func() {
+		close(s.flushStop)
+		<-s.flushDone // wait for the flusher to exit before the final flush
+		s.Flush()
+		err = s.db.Close()
+	})
+	return err
+}
 
 func (s *SQLiteStore) loadChats() error {
 	rows, err := s.db.Query(`SELECT id, title, peer_type, peer_access_hash, pinned,
@@ -308,10 +378,9 @@ func (s *SQLiteStore) capMessagesLocked(chatID int64) {
 
 func (s *SQLiteStore) AppendMessage(msg Message) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.messages[msg.ChatID] = append(s.messages[msg.ChatID], msg)
-	var chat Chat
-	var ok bool
-	if chat, ok = s.chats[msg.ChatID]; ok {
+	if chat, ok := s.chats[msg.ChatID]; ok {
 		m := msg
 		chat.LastMessage = &m
 		s.chats[msg.ChatID] = chat
@@ -319,12 +388,9 @@ func (s *SQLiteStore) AppendMessage(msg Message) {
 		if sharedPtsBox(chat.Peer) {
 			s.msgChat[msg.ID] = msg.ChatID
 		}
+		s.markDirtyLocked(msg.ChatID) // write-behind: last-message persists on flush
 	}
 	s.capMessagesLocked(msg.ChatID)
-	s.mu.Unlock()
-	if ok {
-		s.persistChat(chat)
-	}
 }
 
 func (s *SQLiteStore) UpdateMessageID(chatID int64, oldID, newID int) {
@@ -456,8 +522,8 @@ func (s *SQLiteStore) IncrementChatUnread(chatID int64) {
 	}
 	chat.UnreadCount++
 	s.chats[chatID] = chat
+	s.markDirtyLocked(chatID)
 	s.mu.Unlock()
-	s.persistChat(chat)
 }
 
 func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
@@ -476,8 +542,8 @@ func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
 	}
 	chat.UnreadCount = unread
 	s.chats[chatID] = chat
+	s.markDirtyLocked(chatID)
 	s.mu.Unlock()
-	s.persistChat(chat)
 	return true
 }
 
@@ -490,21 +556,22 @@ func (s *SQLiteStore) UpdateChatOutboxReadMaxID(chatID int64, maxID int) {
 	}
 	chat.ReadOutboxMaxID = maxID
 	s.chats[chatID] = chat
+	s.markDirtyLocked(chatID)
 	s.mu.Unlock()
-	s.persistChat(chat)
 }
 
+// UpdateChatOnline updates presence in memory only. Online status is ephemeral
+// and high-frequency (one update per contact per status change), so it is never
+// persisted. See issue #91.
 func (s *SQLiteStore) UpdateChatOnline(userID int64, online bool) bool {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	chat, ok := s.chats[userID]
 	if !ok || chat.Online == online {
-		s.mu.Unlock()
 		return false
 	}
 	chat.Online = online
 	s.chats[userID] = chat
-	s.mu.Unlock()
-	s.persistChat(chat)
 	return true
 }
 
@@ -558,6 +625,7 @@ func (s *SQLiteStore) ClearForNewAccount(ownerID int64) {
 	s.chats = make(map[int64]Chat)
 	s.messages = make(map[int64][]Message)
 	s.msgChat = make(map[int]int64)
+	s.dirtyPersist = make(map[int64]struct{})
 	s.sortedIDs = nil
 	s.orderDirty = true
 	s.mu.Unlock()

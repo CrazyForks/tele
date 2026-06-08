@@ -216,6 +216,68 @@ func TestSQLite_SetMessages_CapsHistory(t *testing.T) {
 	assert.Equal(t, total, got[len(got)-1].ID)
 }
 
+func persistedReadInboxMaxID(t *testing.T, s *store.SQLiteStore, id int64) int {
+	t.Helper()
+	var v int
+	err := s.DB().QueryRow(`SELECT read_inbox_max_id FROM chats WHERE id = ?`, id).Scan(&v)
+	require.NoError(t, err)
+	return v
+}
+
+func persistedOnline(t *testing.T, s *store.SQLiteStore, id int64) int {
+	t.Helper()
+	var v int
+	err := s.DB().QueryRow(`SELECT online FROM chats WHERE id = ?`, id).Scan(&v)
+	require.NoError(t, err)
+	return v
+}
+
+func TestSQLite_WriteBehind_ReadStateFlushedOnFlush(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}, ReadInboxMaxID: 5})
+
+	// Read-state advance is write-behind: in memory immediately, on disk only
+	// after a flush.
+	require.True(t, s.UpdateChatReadMaxID(1, 10))
+	got, _ := s.GetChat(1)
+	assert.Equal(t, 10, got.ReadInboxMaxID)              // in memory
+	assert.Equal(t, 5, persistedReadInboxMaxID(t, s, 1)) // not yet on disk
+
+	s.Flush()
+	assert.Equal(t, 10, persistedReadInboxMaxID(t, s, 1)) // flushed
+}
+
+func TestSQLite_WriteBehind_OnlineNeverPersisted(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+
+	require.True(t, s.UpdateChatOnline(1, true))
+	got, _ := s.GetChat(1)
+	assert.True(t, got.Online) // in memory
+
+	s.Flush()
+	assert.Equal(t, 0, persistedOnline(t, s, 1)) // presence is ephemeral, never written
+}
+
+func TestSQLite_WriteBehind_FlushesOnClose(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.db")
+	log := zap.NewNop()
+
+	s, err := store.NewSQLite(path, log)
+	require.NoError(t, err)
+	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}, ReadInboxMaxID: 5})
+	require.True(t, s.UpdateChatReadMaxID(1, 42))
+	require.NoError(t, s.Close()) // must flush pending write-behind state
+
+	s2, err := store.NewSQLite(path, log)
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	chat, ok := s2.GetChat(1)
+	require.True(t, ok)
+	assert.Equal(t, 42, chat.ReadInboxMaxID)
+}
+
 func TestSQLite_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
 	s := newTestSQLite(t)
 	s.SetChat(store.Chat{ID: 1, Title: "Alice"})
