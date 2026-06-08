@@ -5,11 +5,22 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// assertPrivatePerm checks the 0600 temp-file mode on Unix. Windows has no Unix
+// permission bits (os.Chmod only toggles read-only), so os.Stat reports 0666.
+func assertPrivatePerm(t *testing.T, info os.FileInfo) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+}
 
 func TestOpenInViewer_CreatesFileInTmpDir(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -26,7 +37,7 @@ func TestOpenInViewer_CreatesFileInTmpDir(t *testing.T) {
 	filePath := filepath.Join(tmpDir, entries[0].Name())
 	info, err := os.Stat(filePath)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	assertPrivatePerm(t, info)
 }
 
 func TestWriteTempMediaFile_WritesBytesWithExtension(t *testing.T) {
@@ -43,5 +54,5 @@ func TestWriteTempMediaFile_WritesBytesWithExtension(t *testing.T) {
 
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	assertPrivatePerm(t, info)
 }
