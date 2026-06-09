@@ -318,18 +318,42 @@ func (m RootModel) computeFolderUnreads() map[int]int {
 	}
 	chats := m.st.Chats()
 	for _, f := range m.folderBar.Folders() {
-		if f.ID == 0 {
+		// All Chats has no badge; Archive intentionally shows no unread
+		// count (mirrors the official client).
+		if f.ID == 0 || f.ID == store.ArchiveFolderID {
 			continue
 		}
 		chatsWithUnread := 0
 		for _, c := range chats {
-			if f.Matches(c) && c.UnreadCount > 0 {
+			if !c.IsArchived && f.Matches(c) && c.UnreadCount > 0 {
 				chatsWithUnread++
 			}
 		}
 		counts[f.ID] = chatsWithUnread
 	}
 	return counts
+}
+
+// syncFolderBar refreshes the folder pane's unread badges and toggles the
+// Archive entry's presence based on whether any archived chat exists.
+func (m RootModel) syncFolderBar() {
+	if m.folderBar == nil || m.st == nil {
+		return
+	}
+	m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+	m.folderBar.SetArchivePresent(m.hasArchivedChats())
+}
+
+func (m RootModel) hasArchivedChats() bool {
+	if m.st == nil {
+		return false
+	}
+	for _, c := range m.st.Chats() {
+		if c.IsArchived {
+			return true
+		}
+	}
+	return false
 }
 
 func (m RootModel) Init() tea.Cmd {

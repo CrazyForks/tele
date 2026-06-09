@@ -57,7 +57,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 				m.chatList.SetSize(chatlistW-2*borderSize, innerH)
 				m.chat.SetSize(chatW-2*borderSize, innerH)
 			}
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+			m.syncFolderBar()
 		}
 		return m, m.retransmitOnColsChange()
 
@@ -66,7 +66,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.chatList.SetChats(m.filteredChats())
 		m.chatList.SetActiveByID(m.currentChatID)
 		if m.folderBar != nil {
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+			m.syncFolderBar()
 		}
 		result, cmd := m.focusPane(FocusChatList)
 		return result.(RootModel), cmd
@@ -79,7 +79,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			m.chatList.SetChats(m.filteredChats())
 		}
 		if m.folderBar != nil {
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+			m.syncFolderBar()
 		}
 		return m, spinnerTickCmd()
 

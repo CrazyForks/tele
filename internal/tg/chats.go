@@ -178,7 +178,7 @@ func (c *GotdClient) getDialogs(ctx context.Context, folderID int) ([]store.Chat
 		Users:    userSlice,
 		Chats:    chatSlice,
 	}
-	chats := c.parseDialogs(synthetic, folderID == 1)
+	chats := c.parseDialogs(synthetic)
 	c.log.Debug("GetDialogs done", zap.Int("count", len(chats)))
 	return chats, nil
 }
@@ -205,7 +205,7 @@ type dialogMeta struct {
 	lastMsgAt time.Time
 }
 
-func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass, archived bool) []store.Chat {
+func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 	var dialogs []tg.DialogClass
 	var msgs []tg.MessageClass
 	var users []tg.UserClass
@@ -294,7 +294,11 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass, archived bool)
 			continue
 		}
 		chat.IsMuted = isMuted(dlg)
-		chat.IsArchived = archived
+		// Derive archived state from the dialog's own folder, not from which
+		// folder we queried: messages.getDialogs(folder_id=1) also returns the
+		// main folder's pinned dialogs, which must not be marked archived.
+		folderID, _ := dlg.GetFolderID()
+		chat.IsArchived = folderID == 1
 		chat.Pinned = m.pinned
 		chat.UnreadCount = dlg.UnreadCount
 		chat.ReadInboxMaxID = dlg.ReadInboxMaxID

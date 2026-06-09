@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
@@ -72,10 +73,16 @@ func (m RootModel) handleChatMenuRequest(msg tea.Msg) (RootModel, tea.Cmd, bool)
 // refreshChatPanes re-applies the active filter to the chat list and
 // recomputes folder unread badges after a store mutation.
 func (m *RootModel) refreshChatPanes() {
+	// If the Archive folder was active but just became empty (the last
+	// archived chat was unarchived), fall back to All Chats so the user is
+	// not stranded on an empty view.
+	if m.activeFilter != nil && m.activeFilter.ID == store.ArchiveFolderID && !m.hasArchivedChats() {
+		m.activeFilter = nil
+	}
 	m.chatList.SetChats(m.filteredChats())
 	m.chatList.SetActiveByID(m.currentChatID)
 	if m.folderBar != nil {
-		m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+		m.syncFolderBar()
 	}
 }
 

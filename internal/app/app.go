@@ -158,6 +158,15 @@ func (a *App) Run() error {
 			for _, c := range chats {
 				a.st.SetChat(c)
 			}
+			archived, err := a.client.GetArchivedDialogs(ctx)
+			if err != nil {
+				a.log.Warn("GetArchivedDialogs failed", zap.Error(err))
+			} else {
+				a.log.Info("archived dialogs loaded", zap.Int("count", len(archived)))
+				for _, c := range archived {
+					a.st.SetChat(c)
+				}
+			}
 			prog.Send(screens.TransitionToMainMsg{})
 		}()
 

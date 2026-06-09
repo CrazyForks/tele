@@ -26,8 +26,12 @@ var (
 
 var allChatsFilter = store.FolderFilter{ID: 0, Title: "All Chats"}
 
+var archiveFilter = store.FolderFilter{ID: store.ArchiveFolderID, Title: "Archive"}
+
 type FoldersModel struct {
-	folders      []store.FolderFilter // index 0 is always allChatsFilter
+	folders      []store.FolderFilter // computed: [AllChats] + realFolders + (Archive?)
+	realFolders  []store.FolderFilter
+	showArchive  bool
 	cursor       int
 	activeIdx    int
 	width        int
@@ -37,22 +41,59 @@ type FoldersModel struct {
 }
 
 func NewFoldersModel() *FoldersModel {
-	return &FoldersModel{
-		folders:      []store.FolderFilter{allChatsFilter},
-		unreadCounts: make(map[int]int),
-	}
+	m := &FoldersModel{unreadCounts: make(map[int]int)}
+	m.rebuild()
+	return m
 }
 
 func (m *FoldersModel) SetFolders(folders []store.FolderFilter) {
-	m.folders = make([]store.FolderFilter, 0, len(folders)+1)
-	m.folders = append(m.folders, allChatsFilter)
-	m.folders = append(m.folders, folders...)
-	if m.cursor >= len(m.folders) {
-		m.cursor = 0
+	m.realFolders = folders
+	m.rebuild()
+}
+
+// SetArchivePresent shows or hides the Archive virtual folder entry. The
+// Archive entry appears only while at least one archived chat exists, so an
+// empty Archive is never drawn.
+func (m *FoldersModel) SetArchivePresent(present bool) {
+	if m.showArchive == present {
+		return
 	}
-	if m.activeIdx >= len(m.folders) {
-		m.activeIdx = 0
+	m.showArchive = present
+	m.rebuild()
+}
+
+// rebuild recomputes the folder list (All Chats, real folders, optional
+// Archive) while preserving the cursor and active selection by filter ID.
+func (m *FoldersModel) rebuild() {
+	cursorID := m.idAt(m.cursor)
+	activeID := m.idAt(m.activeIdx)
+
+	folders := make([]store.FolderFilter, 0, len(m.realFolders)+2)
+	folders = append(folders, allChatsFilter)
+	folders = append(folders, m.realFolders...)
+	if m.showArchive {
+		folders = append(folders, archiveFilter)
 	}
+	m.folders = folders
+
+	m.cursor = m.indexOfID(cursorID)
+	m.activeIdx = m.indexOfID(activeID)
+}
+
+func (m *FoldersModel) idAt(idx int) int {
+	if idx >= 0 && idx < len(m.folders) {
+		return m.folders[idx].ID
+	}
+	return 0
+}
+
+func (m *FoldersModel) indexOfID(id int) int {
+	for i, f := range m.folders {
+		if f.ID == id {
+			return i
+		}
+	}
+	return 0 // fall back to All Chats
 }
 
 func (m *FoldersModel) SetFocused(focused bool)            { m.focused = focused }

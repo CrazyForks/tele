@@ -69,7 +69,7 @@ func TestParseDialogs_IncludesBots(t *testing.T) {
 		Messages: []tg.MessageClass{msg},
 		Users:    []tg.UserClass{bot},
 	}
-	chats := c.parseDialogs(result, false)
+	chats := c.parseDialogs(result)
 	require.Len(t, chats, 1)
 	assert.Equal(t, "CoolBot", chats[0].Title)
 }
@@ -87,7 +87,7 @@ func TestParseDialogs_IncludesSavedMessages(t *testing.T) {
 		Messages: []tg.MessageClass{msg},
 		Users:    []tg.UserClass{self},
 	}
-	chats := c.parseDialogs(result, false)
+	chats := c.parseDialogs(result)
 	require.Len(t, chats, 1)
 	assert.Equal(t, "Saved Messages", chats[0].Title)
 }
@@ -106,7 +106,7 @@ func TestParseDialogs_UnreadCount(t *testing.T) {
 		Messages: []tg.MessageClass{msg},
 		Users:    []tg.UserClass{user},
 	}
-	chats := c.parseDialogs(result, false)
+	chats := c.parseDialogs(result)
 	require.Len(t, chats, 1)
 	assert.Equal(t, 5, chats[0].UnreadCount)
 }
@@ -118,12 +118,34 @@ func TestParseDialogs_SetsArchivedFlag(t *testing.T) {
 		Peer:       &tg.PeerUser{UserID: 7},
 		TopMessage: 10,
 	}
-	result := &tg.MessagesDialogs{
-		Dialogs:  []tg.DialogClass{dialog},
-		Messages: []tg.MessageClass{&tg.Message{ID: 10, Date: 1}},
-		Users:    []tg.UserClass{user},
+	dialog.SetFolderID(1) // archived dialog carries folder_id 1
+
+	pinnedMain := &tg.Dialog{
+		Peer:       &tg.PeerUser{UserID: 8},
+		TopMessage: 11,
+		Pinned:     true,
 	}
-	out := c.parseDialogs(result, true)
-	require.Len(t, out, 1)
-	assert.True(t, out[0].IsArchived)
+	// A main-folder pinned dialog that the archive query also returns; it has
+	// no folder_id and must not be marked archived.
+
+	result := &tg.MessagesDialogs{
+		Dialogs: []tg.DialogClass{dialog, pinnedMain},
+		Messages: []tg.MessageClass{
+			&tg.Message{ID: 10, Date: 1},
+			&tg.Message{ID: 11, Date: 2},
+		},
+		Users: []tg.UserClass{
+			user,
+			&tg.User{ID: 8, FirstName: "Alice", AccessHash: 2},
+		},
+	}
+	out := c.parseDialogs(result)
+	require.Len(t, out, 2)
+
+	byID := map[int64]store.Chat{}
+	for _, c := range out {
+		byID[c.ID] = c
+	}
+	assert.True(t, byID[7].IsArchived, "folder_id 1 dialog is archived")
+	assert.False(t, byID[8].IsArchived, "leaked pinned main dialog is not archived")
 }

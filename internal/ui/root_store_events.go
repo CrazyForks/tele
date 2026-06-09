@@ -31,7 +31,7 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		// Folder unread counts only depend on per-chat unread; recompute solely
 		// when this message actually bumped a chat's unread count.
 		if m.folderBar != nil && unreadChanged {
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+			m.syncFolderBar()
 		}
 		if msg.Message.ChatID == m.currentChatID {
 			m.chat.SetMessages(m.st.Messages(m.currentChatID))
@@ -43,7 +43,7 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 				m.chatList.SetChatUnread(msg.ChatID, chat.UnreadCount)
 			}
 			if m.folderBar != nil {
-				m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
+				m.syncFolderBar()
 			}
 		}
 	case store.EventReadOutbox:

@@ -9,6 +9,39 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
+func TestComputeFolderUnreads_NoArchiveBadge_ExcludesArchived(t *testing.T) {
+	st := store.NewMemory()
+	// Two archived chats (one unread) and one normal unread chat in a group folder.
+	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerGroup}, IsArchived: true, UnreadCount: 2})
+	st.SetChat(store.Chat{ID: 2, Peer: store.Peer{ID: 2, Type: store.PeerGroup}, UnreadCount: 3})
+	m := NewRootModel(nil, st, 50, false)
+	m.folderBar.SetFolders([]store.FolderFilter{{ID: 7, Title: "Groups", Groups: true}})
+	m.folderBar.SetArchivePresent(true)
+
+	counts := m.computeFolderUnreads()
+	// Archive carries no unread badge.
+	_, hasArchive := counts[store.ArchiveFolderID]
+	assert.False(t, hasArchive)
+	// The archived chat does not inflate the Groups folder badge.
+	assert.Equal(t, 1, counts[7])
+}
+
+func TestSyncFolderBar_TogglesArchivePresence(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m := NewRootModel(nil, st, 50, false)
+
+	m.syncFolderBar()
+	for _, f := range m.folderBar.Folders() {
+		require.NotEqual(t, store.ArchiveFolderID, f.ID)
+	}
+
+	st.SetChatArchived(1, true)
+	m.syncFolderBar()
+	last := m.folderBar.Folders()
+	assert.Equal(t, store.ArchiveFolderID, last[len(last)-1].ID)
+}
+
 func TestFilteredChats_ArchiveSplit(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(store.Chat{ID: 1, Title: "Normal", Peer: store.Peer{ID: 1, Type: store.PeerUser}})

@@ -128,3 +128,42 @@ func TestFolders_TruncatedBadgeFitsWidth(t *testing.T) {
 		assert.LessOrEqual(t, w, 16, "line %q must fit in inner width 16", line)
 	}
 }
+
+func TestFolders_ArchiveAppearsOnlyWhenPresent(t *testing.T) {
+	m := screens.NewFoldersModel()
+	m.SetFolders([]store.FolderFilter{{ID: 7, Title: "Work"}})
+
+	// No archived chats yet: no Archive entry.
+	for _, f := range m.Folders() {
+		require.NotEqual(t, store.ArchiveFolderID, f.ID, "archive must be hidden when empty")
+	}
+
+	// Archived chat exists: Archive entry appears last.
+	m.SetArchivePresent(true)
+	folders := m.Folders()
+	last := folders[len(folders)-1]
+	assert.Equal(t, store.ArchiveFolderID, last.ID)
+	assert.Equal(t, "Archive", last.Title)
+
+	// Becomes empty again: Archive entry disappears.
+	m.SetArchivePresent(false)
+	for _, f := range m.Folders() {
+		require.NotEqual(t, store.ArchiveFolderID, f.ID)
+	}
+}
+
+func TestFolders_ArchivePreservesSelectionByID(t *testing.T) {
+	m := screens.NewFoldersModel()
+	m.SetFolders([]store.FolderFilter{{ID: 7, Title: "Work"}})
+	m.SetArchivePresent(true)
+
+	// Move cursor to the Work folder (index 1). Update returns a new pane.
+	m.SetFocused(true)
+	p, _ := m.Update(keys.ActionMsg{Action: keys.ActionDown})
+	m = p.(*screens.FoldersModel)
+	require.Equal(t, 1, m.Cursor())
+
+	// Toggling archive presence must not move the cursor off Work.
+	m.SetArchivePresent(false)
+	assert.Equal(t, 1, m.Cursor())
+}
