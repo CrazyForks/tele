@@ -54,6 +54,11 @@ func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChat
 	if !ok {
 		return
 	}
+	// Suppress notifications for muted chats and anything in the Archive
+	// folder (archived chats are treated as muted).
+	if chat.IsMuted || chat.IsArchived {
+		return
+	}
 	_ = notifier.Notify(chat.Title, truncate(evt.Message.Text, 100))
 }
 

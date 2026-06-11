@@ -82,3 +82,27 @@ func TestMaybeNotify_SilentForOutgoingMessage(t *testing.T) {
 	maybeNotify(n, st, evt, 1)
 	assert.Empty(t, n.calls)
 }
+
+func TestMaybeNotify_SilentForMutedChat(t *testing.T) {
+	n := &mockNotifier{}
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 2, Title: "Bob", IsMuted: true})
+	evt := store.Event{
+		Kind:    store.EventNewMessage,
+		Message: store.Message{ChatID: 2, Text: "hello there"},
+	}
+	maybeNotify(n, st, evt, 1)
+	assert.Empty(t, n.calls)
+}
+
+func TestMaybeNotify_SilentForArchivedChat(t *testing.T) {
+	n := &mockNotifier{}
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 2, Title: "Bob", IsArchived: true})
+	evt := store.Event{
+		Kind:    store.EventNewMessage,
+		Message: store.Message{ChatID: 2, Text: "hello there"},
+	}
+	maybeNotify(n, st, evt, 1)
+	assert.Empty(t, n.calls)
+}
