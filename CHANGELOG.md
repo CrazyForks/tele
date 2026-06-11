@@ -11,6 +11,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Chat list now shows muted (dim `×`) and manual-unread (`[•]`) indicators so
+  these states are visible at a glance (#117)
+
 ## [1.2.0] - 2026-06-11 — Reliable updates and history scrolling
 
 ### Fixed

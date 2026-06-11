@@ -20,6 +20,7 @@ var (
 	normalChatStyle   = lipgloss.NewStyle()
 	activeChatStyle   = lipgloss.NewStyle().Bold(true)
 	onlineDotStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 )
 
 func formatUnread(count int) string {
@@ -30,6 +31,28 @@ func formatUnread(count int) string {
 		return "[99+]"
 	}
 	return fmt.Sprintf("[%d]", count)
+}
+
+// rowIndicators builds the right-aligned status column for a chat row: an
+// optional dim muted marker followed by the unread token. The unread token is
+// the numeric badge when there are unread messages, or a manual-unread dot when
+// the chat was marked unread with no real count.
+func rowIndicators(c store.Chat) string {
+	var unread string
+	switch {
+	case c.UnreadCount > 0:
+		unread = formatUnread(c.UnreadCount)
+	case c.UnreadMark:
+		unread = "[•]"
+	}
+	if !c.IsMuted {
+		return unread
+	}
+	muted := mutedStyle.Render("×")
+	if unread == "" {
+		return muted
+	}
+	return muted + " " + unread
 }
 
 type ChatListModel struct {
@@ -228,7 +251,7 @@ func (m *ChatListModel) View() string {
 
 	lines := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
-		badge := formatUnread(m.chats[i].UnreadCount)
+		badge := rowIndicators(m.chats[i])
 		title := m.chats[i].Title
 
 		prefix := "    "

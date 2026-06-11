@@ -80,6 +80,65 @@ func TestChatList_NoBadgeWhenZero(t *testing.T) {
 	assert.NotContains(t, view, "[0]")
 }
 
+func TestChatList_ManualUnread_ShowsDotBadge(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{
+		{ID: 1, Title: "Marked", UnreadMark: true, UnreadCount: 0},
+	})
+	view := m.View()
+	assert.Contains(t, view, "[•]", "manually-marked chat with no count shows the dot badge")
+	assert.NotContains(t, view, "[0]")
+}
+
+func TestChatList_ManualUnread_NumericBadgeWinsWithCount(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{
+		{ID: 1, Title: "Both", UnreadMark: true, UnreadCount: 5},
+	})
+	view := m.View()
+	assert.Contains(t, view, "[5]")
+	assert.NotContains(t, view, "[•]", "numeric count takes precedence over the manual-unread dot")
+}
+
+func TestChatList_Muted_ShowsMarker(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{
+		{ID: 1, Title: "Quiet", IsMuted: true},
+	})
+	view := m.View()
+	assert.Contains(t, view, "×", "muted chat shows the mute marker")
+}
+
+func TestChatList_NotMuted_NoMarker(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{
+		{ID: 1, Title: "Loud", IsMuted: false, UnreadCount: 3},
+	})
+	view := m.View()
+	assert.NotContains(t, view, "×", "non-muted chat has no mute marker")
+}
+
+func TestChatList_MutedUnread_WidthConsistent(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(30, 20)
+	m.SetChats([]store.Chat{
+		{ID: 1, Title: "Plain", UnreadCount: 5},
+		{ID: 2, Title: "Muted", UnreadCount: 5, IsMuted: true},
+		{ID: 3, Title: "Mark", UnreadMark: true},
+	})
+	lines := strings.Split(m.View(), "\n")
+	require.GreaterOrEqual(t, len(lines), 3)
+	w0 := lipgloss.Width(lines[0])
+	w1 := lipgloss.Width(lines[1])
+	w2 := lipgloss.Width(lines[2])
+	assert.Equal(t, w0, w1, "muted row must match plain unread row width")
+	assert.Equal(t, w0, w2, "manual-unread row must match plain unread row width")
+}
+
 func TestChatList_SetChats_PreservesCursorByID(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetChats(makeTestChats()) // [A(1), B(2), C(3)], cursor at 0 (A)
