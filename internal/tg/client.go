@@ -2,12 +2,15 @@ package tg
 
 import (
 	"context"
+	"net"
 	"sync"
 
 	"go.uber.org/zap"
+	"golang.org/x/net/proxy"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
+	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 
@@ -112,9 +115,23 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		}
 	}()
 
+	dialer := proxy.FromEnvironment()
+	if dialer != proxy.Direct {
+		c.log.Info("using system proxy from ALL_PROXY")
+	}
+	resolver := dcs.Plain(dcs.PlainOptions{
+		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if cd, ok := dialer.(proxy.ContextDialer); ok {
+				return cd.DialContext(ctx, network, addr)
+			}
+			return dialer.Dial(network, addr)
+		},
+	})
+
 	tc := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
 		UpdateHandler:  hook,
 		SessionStorage: sess,
+		Resolver:       resolver,
 		Logger:         c.log,
 		// OnDead marks MTProto connection death (and the reconnect that follows)
 		// so a long-idle update stall (#119) can be correlated with connection
