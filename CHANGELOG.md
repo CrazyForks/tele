@@ -9,7 +9,7 @@ A human title for a release is written as an em-dash suffix on its heading,
 e.g. `## [1.2.0] - 2026-06-11 — Archived folders & image layout fixes`.
 Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
-## [Unreleased] — Proxy support, chat-list indicators & keyboard-layout fixes
+## [Unreleased] — Mute-aware notifications, incoming edits & proxy support
 
 ### Added
 
@@ -17,6 +17,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   these states are visible at a glance (#117)
 - Connect through a system proxy via the `ALL_PROXY` environment variable
   (SOCKS5/HTTP) (#121)
+- Messages edited on another client now update in place without a history
+  reload (#42)
 
 ### Fixed
 
@@ -24,6 +26,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   Archive folder (archived chats are now treated as muted)
 - Mute/unmute performed on another device is now reflected at runtime, so muted
   chats stop notifying without needing an app restart
+- In-place message updates (edits, reactions) no longer jump the scroll position
+  when the message's height changes while viewing the latest messages
 - Emoji reaction picker now responds to non-Latin keyboard layouts (e.g. the
   Russian `hjkl` navigation keys), matching the remap used everywhere else
 

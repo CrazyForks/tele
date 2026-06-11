@@ -174,6 +174,9 @@ const (
 	// EventMuteUpdate reports that a chat's mute state changed server-side
 	// (e.g. muted/unmuted from another device).
 	EventMuteUpdate
+	// EventEditMessage reports that a message was edited on another client.
+	// The updated message is carried in Event.Message.
+	EventEditMessage
 )
 
 type TypingAction int

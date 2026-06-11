@@ -53,6 +53,18 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 				m.chat.SetOutboxReadMaxID(chat.ReadOutboxMaxID)
 			}
 		}
+	case store.EventEditMessage:
+		// A message was edited on another client. Update the stored text/edit
+		// date and re-render the open chat in place (no history reload). Keep
+		// scroll position, matching the reactions-update path.
+		editDate := time.Now()
+		if msg.Message.EditDate != nil {
+			editDate = *msg.Message.EditDate
+		}
+		m.st.UpdateMessageText(msg.Message.ChatID, msg.Message.ID, msg.Message.Text, editDate)
+		if msg.Message.ChatID == m.currentChatID {
+			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+		}
 	case store.EventReactionsUpdate:
 		m.st.UpdateMessageReactions(msg.ChatID, msg.MsgID, msg.Reactions)
 		if msg.ChatID == m.currentChatID {

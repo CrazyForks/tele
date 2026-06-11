@@ -340,6 +340,43 @@ func TestMessageList_SetImage_UpdatesView(t *testing.T) {
 	require.Greater(t, len(after), len(before), "view should grow with actual art lines")
 }
 
+// An in-place edit can change a message's line count. When the viewport was at
+// the natural bottom, it must stay pinned to the bottom (newest fully visible)
+// rather than freezing the stale top anchor — otherwise the grown message is
+// clipped and the view appears to jump. Mirrors SetImage's re-anchoring.
+func TestMessageList_SetMessagesKeepScroll_AtBottom_ReanchorsOnHeightChange(t *testing.T) {
+	ml := components.NewMessageList(9, 80)
+	msgs := makeMessages(6) // each h=3; SetMessages pins to the natural bottom
+	ml.SetMessages(msgs)
+
+	// Edit the newest message to be taller (3 body lines → h=5).
+	msgs[5].Text = "line1\nline2\nline3"
+	ml.SetMessagesKeepScroll(msgs)
+
+	// Expected: re-anchored to the new natural bottom, identical to a fresh load.
+	exp := components.NewMessageList(9, 80)
+	exp.SetMessages(msgs)
+	assert.Equal(t, exp.ViewStart(), ml.ViewStart())
+	assert.Equal(t, exp.LineOffset(), ml.LineOffset())
+}
+
+// When scrolled up in history (not at the bottom), an in-place edit must NOT move
+// the viewport, even if the edited message changes height.
+func TestMessageList_SetMessagesKeepScroll_ScrolledUp_KeepsPosition(t *testing.T) {
+	ml := components.NewMessageList(9, 80)
+	msgs := makeMessages(10) // each h=3
+	ml.SetMessages(msgs)
+	ml.ScrollUpBy(6)
+	vs, lo := ml.ViewStart(), ml.LineOffset()
+	require.False(t, ml.ViewStart() == 0 && ml.LineOffset() == 0, "precondition: not at top")
+
+	// Edit the newest message to be taller; the top anchor must stay put.
+	msgs[9].Text = "line1\nline2\nline3"
+	ml.SetMessagesKeepScroll(msgs)
+	assert.Equal(t, vs, ml.ViewStart())
+	assert.Equal(t, lo, ml.LineOffset())
+}
+
 func TestMessageList_SelectedMessageID_EmptyList(t *testing.T) {
 	ml := components.NewMessageList(10, 80)
 	assert.Equal(t, 0, ml.SelectedMessageID())

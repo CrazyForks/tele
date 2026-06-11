@@ -442,10 +442,23 @@ func (ml *MessageList) SetMessages(msgs []store.Message) {
 }
 
 // SetMessagesKeepScroll replaces the message list without resetting the scroll position.
-// Use for in-place data updates (e.g. reactions) where the message count is unchanged.
+// Use for in-place data updates (e.g. reactions, edits) where the message count is
+// unchanged.
+//
+// An edit can change a message's line count. If the viewport was at the natural
+// bottom, re-anchor to the new bottom so the newest content stays fully visible
+// instead of being clipped by a now-stale offset (same fix as SetImage). When
+// scrolled up in history, keep the top anchor so the position does not jump.
 func (ml *MessageList) SetMessagesKeepScroll(msgs []store.Message) {
+	botIdx, botOff := ml.positionAtBottom()
+	wasAtBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
+
 	vs, lo := ml.viewStart, ml.lineOffset
 	ml.items = ml.buildItems(msgs)
+	if wasAtBottom {
+		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+		return
+	}
 	if vs >= len(ml.items) {
 		vs = max(0, len(ml.items)-1)
 		lo = 0

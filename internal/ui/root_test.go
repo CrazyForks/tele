@@ -1084,6 +1084,26 @@ func TestRoot_EventMuteUpdate_NoopWhenUnchanged(t *testing.T) {
 	assert.True(t, chat.IsMuted)
 }
 
+func TestRoot_EventEditMessage_UpdatesStoredText(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original"})
+	m := ui.NewRootModel(nil, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+
+	edited := time.Unix(int64(1700000000), 0)
+	newM, _ := m.Update(store.Event{
+		Kind:    store.EventEditMessage,
+		Message: store.Message{ID: 10, ChatID: 1, Text: "edited", EditDate: &edited},
+	})
+	_ = newM.(ui.RootModel)
+
+	msgs := st.Messages(1)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "edited", msgs[0].Text)
+	require.NotNil(t, msgs[0].EditDate)
+}
+
 func TestRoot_PasteMsg_WhenComposerFocused_InsertsText(t *testing.T) {
 	m, _ := newRootWithOpenChat(t, &mockTGClient{})
 	// enter insert mode → focuses composer

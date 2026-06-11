@@ -397,6 +397,75 @@ func TestSetupDispatcher_NotifySettings_GlobalCategory_Ignored(t *testing.T) {
 	}
 }
 
+func TestSetupDispatcher_EditMessage_EmitsEditEvent(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	editDate := int(time.Now().Unix())
+	rawMsg := &tg.Message{
+		ID:       7,
+		PeerID:   &tg.PeerUser{UserID: 99},
+		Message:  "edited text",
+		Date:     int(time.Now().Unix()),
+		EditDate: editDate,
+	}
+	update := &tg.UpdateEditMessage{Message: rawMsg, Pts: 1, PtsCount: 1}
+
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{update}})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-mustDeliver:
+		assert.Equal(t, store.EventEditMessage, evt.Kind)
+		assert.Equal(t, 7, evt.Message.ID)
+		assert.Equal(t, int64(99), evt.Message.ChatID)
+		assert.Equal(t, "edited text", evt.Message.Text)
+		require.NotNil(t, evt.Message.EditDate)
+	case <-time.After(time.Second):
+		t.Fatal("no edit event received")
+	}
+}
+
+func TestSetupDispatcher_EditChannelMessage_EmitsEditEvent(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	rawMsg := &tg.Message{
+		ID:       11,
+		PeerID:   &tg.PeerChannel{ChannelID: 600},
+		Message:  "edited channel post",
+		Date:     int(time.Now().Unix()),
+		EditDate: int(time.Now().Unix()),
+	}
+	update := &tg.UpdateEditChannelMessage{Message: rawMsg, Pts: 1, PtsCount: 1}
+
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{update}})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-mustDeliver:
+		assert.Equal(t, store.EventEditMessage, evt.Kind)
+		assert.Equal(t, 11, evt.Message.ID)
+		assert.Equal(t, int64(600), evt.Message.ChatID)
+		assert.Equal(t, "edited channel post", evt.Message.Text)
+	case <-time.After(time.Second):
+		t.Fatal("no edit event received for channel message")
+	}
+}
+
+func TestSetupDispatcher_EditServiceMessageIgnored(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	update := &tg.UpdateEditMessage{Message: &tg.MessageService{ID: 1}, Pts: 1, PtsCount: 1}
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{update}})
+	require.NoError(t, err)
+
+	select {
+	case <-mustDeliver:
+		t.Fatal("unexpected event for edited service message")
+	case <-time.After(100 * time.Millisecond):
+		// expected: no event
+	}
+}
+
 func TestConvertTypingAction_Typing(t *testing.T) {
 	assert.Equal(t, store.TypingActionTyping, convertTypingAction(&tg.SendMessageTypingAction{}))
 }

@@ -105,6 +105,33 @@ func setupDispatcher(
 		return handleNewMessage(ctx, e, upd.Message)
 	})
 
+	// handleEditMessage converts an edited message and emits EventEditMessage.
+	// Shared by UpdateEditMessage (users/basic groups) and UpdateEditChannelMessage
+	// (channels/supergroups). No sender-name enrichment: an edit only changes the
+	// message body, and the chat view re-renders from the already-stored sender.
+	handleEditMessage := func(ctx context.Context, raw tg.MessageClass) error {
+		peerID := extractPeerID(raw)
+		msg, ok := convertMessage(raw, peerID)
+		if !ok {
+			return nil
+		}
+		log.Debug("dispatcher: edit message",
+			zap.Int64("chat_id", msg.ChatID), zap.Int("msg_id", msg.ID))
+		select {
+		case mustDeliver <- store.Event{Kind: store.EventEditMessage, Message: msg}:
+		case <-ctx.Done():
+		}
+		return nil
+	}
+
+	dispatcher.OnEditMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateEditMessage) error {
+		return handleEditMessage(ctx, upd.Message)
+	})
+
+	dispatcher.OnEditChannelMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateEditChannelMessage) error {
+		return handleEditMessage(ctx, upd.Message)
+	})
+
 	dispatcher.OnReadHistoryInbox(func(ctx context.Context, e tg.Entities, upd *tg.UpdateReadHistoryInbox) error {
 		chatID := peerIDFromPeer(upd.Peer)
 		if chatID == 0 {
