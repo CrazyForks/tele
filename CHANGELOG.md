@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-06-12
+
 ### Added
 
 - Scroll position indicators on the folders, chat list, and chat panes: a thumb
