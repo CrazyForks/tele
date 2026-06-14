@@ -317,13 +317,17 @@ func (ml *MessageList) photoBox(imgW, imgH int) (cols, rows int) {
 }
 
 // mediaBox returns the capped (cols, rows) cell box for a message's inline
-// image, using the smaller sticker cap for static stickers and the photo cap
-// otherwise. All three sizing sites use this so footprints stay in lock-step.
+// image. Borderless media stays picture-sized: static stickers use the compact
+// cap, round video notes a slightly larger cap; everything else uses the photo
+// cap. All sizing sites use this so footprints stay in lock-step.
 func (ml *MessageList) mediaBox(msg store.Message, imgW, imgH int) (cols, rows int) {
 	cw, ch := media.CellPx()
 	maxCols := ml.photoContentCols()
-	if store.IsStaticSticker(msg.Media, msg.Document) {
-		maxCols = ml.stickerContentCols()
+	switch {
+	case store.IsStaticSticker(msg.Media, msg.Document):
+		maxCols = ml.compactMediaCols()
+	case msg.Media != nil && msg.Media.Kind == store.MediaVideoNote:
+		maxCols = ml.videoNoteCols()
 	}
 	return media.PhotoBox(imgW, imgH, maxCols, ml.viewHeight, ml.maxMediaPx, cw, ch, media.CellAspect())
 }
@@ -484,10 +488,10 @@ func (ml *MessageList) photoContentCols() int {
 	return maxContentW
 }
 
-// stickerContentCols is the inline-image width cap for static stickers: a third
-// of the photo cap so stickers read as stickers and do not dominate the bubble.
-// Still bounded the same way photoContentCols is.
-func (ml *MessageList) stickerContentCols() int {
+// compactMediaCols is the inline-image width cap for borderless media (static
+// stickers and round video notes): a third of the photo cap so they read as
+// compact pictures and do not dominate the pane. Bounded like photoContentCols.
+func (ml *MessageList) compactMediaCols() int {
 	cols := ml.photoContentCols() / 3
 	if cols > 20 {
 		cols = 20
@@ -498,8 +502,25 @@ func (ml *MessageList) stickerContentCols() int {
 	return cols
 }
 
-// StickerContentColsForTest exposes stickerContentCols for tests.
-func (ml *MessageList) StickerContentColsForTest() int { return ml.stickerContentCols() }
+// CompactMediaColsForTest exposes compactMediaCols for tests.
+func (ml *MessageList) CompactMediaColsForTest() int { return ml.compactMediaCols() }
+
+// videoNoteCols is the inline-image width cap for round video notes: larger than
+// the sticker cap so a face stays legible, but still well under the photo cap.
+// Bounded like photoContentCols.
+func (ml *MessageList) videoNoteCols() int {
+	cols := ml.photoContentCols()
+	if cols > 30 {
+		cols = 30
+	}
+	if cols < 4 {
+		cols = 4
+	}
+	return cols
+}
+
+// VideoNoteColsForTest exposes videoNoteCols for tests.
+func (ml *MessageList) VideoNoteColsForTest() int { return ml.videoNoteCols() }
 
 func (ml *MessageList) SetSize(width, height int) {
 	if width != ml.viewWidth && ml.renderer != nil {

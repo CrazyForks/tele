@@ -1381,23 +1381,46 @@ func TestMediaBoxForID_StickerUsesStickerCap(t *testing.T) {
 	// image stays a placeholder box.
 	tCols, _ := ml.MediaBoxForID(555, 512, 512)
 	pCols, _ := ml.PhotoBox(512, 512)
-	if tCols != ml.StickerContentColsForTest() {
-		t.Fatalf("transmit cols (%d) must equal sticker cap (%d)", tCols, ml.StickerContentColsForTest())
+	if tCols != ml.CompactMediaColsForTest() {
+		t.Fatalf("transmit cols (%d) must equal compact cap (%d)", tCols, ml.CompactMediaColsForTest())
 	}
 	if tCols == pCols {
 		t.Fatalf("sticker transmit cols (%d) must differ from photo cols (%d)", tCols, pCols)
 	}
 }
 
-func TestStickerContentCols_SmallerThanPhoto(t *testing.T) {
+func TestMediaBoxForID_VideoNoteUsesCompactCap(t *testing.T) {
+	ml := components.NewMessageList(60, 200)
+	ml.SetImageMode(media.ModeKitty)
+	ml.SetMessages([]store.Message{{
+		ID:       1,
+		Media:    &store.MediaRef{Kind: store.MediaVideoNote, Duration: 5},
+		Document: &store.DocumentRef{ID: 88, ThumbSize: "m"},
+	}})
+	// Round video notes render borderless at their own cap: larger than stickers,
+	// smaller than the full photo width.
+	tCols, _ := ml.MediaBoxForID(88, 320, 320)
+	pCols, _ := ml.PhotoBox(320, 320)
+	if tCols != ml.VideoNoteColsForTest() {
+		t.Fatalf("video note cols (%d) must equal video-note cap (%d)", tCols, ml.VideoNoteColsForTest())
+	}
+	if tCols == pCols {
+		t.Fatalf("video note cols (%d) must differ from photo cols (%d)", tCols, pCols)
+	}
+	if tCols <= ml.CompactMediaColsForTest() {
+		t.Fatalf("video note cols (%d) must be larger than sticker cap (%d)", tCols, ml.CompactMediaColsForTest())
+	}
+}
+
+func TestCompactMediaCols_SmallerThanPhoto(t *testing.T) {
 	ml := components.NewMessageList(20, 200) // wide viewport so photo cap hits 60
 	photoCols := ml.PhotoContentCols()
-	stickerCols := ml.StickerContentColsForTest()
-	if stickerCols >= photoCols {
-		t.Fatalf("sticker cols (%d) must be smaller than photo cols (%d)", stickerCols, photoCols)
+	compactCols := ml.CompactMediaColsForTest()
+	if compactCols >= photoCols {
+		t.Fatalf("compact cols (%d) must be smaller than photo cols (%d)", compactCols, photoCols)
 	}
-	if stickerCols < 4 {
-		t.Fatalf("sticker cols (%d) must stay >= 4", stickerCols)
+	if compactCols < 4 {
+		t.Fatalf("compact cols (%d) must stay >= 4", compactCols)
 	}
 }
 
