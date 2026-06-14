@@ -112,10 +112,14 @@ func (m *ChatModel) SetRenderer(r media.Renderer)               { m.msgList.SetR
 func (m *ChatModel) VisiblePhotoIDs() []int64                   { return m.msgList.VisiblePhotoIDs() }
 func (m *ChatModel) PhotoContentCols() int                      { return m.msgList.PhotoContentCols() }
 func (m *ChatModel) PhotoBox(imgW, imgH int) (int, int)         { return m.msgList.PhotoBox(imgW, imgH) }
-func (m *ChatModel) PhotoViewHeight() int                       { return m.msgList.ViewHeight() }
-func (m *ChatModel) SetMaxMediaPx(px int)                       { m.msgList.SetMaxMediaPx(px) }
-func (m *ChatModel) SetOutboxReadMaxID(id int)                  { m.msgList.SetOutboxReadMaxID(id) }
-func (m *ChatModel) SetInboxReadMaxID(id int)                   { m.msgList.SetInboxReadMaxID(id) }
+func (m *ChatModel) MediaBoxForID(id int64, imgW, imgH int) (int, int) {
+	return m.msgList.MediaBoxForID(id, imgW, imgH)
+}
+func (m *ChatModel) PhotoViewHeight() int         { return m.msgList.ViewHeight() }
+func (m *ChatModel) SetMaxMediaPx(px int)         { m.msgList.SetMaxMediaPx(px) }
+func (m *ChatModel) SetImageMode(mode media.Mode) { m.msgList.SetImageMode(mode) }
+func (m *ChatModel) SetOutboxReadMaxID(id int)    { m.msgList.SetOutboxReadMaxID(id) }
+func (m *ChatModel) SetInboxReadMaxID(id int)     { m.msgList.SetInboxReadMaxID(id) }
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool {
 	return m.msgList.ScrollToFirstUnread(readMaxID)
 }

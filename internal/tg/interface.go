@@ -36,6 +36,9 @@ type Client interface {
 	// DownloadDocumentThumb fetches and decodes the document's thumbnail
 	// (ref.ThumbSize) for an inline preview.
 	DownloadDocumentThumb(ctx context.Context, ref store.DocumentRef) (image.Image, error)
+	// DownloadDocumentImage fetches the full document file and decodes it as an
+	// image (used for static WEBP stickers; streams the main file, not a thumb).
+	DownloadDocumentImage(ctx context.Context, ref store.DocumentRef) (image.Image, error)
 	DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error
 	EditMessage(ctx context.Context, peer store.Peer, msgID int, text string) error
 	SendReaction(ctx context.Context, peer store.Peer, msgID int, emoji string) error

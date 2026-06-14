@@ -80,6 +80,14 @@ func (k MediaKind) IsVideo() bool {
 	return k == MediaVideo || k == MediaVideoNote
 }
 
+// IsStaticSticker reports whether the media is a sticker whose document is a
+// static WEBP image (renderable inline), as opposed to an animated .tgs or
+// video .webm sticker.
+func IsStaticSticker(m *MediaRef, d *DocumentRef) bool {
+	return m != nil && m.Kind == MediaSticker &&
+		d != nil && d.MimeType == "image/webp"
+}
+
 // MediaRef is the display-level description of a message's media. PhotoRef
 // remains the download-capable reference and is set only for photos.
 type MediaRef struct {

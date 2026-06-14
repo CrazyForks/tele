@@ -13,6 +13,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Static WEBP stickers now render as small inline images (with transparency,
+  borderless — no message bubble) in Kitty mode; animated (`.tgs`) and video
+  (`.webm`) stickers keep the alt-emoji placeholder, as do all stickers outside
+  Kitty mode (#103)
+- Round video notes (кружочки) now render borderless too — the circular preview
+  and play/duration overlay without the surrounding message bubble
 - `photos.max_long_side_px` config option (default 800) caps a rendered inline
   image's long side in pixels (#125)
 

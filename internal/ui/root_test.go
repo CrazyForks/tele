@@ -20,15 +20,16 @@ import (
 )
 
 type mockTGClient struct {
-	history           []store.Message
-	historyErr        error
-	sendFunc          func() int
-	sendErr           error
-	reactionErr       error
-	lastReplyToMsgID  int
-	downloadPhotoFunc func() (image.Image, error)
-	refreshFunc       func(msgID int) (store.Message, error)
-	lastSendCtx       context.Context
+	history              []store.Message
+	historyErr           error
+	sendFunc             func() int
+	sendErr              error
+	reactionErr          error
+	lastReplyToMsgID     int
+	downloadPhotoFunc    func() (image.Image, error)
+	downloadDocImageFunc func() (image.Image, error)
+	refreshFunc          func(msgID int) (store.Message, error)
+	lastSendCtx          context.Context
 }
 
 func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
@@ -80,6 +81,12 @@ func (m *mockTGClient) DownloadDocument(_ context.Context, _ store.DocumentRef) 
 	return nil, nil
 }
 func (m *mockTGClient) DownloadDocumentThumb(_ context.Context, _ store.DocumentRef) (image.Image, error) {
+	return nil, nil
+}
+func (m *mockTGClient) DownloadDocumentImage(_ context.Context, _ store.DocumentRef) (image.Image, error) {
+	if m.downloadDocImageFunc != nil {
+		return m.downloadDocImageFunc()
+	}
 	return nil, nil
 }
 func (m *mockTGClient) EditMessage(_ context.Context, _ store.Peer, _ int, _ string) error {
@@ -223,6 +230,27 @@ func TestDownloadPhotoCmd_RefreshesOnExpiredRef(t *testing.T) {
 	require.NotNil(t, ready)
 	assert.NotNil(t, ready.Image)
 	assert.Len(t, msgs, 2) // ready image + store-update after refresh
+}
+
+func TestDownloadStickerCmd_EmitsPhotoReady(t *testing.T) {
+	mc := &mockTGClient{
+		downloadDocImageFunc: func() (image.Image, error) {
+			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
+		},
+	}
+	cmd := ui.DownloadStickerCmdForTest(mc, store.Peer{ID: 7, Type: store.PeerUser}, 100, store.DocumentRef{ID: 555, MimeType: "image/webp"})
+
+	msgs := drainMsgs(cmd())
+	var ready *ui.PhotoReadyMsg
+	for _, m := range msgs {
+		if r, ok := m.(ui.PhotoReadyMsg); ok {
+			rr := r
+			ready = &rr
+		}
+	}
+	require.NotNil(t, ready)
+	assert.Equal(t, int64(555), ready.PhotoID)
+	assert.NotNil(t, ready.Image)
 }
 
 // drainMsgs flattens a (possibly batched) cmd result into its concrete messages.

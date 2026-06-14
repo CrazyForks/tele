@@ -8,6 +8,8 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
+	_ "golang.org/x/image/webp" // register WEBP decoder for image.Decode (static stickers)
+
 	"github.com/gotd/td/telegram/downloader"
 	gotdtg "github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
@@ -101,6 +103,36 @@ func (c *GotdClient) DownloadDocumentThumb(ctx context.Context, ref store.Docume
 	img, _, err := image.Decode(&buf)
 	if err != nil {
 		return nil, fmt.Errorf("decode document thumb %d: %w", ref.ID, err)
+	}
+	return img, nil
+}
+
+// DownloadDocumentImage fetches the full document file and decodes it as an
+// image. Used for static WEBP stickers: unlike DownloadDocumentThumb it streams
+// the main file (no ThumbSize), so transparency from the full sticker is kept.
+func (c *GotdClient) DownloadDocumentImage(ctx context.Context, ref store.DocumentRef) (image.Image, error) {
+	c.mu.RLock()
+	api := c.api
+	c.mu.RUnlock()
+	if api == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	loc := &gotdtg.InputDocumentFileLocation{
+		ID:            ref.ID,
+		AccessHash:    ref.AccessHash,
+		FileReference: ref.FileReference,
+	}
+
+	var buf bytes.Buffer
+	d := downloader.NewDownloader()
+	if _, err := d.Download(api, loc).Stream(ctx, &buf); err != nil {
+		return nil, fmt.Errorf("download document image %d: %w", ref.ID, err)
+	}
+
+	img, _, err := image.Decode(&buf)
+	if err != nil {
+		return nil, fmt.Errorf("decode document image %d: %w", ref.ID, err)
 	}
 	return img, nil
 }

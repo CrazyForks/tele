@@ -257,6 +257,7 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	}
 	m.kittyCap = cfg.Photos.KittyPlacementCap
 	m.chat.SetMaxMediaPx(cfg.Photos.MaxLongSidePx)
+	m.chat.SetImageMode(m.imageMode)
 	return m
 }
 
@@ -957,6 +958,40 @@ func downloadVideoThumbCmd(ctx context.Context, client internaltg.Client, peer s
 	}
 }
 
+// downloadStickerCmd downloads and decodes a static WEBP sticker (the full
+// document) and feeds it through the inline-image cache keyed by document id.
+func downloadStickerCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef) tea.Cmd {
+	return func() tea.Msg {
+		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
+			func(r store.DocumentRef) (image.Image, error) {
+				return client.DownloadDocumentImage(ctx, r)
+			},
+			func(m store.Message) (store.DocumentRef, bool) {
+				if m.Document == nil {
+					return store.DocumentRef{}, false
+				}
+				return *m.Document, true
+			},
+		)
+		if err != nil || img == nil {
+			if err != nil {
+				return StatusErrMsg{Text: "sticker download failed: " + err.Error(), Sev: components.SeverityWarning}
+			}
+			return nil
+		}
+		ready := PhotoReadyMsg{PhotoID: ref.ID, Image: img}
+		if refreshed != nil {
+			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, doc: refreshed.Document})
+		}
+		return ready
+	}
+}
+
+// DownloadStickerCmdForTest exposes downloadStickerCmd for tests.
+func DownloadStickerCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef) tea.Cmd {
+	return downloadStickerCmd(context.Background(), c, peer, msgID, ref)
+}
+
 func downloadFullPhotoCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
 	fullRef := ref
 	fullRef.ThumbSize = ref.FullThumbSize
@@ -1016,6 +1051,12 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 				cmds = append(cmds, downloadVideoThumbCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Document, crop))
 			}
 		}
+		// Static WEBP stickers render inline (Kitty only); decode the full document.
+		if m.imageMode == media.ModeKitty && store.IsStaticSticker(msg.Media, msg.Document) {
+			if _, ok := m.imageCache[msg.Document.ID]; !ok {
+				cmds = append(cmds, downloadStickerCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Document))
+			}
+		}
 	}
 	return tea.Batch(cmds...)
 }
@@ -1028,7 +1069,10 @@ func (m RootModel) transmitPhotoCmd(photoID int64, img image.Image) tea.Cmd {
 	}
 	id := m.kittyStore.IDFor(photoID)
 	b := img.Bounds()
-	cols, rows := m.chat.PhotoBox(b.Dx(), b.Dy())
+	// Use the message-aware box (sticker cap vs photo cap) so the transmitted
+	// width matches the rendered placeholder width; otherwise the Kitty placement
+	// is never marked ready and the image stays a placeholder box.
+	cols, rows := m.chat.MediaBoxForID(photoID, b.Dx(), b.Dy())
 	// Order matters: write the placement to the terminal FIRST, then mark the
 	// image ready (kittyTransmittedMsg) so the next render emits placeholders
 	// only once the placement exists. Marking ready before the transmit lands

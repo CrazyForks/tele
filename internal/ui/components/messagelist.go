@@ -264,7 +264,8 @@ type MessageList struct {
 	showIndicator     bool
 	hasDarkBackground bool
 	renderer          media.Renderer
-	maxMediaPx        int // photos.max_long_side_px; 0 => media package default
+	maxMediaPx        int        // photos.max_long_side_px; 0 => media package default
+	imageMode         media.Mode // inline-image backend; static stickers render in Kitty only
 
 	// Voice playback state: the document being played, its progress (0..1) and
 	// current position in seconds. playingVoiceID == 0 means nothing is playing.
@@ -313,6 +314,34 @@ func (ml *MessageList) PhotoContentCols() int {
 func (ml *MessageList) photoBox(imgW, imgH int) (cols, rows int) {
 	cw, ch := media.CellPx()
 	return media.PhotoBox(imgW, imgH, ml.photoContentCols(), ml.viewHeight, ml.maxMediaPx, cw, ch, media.CellAspect())
+}
+
+// mediaBox returns the capped (cols, rows) cell box for a message's inline
+// image, using the smaller sticker cap for static stickers and the photo cap
+// otherwise. All three sizing sites use this so footprints stay in lock-step.
+func (ml *MessageList) mediaBox(msg store.Message, imgW, imgH int) (cols, rows int) {
+	cw, ch := media.CellPx()
+	maxCols := ml.photoContentCols()
+	if store.IsStaticSticker(msg.Media, msg.Document) {
+		maxCols = ml.stickerContentCols()
+	}
+	return media.PhotoBox(imgW, imgH, maxCols, ml.viewHeight, ml.maxMediaPx, cw, ch, media.CellAspect())
+}
+
+// MediaBoxForID returns the capped (cols, rows) box for the inline image cached
+// under id, applying the same message-aware cap (sticker vs photo) used when the
+// image is rendered. Transmit sizing must go through this so the Kitty placement
+// is marked ready at exactly the rendered width; otherwise Render never matches.
+func (ml *MessageList) MediaBoxForID(id int64, imgW, imgH int) (cols, rows int) {
+	for i := range ml.items {
+		if ml.items[i].kind != itemMessage {
+			continue
+		}
+		if pid, ok := ml.PreviewImageID(ml.items[i].msg); ok && pid == id {
+			return ml.mediaBox(ml.items[i].msg, imgW, imgH)
+		}
+	}
+	return ml.photoBox(imgW, imgH)
 }
 
 // SetMaxMediaPx sets the long-side pixel cap for inline images
@@ -393,9 +422,10 @@ func durationLabel(base string, dur int) string {
 	return base
 }
 
-// PreviewImageID returns the image-cache key for a message's inline thumbnail
-// (photos and videos with an embedded thumbnail) and whether one applies.
-func PreviewImageID(msg store.Message) (int64, bool) {
+// PreviewImageID returns the image-cache key for a message's inline image and
+// whether one applies: photos, videos with an embedded thumbnail, and static
+// WEBP stickers (Kitty mode only).
+func (ml *MessageList) PreviewImageID(msg store.Message) (int64, bool) {
 	if msg.Media == nil {
 		return 0, false
 	}
@@ -404,8 +434,15 @@ func PreviewImageID(msg store.Message) (int64, bool) {
 		return msg.Photo.ID, true
 	case msg.Media.Kind.IsVideo() && msg.Document != nil && msg.Document.ThumbSize != "":
 		return msg.Document.ID, true
+	case ml.imageMode == media.ModeKitty && store.IsStaticSticker(msg.Media, msg.Document):
+		return msg.Document.ID, true
 	}
 	return 0, false
+}
+
+// PreviewImageIDForTest exposes PreviewImageID for tests in other packages.
+func (ml *MessageList) PreviewImageIDForTest(msg store.Message) (int64, bool) {
+	return ml.PreviewImageID(msg)
 }
 
 // videoOverlayLabel returns the play affordance shown under a video thumbnail,
@@ -446,6 +483,23 @@ func (ml *MessageList) photoContentCols() int {
 	}
 	return maxContentW
 }
+
+// stickerContentCols is the inline-image width cap for static stickers: a third
+// of the photo cap so stickers read as stickers and do not dominate the bubble.
+// Still bounded the same way photoContentCols is.
+func (ml *MessageList) stickerContentCols() int {
+	cols := ml.photoContentCols() / 3
+	if cols > 20 {
+		cols = 20
+	}
+	if cols < 4 {
+		cols = 4
+	}
+	return cols
+}
+
+// StickerContentColsForTest exposes stickerContentCols for tests.
+func (ml *MessageList) StickerContentColsForTest() int { return ml.stickerContentCols() }
 
 func (ml *MessageList) SetSize(width, height int) {
 	if width != ml.viewWidth && ml.renderer != nil {
@@ -577,7 +631,7 @@ func (ml *MessageList) VisiblePhotoIDs() []int64 {
 		}
 		lines += h
 		if ml.items[i].kind == itemMessage {
-			if id, ok := PreviewImageID(ml.items[i].msg); ok {
+			if id, ok := ml.PreviewImageID(ml.items[i].msg); ok {
 				ids = append(ids, id)
 			}
 		}
@@ -594,6 +648,11 @@ func (ml *MessageList) SetIsGroup(v bool)                { ml.isGroup = v }
 func (ml *MessageList) SetOutboxReadMaxID(id int)        { ml.outboxReadMaxID = id }
 func (ml *MessageList) SetInboxReadMaxID(id int)         { ml.inboxReadMaxID = id }
 func (ml *MessageList) SetDarkBackground(isDark bool)    { ml.hasDarkBackground = isDark }
+
+// SetImageMode tells the list which inline-image backend is active. Static
+// stickers only render in Kitty mode (transparency); other modes keep the
+// emoji placeholder.
+func (ml *MessageList) SetImageMode(mode media.Mode) { ml.imageMode = mode }
 
 func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
 	idx := senderID % 8
@@ -815,9 +874,46 @@ func wrappedLineCount(text string, entities []store.MessageEntity, contentW int)
 
 // msgHeight estimates the rendered line count for a single message:
 // 2 border lines (top with header title + bottom) + wrapped body lines.
+// isBareMedia reports whether a message should render borderless (no message
+// bubble): a static WEBP sticker or a round video note whose image is loaded,
+// with no caption, reply, or forward header that would need the bubble layout.
+func (ml *MessageList) isBareMedia(msg store.Message) bool {
+	if msg.Text != "" || msg.Forward != nil || msg.ReplyToMsgID != 0 || msg.Media == nil {
+		return false
+	}
+	if !store.IsStaticSticker(msg.Media, msg.Document) && msg.Media.Kind != store.MediaVideoNote {
+		return false
+	}
+	id, ok := ml.PreviewImageID(msg)
+	if !ok {
+		return false
+	}
+	_, has := ml.images[id]
+	return has
+}
+
+// bareMediaRows returns the media's art-row footprint (without the overlay,
+// meta, or sender-name lines). Caller must have verified isBareMedia.
+func (ml *MessageList) bareMediaRows(msg store.Message) int {
+	id, _ := ml.PreviewImageID(msg)
+	bb := ml.images[id].Bounds()
+	_, rows := ml.mediaBox(msg, bb.Dx(), bb.Dy())
+	return rows
+}
+
 func (ml *MessageList) msgHeight(msg store.Message) int {
 	if ml.viewWidth <= 0 {
 		return 4
+	}
+	if ml.isBareMedia(msg) {
+		h := ml.bareMediaRows(msg) + 1 // art rows + timestamp line, no borders
+		if videoOverlayLabel(msg.Media) != "" {
+			h++ // play/duration overlay line (video notes)
+		}
+		if !msg.IsOut && ml.isGroup {
+			h++ // sender-name line above the media
+		}
+		return h
 	}
 	maxBubbleW := ml.viewWidth * 3 / 4
 	if maxBubbleW < 10 {
@@ -858,10 +954,10 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 		// renderer draws a full-height placeholder box until the image is ready,
 		// so the rendered height always equals this reserved height: no hidden
 		// tail (issue #115) and no scroll jump when the placement lands.
-		if id, ok := PreviewImageID(msg); ok {
+		if id, ok := ml.PreviewImageID(msg); ok {
 			if img, has := ml.images[id]; has {
 				b := img.Bounds()
-				_, rows := ml.photoBox(b.Dx(), b.Dy())
+				_, rows := ml.mediaBox(msg, b.Dx(), b.Dy())
 				h += rows
 				if videoOverlayLabel(msg.Media) != "" {
 					h++ // play/duration overlay line under the thumbnail
@@ -1015,6 +1111,9 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	if ml.viewWidth <= 0 {
 		return []string{""}
 	}
+	if ml.isBareMedia(msg) {
+		return ml.renderBareMedia(msg, selected)
+	}
 	maxBubbleW := ml.viewWidth * 3 / 4
 	if maxBubbleW < 10 {
 		maxBubbleW = 10
@@ -1061,7 +1160,7 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	// once the thumbnail is available (the text placeholder is narrow).
 	widenToPhotoCols := msg.Photo != nil
 	if !widenToPhotoCols {
-		if id, ok := PreviewImageID(msg); ok {
+		if id, ok := ml.PreviewImageID(msg); ok {
 			if _, has := ml.images[id]; has {
 				widenToPhotoCols = true
 			}
@@ -1071,10 +1170,10 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		photoCols := ml.photoContentCols()
 		// Once bytes are known, the rendered width may be narrower than the full
 		// budget (480px / viewport caps), so size the bubble to the actual image.
-		if id, ok := PreviewImageID(msg); ok {
+		if id, ok := ml.PreviewImageID(msg); ok {
 			if img, has := ml.images[id]; has {
 				bb := img.Bounds()
-				photoCols, _ = ml.photoBox(bb.Dx(), bb.Dy())
+				photoCols, _ = ml.mediaBox(msg, bb.Dx(), bb.Dy())
 			}
 		}
 		if photoCols > actualW {
@@ -1220,11 +1319,11 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	if msg.Media != nil {
 		var artLines []string
 		hasBytes, footprint := false, 0
-		if id, ok := PreviewImageID(msg); ok {
+		if id, ok := ml.PreviewImageID(msg); ok {
 			if img, has := ml.images[id]; has {
 				hasBytes = true
 				bb := img.Bounds()
-				cols, rows := ml.photoBox(bb.Dx(), bb.Dy())
+				cols, rows := ml.mediaBox(msg, bb.Dx(), bb.Dy())
 				footprint = rows
 				artLines = ml.renderer.Render(id, img, cols)
 			}
@@ -1329,6 +1428,122 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	}
 
 	return allLines
+}
+
+// renderBareMedia draws a sticker or round video note without the message
+// bubble: the image art, a sender-name line above it in groups, an optional
+// play/duration overlay (video notes), and a plain timestamp line below
+// (reactions left, time + read status right). Caller must have verified
+// isBareMedia.
+func (ml *MessageList) renderBareMedia(msg store.Message, selected bool) []string {
+	id, _ := ml.PreviewImageID(msg)
+	img := ml.images[id]
+	bb := img.Bounds()
+	cols, rows := ml.mediaBox(msg, bb.Dx(), bb.Dy())
+	artLines := ml.renderer.Render(id, img, cols)
+
+	// Timestamp + read status, shown on a plain line under the sticker.
+	var statusStr string
+	if msg.IsOut {
+		if msg.ID > 0 && msg.ID <= ml.outboxReadMaxID {
+			statusStr = " " + readStyle.Render("✓✓")
+		} else if msg.ID > 0 {
+			statusStr = " " + sentStyle.Render("✓")
+		}
+	}
+	editMark := ""
+	if msg.EditDate != nil {
+		editMark = tsStyle.Render("edited") + " · "
+	}
+	tsStr := editMark + tsStyle.Render(msg.Date.Format("15:04")) + statusStr
+	reactStr := strings.TrimSpace(buildReactStr(msg.Reactions))
+
+	// Block width: widest of the art, the meta line, and (in groups) the name.
+	blockW := cols
+	metaW := lipgloss.Width(tsStr)
+	if reactStr != "" {
+		metaW += lipgloss.Width(reactStr) + 1
+	}
+	if metaW > blockW {
+		blockW = metaW
+	}
+	nameStr := ""
+	if !msg.IsOut && ml.isGroup {
+		name := msg.SenderName
+		if name == "" {
+			name = "?"
+		}
+		nameStr = ml.senderNameStyle(msg.SenderID).Render(name)
+		if w := lipgloss.Width(nameStr); w > blockW {
+			blockW = w
+		}
+	}
+
+	pad := func(s string) string {
+		if w := lipgloss.Width(s); w < blockW {
+			return s + strings.Repeat(" ", blockW-w)
+		}
+		return s
+	}
+
+	lines := make([]string, 0, rows+2)
+	if nameStr != "" {
+		lines = append(lines, pad(nameStr))
+	}
+	if artLines != nil {
+		for _, al := range artLines {
+			lines = append(lines, pad(al))
+		}
+	} else {
+		// Placement not transmitted yet: reserve the art rows so the height
+		// matches msgHeight; the image swaps in on the next render.
+		for i := 0; i < rows; i++ {
+			lines = append(lines, strings.Repeat(" ", blockW))
+		}
+	}
+	if overlay := videoOverlayLabel(msg.Media); overlay != "" {
+		lines = append(lines, pad(overlay)) // ▶ duration under a round video note
+	}
+	fill := blockW - lipgloss.Width(reactStr) - lipgloss.Width(tsStr)
+	if fill < 0 {
+		fill = 0
+	}
+	lines = append(lines, pad(reactStr+strings.Repeat(" ", fill)+tsStr))
+
+	return ml.alignBareLines(lines, blockW, selected, msg.IsOut)
+}
+
+// alignBareLines right-aligns outgoing borderless media blocks (left margin for
+// incoming) and draws the selection indicator bar beside the block, mirroring
+// the bubble path but without borders.
+func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOut bool) []string {
+	if isOut {
+		leftPad := ml.viewWidth - blockW
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		pad := strings.Repeat(" ", leftPad)
+		for i := range lines {
+			lines[i] = pad + lines[i]
+		}
+		// leftPad bytes are ASCII spaces, so byte-slicing is safe.
+		if selected && ml.showIndicator && leftPad >= 2 {
+			bar := " " + indicatorStyle.Render(indicatorChar)
+			for i := range lines {
+				lines[i] = lines[i][:leftPad-2] + bar + lines[i][leftPad:]
+			}
+		}
+		return lines
+	}
+	if selected && ml.showIndicator {
+		if available := ml.viewWidth - blockW; available >= 2 {
+			bar := " " + indicatorStyle.Render(indicatorChar)
+			for i := range lines {
+				lines[i] = lines[i] + bar
+			}
+		}
+	}
+	return lines
 }
 
 func (ml *MessageList) renderSeparator(label string) []string {

@@ -66,6 +66,10 @@ func (m *mockClient) DownloadDocumentThumb(_ context.Context, _ store.DocumentRe
 	return nil, nil
 }
 
+func (m *mockClient) DownloadDocumentImage(_ context.Context, _ store.DocumentRef) (image.Image, error) {
+	return nil, nil
+}
+
 func (m *mockClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, _ bool) error {
 	return nil
 }

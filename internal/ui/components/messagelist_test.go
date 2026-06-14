@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1327,6 +1328,108 @@ func TestMessageList_MediaOnlyBubble_BordersAligned(t *testing.T) {
 	require.NotEmpty(t, widths)
 	for _, w := range widths {
 		assert.Equal(t, widths[0], w, "all bubble lines must share the same width")
+	}
+}
+
+func TestMessageList_StaticSticker_RendersBorderless(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetImageMode(media.ModeKitty)
+	ml.SetMessages([]store.Message{{
+		ID:       1,
+		Date:     time.Date(2026, 6, 14, 8, 40, 0, 0, time.UTC),
+		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
+		Document: &store.DocumentRef{ID: 555, MimeType: "image/webp"},
+	}})
+	ml.SetImage(555, image.NewRGBA(image.Rect(0, 0, 64, 64)))
+	view := ml.View()
+	assert.NotContains(t, view, "╭", "loaded sticker must render without a bubble border")
+	assert.NotContains(t, view, "│", "loaded sticker must render without bubble sides")
+	assert.Contains(t, view, "08:40", "timestamp still shown under the sticker")
+	assert.NotContains(t, view, "🐱 sticker", "image replaces the text placeholder")
+}
+
+func TestMessageList_VideoNote_RendersBorderless(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetImageMode(media.ModeKitty)
+	ml.SetMessages([]store.Message{{
+		ID:       1,
+		Date:     time.Date(2026, 6, 14, 8, 51, 0, 0, time.UTC),
+		Media:    &store.MediaRef{Kind: store.MediaVideoNote, Duration: 8},
+		Document: &store.DocumentRef{ID: 77, ThumbSize: "m"},
+	}})
+	ml.SetImage(77, image.NewRGBA(image.Rect(0, 0, 64, 64)))
+	view := ml.View()
+	assert.NotContains(t, view, "╭", "video note must render without a bubble border")
+	assert.NotContains(t, view, "│", "video note must render without bubble sides")
+	assert.Contains(t, view, "▶ 0:08", "play overlay still shown under the round video")
+	assert.Contains(t, view, "08:51", "timestamp still shown")
+}
+
+func TestMediaBoxForID_StickerUsesStickerCap(t *testing.T) {
+	// Tall viewport so a 512x512 image is width-bound, not height-bound.
+	ml := components.NewMessageList(60, 200)
+	ml.SetImageMode(media.ModeKitty)
+	sticker := store.Message{
+		ID:       1,
+		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
+		Document: &store.DocumentRef{ID: 555, MimeType: "image/webp"},
+	}
+	ml.SetMessages([]store.Message{sticker})
+
+	// Transmit sizing (MediaBoxForID) must match the sticker render cap, otherwise
+	// the Kitty placement is never marked ready at the rendered width and the
+	// image stays a placeholder box.
+	tCols, _ := ml.MediaBoxForID(555, 512, 512)
+	pCols, _ := ml.PhotoBox(512, 512)
+	if tCols != ml.StickerContentColsForTest() {
+		t.Fatalf("transmit cols (%d) must equal sticker cap (%d)", tCols, ml.StickerContentColsForTest())
+	}
+	if tCols == pCols {
+		t.Fatalf("sticker transmit cols (%d) must differ from photo cols (%d)", tCols, pCols)
+	}
+}
+
+func TestStickerContentCols_SmallerThanPhoto(t *testing.T) {
+	ml := components.NewMessageList(20, 200) // wide viewport so photo cap hits 60
+	photoCols := ml.PhotoContentCols()
+	stickerCols := ml.StickerContentColsForTest()
+	if stickerCols >= photoCols {
+		t.Fatalf("sticker cols (%d) must be smaller than photo cols (%d)", stickerCols, photoCols)
+	}
+	if stickerCols < 4 {
+		t.Fatalf("sticker cols (%d) must stay >= 4", stickerCols)
+	}
+}
+
+func TestPreviewImageID_StaticStickerKittyOnly(t *testing.T) {
+	stickerMsg := store.Message{
+		ID:       1,
+		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
+		Document: &store.DocumentRef{ID: 555, MimeType: "image/webp"},
+	}
+
+	// Block-art mode (default): no inline image.
+	mlBlock := components.NewMessageList(20, 80)
+	if _, ok := mlBlock.PreviewImageIDForTest(stickerMsg); ok {
+		t.Fatal("static sticker must not preview in block-art mode")
+	}
+
+	// Kitty mode: previews keyed by document id.
+	mlKitty := components.NewMessageList(20, 80)
+	mlKitty.SetImageMode(media.ModeKitty)
+	id, ok := mlKitty.PreviewImageIDForTest(stickerMsg)
+	if !ok || id != 555 {
+		t.Fatalf("static sticker in Kitty: got (%d,%v), want (555,true)", id, ok)
+	}
+
+	// Animated sticker (tgs) in Kitty: still no inline image.
+	tgsMsg := store.Message{
+		ID:       2,
+		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
+		Document: &store.DocumentRef{ID: 777, MimeType: "application/x-tgsticker"},
+	}
+	if _, ok := mlKitty.PreviewImageIDForTest(tgsMsg); ok {
+		t.Fatal("animated sticker must not preview even in Kitty mode")
 	}
 }
 

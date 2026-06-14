@@ -9,6 +9,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestIsStaticSticker(t *testing.T) {
+	webp := &store.DocumentRef{MimeType: "image/webp"}
+	tgs := &store.DocumentRef{MimeType: "application/x-tgsticker"}
+	webm := &store.DocumentRef{MimeType: "video/webm"}
+	stickerMedia := &store.MediaRef{Kind: store.MediaSticker}
+
+	cases := []struct {
+		name string
+		m    *store.MediaRef
+		d    *store.DocumentRef
+		want bool
+	}{
+		{"static webp sticker", stickerMedia, webp, true},
+		{"animated tgs sticker", stickerMedia, tgs, false},
+		{"video webm sticker", stickerMedia, webm, false},
+		{"webp but not sticker", &store.MediaRef{Kind: store.MediaPhoto}, webp, false},
+		{"nil media", nil, webp, false},
+		{"nil document", stickerMedia, nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, store.IsStaticSticker(tc.m, tc.d))
+		})
+	}
+}
+
 func TestPeer_TypeHelpers(t *testing.T) {
 	assert.True(t, store.Peer{Type: store.PeerUser}.IsUser())
 	assert.True(t, store.Peer{Type: store.PeerGroup}.IsGroup())
