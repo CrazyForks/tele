@@ -13,15 +13,25 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/audio"
 )
 
+// createTempMediaFile creates an empty private (0600) temp file in tmpDir with
+// the given extension. The caller owns the returned file and must Close it.
+func createTempMediaFile(tmpDir, ext string) (*os.File, error) {
+	f, err := os.CreateTemp(tmpDir, "tele-media-*"+ext)
+	if err != nil {
+		return nil, err
+	}
+	_ = os.Chmod(f.Name(), 0600)
+	return f, nil
+}
+
 // writeTempMediaFile writes data to a private (0600) temp file in tmpDir with
 // the given extension and returns its path.
 func writeTempMediaFile(data []byte, tmpDir, ext string) (string, error) {
-	f, err := os.CreateTemp(tmpDir, "tele-media-*"+ext)
+	f, err := createTempMediaFile(tmpDir, ext)
 	if err != nil {
 		return "", err
 	}
 	name := f.Name()
-	_ = os.Chmod(name, 0600)
 	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
 		_ = os.Remove(name)
@@ -34,8 +44,9 @@ func writeTempMediaFile(data []byte, tmpDir, ext string) (string, error) {
 	return name, nil
 }
 
-// openPath hands a file to the OS default application.
-func openPath(name string) {
+// openPath hands a file to the OS default application. It is a variable so
+// tests can stub out the external launch.
+var openPath = func(name string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":

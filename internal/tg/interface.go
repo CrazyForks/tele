@@ -3,6 +3,7 @@ package tg
 import (
 	"context"
 	"image"
+	"io"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
@@ -31,8 +32,13 @@ type Client interface {
 	// SetArchived moves a peer into (archived) or out of the Archive folder.
 	SetArchived(ctx context.Context, peer store.Peer, archived bool) error
 	DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error)
-	// DownloadDocument fetches the full document file as raw bytes.
+	// DownloadDocument fetches the full document file as raw bytes. Suitable
+	// only for small documents (e.g. voice messages); large files should use
+	// DownloadDocumentToFile to avoid buffering in memory.
 	DownloadDocument(ctx context.Context, ref store.DocumentRef) ([]byte, error)
+	// DownloadDocumentToFile streams the full document directly into dst with
+	// bounded memory, regardless of file size.
+	DownloadDocumentToFile(ctx context.Context, ref store.DocumentRef, dst io.Writer) error
 	// DownloadDocumentThumb fetches and decodes the document's thumbnail
 	// (ref.ThumbSize) for an inline preview.
 	DownloadDocumentThumb(ctx context.Context, ref store.DocumentRef) (image.Image, error)

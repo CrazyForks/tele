@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"image"
+	"io"
+	"os"
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
@@ -105,25 +107,39 @@ func (m RootModel) currentPeer() store.Peer {
 // application (e.g. a video player). Runs async; the download may be large.
 func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
-		data, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) ([]byte, error) {
-				return client.DownloadDocument(ctx, r)
-			},
-			pickDocumentRef,
-		)
-		if err != nil {
-			return StatusErrMsg{Text: "open file failed: " + err.Error(), Sev: components.SeverityWarning}
-		}
-		if len(data) == 0 {
-			return nil
-		}
 		ext := filepath.Ext(ref.FileName)
 		if ext == "" {
 			ext = extFromMime(ref.MimeType)
 		}
-		name, werr := writeTempMediaFile(data, tmpDir, ext)
-		if werr != nil {
-			return StatusErrMsg{Text: "open file failed: " + werr.Error(), Sev: components.SeverityWarning}
+		f, err := createTempMediaFile(tmpDir, ext)
+		if err != nil {
+			return StatusErrMsg{Text: "open file failed: " + err.Error(), Sev: components.SeverityWarning}
+		}
+		name := f.Name()
+
+		// Stream directly to disk; the whole file is never held in memory. On a
+		// FILE_REFERENCE_EXPIRED retry the file is truncated so a partial first
+		// attempt does not corrupt the result.
+		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
+			func(r store.DocumentRef) (struct{}, error) {
+				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
+					return struct{}{}, serr
+				}
+				if terr := f.Truncate(0); terr != nil {
+					return struct{}{}, terr
+				}
+				return struct{}{}, client.DownloadDocumentToFile(ctx, r, f)
+			},
+			pickDocumentRef,
+		)
+		if derr != nil {
+			_ = f.Close()
+			_ = os.Remove(name)
+			return StatusErrMsg{Text: "open file failed: " + derr.Error(), Sev: components.SeverityWarning}
+		}
+		if cerr := f.Close(); cerr != nil {
+			_ = os.Remove(name)
+			return StatusErrMsg{Text: "open file failed: " + cerr.Error(), Sev: components.SeverityWarning}
 		}
 		openPath(name)
 		if refreshed != nil {
@@ -131,6 +147,18 @@ func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.P
 		}
 		return nil
 	}
+}
+
+// OpenDocumentCmdForTest exposes openDocumentCmd for tests.
+func OpenDocumentCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string) tea.Cmd {
+	return openDocumentCmd(context.Background(), c, peer, msgID, ref, tmpDir)
+}
+
+// SetOpenPathForTest swaps the OS file launcher and returns a restore func.
+func SetOpenPathForTest(fn func(string)) func() {
+	prev := openPath
+	openPath = fn
+	return func() { openPath = prev }
 }
 
 // pickDocumentRef extracts a message's fresh document ref, used as the refresh

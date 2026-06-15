@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"io"
 	_ "image/jpeg"
 	_ "image/png"
 
@@ -68,6 +69,27 @@ func (c *GotdClient) DownloadDocument(ctx context.Context, ref store.DocumentRef
 		return nil, fmt.Errorf("download document %d: %w", ref.ID, err)
 	}
 	return buf.Bytes(), nil
+}
+
+// DownloadDocumentToFile streams the full document into dst without buffering
+// the whole file in memory, so it stays bounded regardless of file size.
+func (c *GotdClient) DownloadDocumentToFile(ctx context.Context, ref store.DocumentRef, dst io.Writer) error {
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
+	}
+
+	loc := &gotdtg.InputDocumentFileLocation{
+		ID:            ref.ID,
+		AccessHash:    ref.AccessHash,
+		FileReference: ref.FileReference,
+	}
+
+	d := downloader.NewDownloader()
+	if _, err := d.Download(api, loc).Stream(ctx, dst); err != nil {
+		return fmt.Errorf("download document %d: %w", ref.ID, err)
+	}
+	return nil
 }
 
 // DownloadDocumentThumb fetches and decodes the document's thumbnail named by

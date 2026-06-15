@@ -3,6 +3,7 @@ package tg
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/gotd/td/tgerr"
@@ -23,5 +24,13 @@ func TestIsFileReferenceExpired(t *testing.T) {
 func TestDownloadDocumentImage_NotConnected(t *testing.T) {
 	c := &GotdClient{}
 	_, err := c.DownloadDocumentImage(context.Background(), store.DocumentRef{ID: 1})
+	assert.Error(t, err)
+}
+
+// DownloadDocumentToFile must fail cleanly (not panic) when the client is not
+// connected; the streaming path is exercised end-to-end by manual testing.
+func TestDownloadDocumentToFile_NotConnected(t *testing.T) {
+	c := &GotdClient{}
+	err := c.DownloadDocumentToFile(context.Background(), store.DocumentRef{ID: 1}, io.Discard)
 	assert.Error(t, err)
 }

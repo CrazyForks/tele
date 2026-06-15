@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"image"
+	"io"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ type mockTGClient struct {
 	lastReplyToMsgID     int
 	downloadPhotoFunc    func() (image.Image, error)
 	downloadDocImageFunc func() (image.Image, error)
+	downloadDocFileFunc  func(dst io.Writer) error
 	refreshFunc          func(msgID int) (store.Message, error)
 	lastSendCtx          context.Context
 }
@@ -79,6 +81,12 @@ func (m *mockTGClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image
 }
 func (m *mockTGClient) DownloadDocument(_ context.Context, _ store.DocumentRef) ([]byte, error) {
 	return nil, nil
+}
+func (m *mockTGClient) DownloadDocumentToFile(_ context.Context, _ store.DocumentRef, dst io.Writer) error {
+	if m.downloadDocFileFunc != nil {
+		return m.downloadDocFileFunc(dst)
+	}
+	return nil
 }
 func (m *mockTGClient) DownloadDocumentThumb(_ context.Context, _ store.DocumentRef) (image.Image, error) {
 	return nil, nil

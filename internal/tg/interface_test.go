@@ -3,6 +3,7 @@ package tg_test
 import (
 	"context"
 	"image"
+	"io"
 	"testing"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -60,6 +61,10 @@ func (m *mockClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.I
 
 func (m *mockClient) DownloadDocument(_ context.Context, _ store.DocumentRef) ([]byte, error) {
 	return nil, nil
+}
+
+func (m *mockClient) DownloadDocumentToFile(_ context.Context, _ store.DocumentRef, _ io.Writer) error {
+	return nil
 }
 
 func (m *mockClient) DownloadDocumentThumb(_ context.Context, _ store.DocumentRef) (image.Image, error) {
