@@ -16,23 +16,21 @@ import (
 
 // RefreshMessage re-fetches one message and returns it with fresh media refs.
 func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return store.Message{}, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return store.Message{}, err
 	}
 
 	ids := []tg.InputMessageClass{&tg.InputMessageID{ID: msgID}}
 	var out store.Message
-	err := WithRetry(ctx, func() error {
+	err = WithRetry(ctx, func() error {
 		var (
 			result tg.MessagesMessagesClass
 			err    error
 		)
-		if peer.Type == store.PeerChannel || peer.Type == store.PeerSuperGroup {
+		if isChannelPeer(peer) {
 			result, err = api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
-				Channel: &tg.InputChannel{ChannelID: peer.ID, AccessHash: peer.AccessHash},
+				Channel: inputChannel(peer),
 				ID:      ids,
 			})
 		} else {
@@ -54,17 +52,15 @@ func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID 
 }
 
 func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
 	}
 
 	c.traceLog.Debug("GetHistory", zap.Int64("peer_id", peer.ID), zap.Int("offsetID", offsetID), zap.Int("limit", limit))
 	inputPeer := peerToInput(peer)
 	var msgs []store.Message
-	err := WithRetry(ctx, func() error {
+	err = WithRetry(ctx, func() error {
 		result, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
 			Peer:     inputPeer,
 			Limit:    limit,
@@ -82,17 +78,15 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 }
 
 func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int) (int, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return 0, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return 0, err
 	}
 
 	c.traceLog.Debug("SendMessage", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
 	inputPeer := peerToInput(peer)
 	var realID int
-	err := WithRetry(ctx, func() error {
+	err = WithRetry(ctx, func() error {
 		var buf [8]byte
 		if _, err := rand.Read(buf[:]); err != nil {
 			return err
@@ -129,16 +123,14 @@ func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, 
 }
 
 func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	return WithRetry(ctx, func() error {
-		if peer.Type == store.PeerChannel || peer.Type == store.PeerSuperGroup {
+		if isChannelPeer(peer) {
 			_, err := api.ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
-				Channel: &tg.InputChannel{ChannelID: peer.ID, AccessHash: peer.AccessHash},
+				Channel: inputChannel(peer),
 				MaxID:   maxID,
 			})
 			return err
@@ -152,18 +144,16 @@ func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) e
 }
 
 func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	c.traceLog.Debug("DeleteMessages", zap.Int64("peer_id", peer.ID), zap.Int("count", len(ids)), zap.Bool("revoke", revoke))
 	return WithRetry(ctx, func() error {
-		if peer.Type == store.PeerChannel || peer.Type == store.PeerSuperGroup {
+		if isChannelPeer(peer) {
 			// Channel/supergroup messages are always deleted for all members; revoke is N/A.
 			_, err := api.ChannelsDeleteMessages(ctx, &tg.ChannelsDeleteMessagesRequest{
-				Channel: &tg.InputChannel{ChannelID: peer.ID, AccessHash: peer.AccessHash},
+				Channel: inputChannel(peer),
 				ID:      ids,
 			})
 			return err
@@ -177,11 +167,9 @@ func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []
 }
 
 func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int, text string) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	c.traceLog.Debug("EditMessage", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID))
 	return WithRetry(ctx, func() error {
@@ -198,11 +186,9 @@ func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int
 }
 
 func (c *GotdClient) SendReaction(ctx context.Context, peer store.Peer, msgID int, emoji string) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	c.traceLog.Debug("SendReaction", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID), zap.String("emoji", emoji))
 	return WithRetry(ctx, func() error {
@@ -223,6 +209,17 @@ func buildReactionArg(emoji string) []tg.ReactionClass {
 		return []tg.ReactionClass{} // empty vector = remove reaction
 	}
 	return []tg.ReactionClass{&tg.ReactionEmoji{Emoticon: emoji}}
+}
+
+// isChannelPeer reports whether a peer is addressed via the channels.* API
+// (channels and supergroups), as opposed to the messages.* API.
+func isChannelPeer(p store.Peer) bool {
+	return p.Type == store.PeerChannel || p.Type == store.PeerSuperGroup
+}
+
+// inputChannel builds the InputChannel for a channel/supergroup peer.
+func inputChannel(p store.Peer) *tg.InputChannel {
+	return &tg.InputChannel{ChannelID: p.ID, AccessHash: p.AccessHash}
 }
 
 func peerToInput(p store.Peer) tg.InputPeerClass {
@@ -365,8 +362,9 @@ func parseHistory(result tg.MessagesMessagesClass, chatID int64) []store.Message
 	return out
 }
 
-// pickFullThumbSize returns the largest available PhotoSize type for full-quality download.
-func pickFullThumbSize(sizes []tg.PhotoSizeClass) string {
+// largestPhotoSize returns the PhotoSize type with the greatest pixel area, or
+// "" when none is a concrete PhotoSize.
+func largestPhotoSize(sizes []tg.PhotoSizeClass) string {
 	best := ""
 	bestArea := 0
 	for _, s := range sizes {
@@ -380,6 +378,11 @@ func pickFullThumbSize(sizes []tg.PhotoSizeClass) string {
 	return best
 }
 
+// pickFullThumbSize returns the largest available PhotoSize type for full-quality download.
+func pickFullThumbSize(sizes []tg.PhotoSizeClass) string {
+	return largestPhotoSize(sizes)
+}
+
 // pickThumbSize returns the best thumb type string for inline display.
 // Prefers "m" (320px), then largest available PhotoSize by area.
 func pickThumbSize(sizes []tg.PhotoSizeClass) string {
@@ -388,17 +391,7 @@ func pickThumbSize(sizes []tg.PhotoSizeClass) string {
 			return "m"
 		}
 	}
-	best := ""
-	bestArea := 0
-	for _, s := range sizes {
-		if ps, ok := s.(*tg.PhotoSize); ok {
-			if ps.W*ps.H > bestArea {
-				bestArea = ps.W * ps.H
-				best = ps.Type
-			}
-		}
-	}
-	return best
+	return largestPhotoSize(sizes)
 }
 
 // classifyMedia maps a Telegram media object to a display-level MediaRef.
@@ -611,13 +604,11 @@ func typingActionToTG(a store.TypingAction) tg.SendMessageActionClass {
 }
 
 func (c *GotdClient) SetTyping(ctx context.Context, peer store.Peer, action store.TypingAction) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil // typing is best-effort; ignore when not connected
 	}
-	_, err := api.MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
+	_, err = api.MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
 		Peer:   peerToInput(peer),
 		Action: typingActionToTG(action),
 	})

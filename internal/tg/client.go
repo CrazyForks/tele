@@ -2,6 +2,7 @@ package tg
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 
@@ -48,6 +49,17 @@ func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace boo
 		suppressIDs:  make(map[int]struct{}),
 		stateStorage: stateStorage,
 	}
+}
+
+// acquireAPI returns the live API client under the read lock, or an error when
+// the client is not connected yet.
+func (c *GotdClient) acquireAPI() (*tg.Client, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.api == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	return c.api, nil
 }
 
 // Connect starts the gotd client. Call in a goroutine — blocks until ctx is cancelled.
