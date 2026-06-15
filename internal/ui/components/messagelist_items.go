@@ -63,6 +63,7 @@ func (ml *MessageList) buildItems(msgs []store.Message) []listItem {
 func (ml *MessageList) SetMessages(msgs []store.Message) {
 	ml.items = ml.buildItems(msgs)
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+	ml.setCursorNewest()
 }
 
 // SetMessagesKeepScroll replaces the message list without resetting the scroll position.
@@ -136,6 +137,11 @@ func (ml *MessageList) RemoveMessage(id int) {
 	if ml.viewStart >= len(ml.items) {
 		ml.viewStart = len(ml.items) - 1
 		ml.lineOffset = 0
+	}
+
+	// If the cursor was on the removed message, fall back to the newest.
+	if ml.cursorIndex() < 0 {
+		ml.setCursorNewest()
 	}
 }
 

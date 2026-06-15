@@ -67,7 +67,9 @@ It also runs lean — typically ~35MB RSS at idle vs several hundred MB for desk
 
 ### ⚡ Keyboard-first UX
 
-Vim-inspired navigation (`j/k`, `gg/G`, insert mode, etc.)
+Vim-inspired navigation (`j/k`, `gg/G`, insert mode, etc.), plus a movable
+per-message cursor (`ctrl+j/k`) that steps bubble-by-bubble, stays centered as
+the chat scrolls, and is the target for the context menu and per-message actions.
 
 ### 💬 Full Telegram support
 
@@ -150,6 +152,7 @@ Then prompts for:
 | Key             | Action                            |
 | --------------- | --------------------------------- |
 | `j` / `k`       | Navigate chats or scroll messages |
+| `ctrl+j` / `ctrl+k` | Select next / previous message |
 | `i`             | Compose message                   |
 | `r`             | Reply                             |
 | `e` / `d`       | Edit / delete message             |

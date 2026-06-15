@@ -34,6 +34,11 @@ type MessageList struct {
 	// no message is selected or no render has happened yet.
 	selRect   Rect
 	selRectOK bool
+
+	// cursorMsgID is the explicit "active message" the user steps over with
+	// CursorUp/CursorDown. 0 means unset; selection then falls back to the
+	// newest visible message. It is the target for per-message actions.
+	cursorMsgID int
 }
 
 // SetVoicePlayback marks a voice message (by document id) as currently playing,

@@ -26,6 +26,8 @@
 | --------- | ------------------------------ |
 | `j` / `↓` | Scroll down                    |
 | `k` / `↑` | Scroll up                      |
+| `Ctrl+J`  | Select next (newer) message    |
+| `Ctrl+K`  | Select previous (older) message|
 | `gg`      | Scroll to top                  |
 | `G`       | Scroll to bottom               |
 | `i` / `a` | Compose message (insert mode)  |
@@ -73,6 +75,8 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `go_bottom`        | Jump to the bottom (last / newest)   |
 | `scroll_half_down` | Scroll half a page down              |
 | `scroll_half_up`   | Scroll half a page up                |
+| `cursor_down`      | Move the active-message cursor to the next (newer) bubble |
+| `cursor_up`        | Move the active-message cursor to the previous (older) bubble |
 | `confirm`          | Confirm / open the selected item     |
 
 ### Chat & messages — context `chat`

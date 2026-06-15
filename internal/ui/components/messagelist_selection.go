@@ -63,6 +63,13 @@ func (ml *MessageList) computeSelectedMsg() *store.Message {
 	if len(ml.items) == 0 {
 		return nil
 	}
+	// The explicit cursor, when set and still present, is the selection. It
+	// falls back to the newest visible message below until initialized.
+	if ml.cursorMsgID != 0 {
+		if msg := ml.findMessage(ml.cursorMsgID); msg != nil {
+			return msg
+		}
+	}
 	selectedIdx := -1
 	linesUsed := 0
 	for i := ml.viewStart; i < len(ml.items); i++ {

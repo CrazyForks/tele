@@ -75,6 +75,8 @@ func DefaultKeyMap() KeyMap {
 			"g g":    ActionGoTop,
 			"ctrl+d": ActionScrollHalfDown,
 			"ctrl+u": ActionScrollHalfUp,
+			"ctrl+j": ActionCursorDown,
+			"ctrl+k": ActionCursorUp,
 			"i":      ActionInsert,
 			"a":      ActionInsert,
 			"esc":    ActionNormal,

@@ -308,6 +308,15 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				offsetID := m.msgList.OldestID()
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
+		case keys.ActionCursorUp:
+			atOldest := m.msgList.CursorUp()
+			if atOldest && m.chat != nil && m.msgList.Count() > 0 {
+				chatID := m.chat.ID
+				offsetID := m.msgList.OldestID()
+				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
+			}
+		case keys.ActionCursorDown:
+			m.msgList.CursorDown()
 		case keys.ActionInsert:
 			m.composerFocused = true
 			focusCmd := m.composer.Focus()

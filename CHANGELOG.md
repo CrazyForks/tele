@@ -9,10 +9,16 @@ A human title for a release is written as an em-dash suffix on its heading,
 e.g. `## [1.2.0] - 2026-06-11 — Archived folders & image layout fixes`.
 Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
-## [Unreleased]
+## [Unreleased] — Message cursor & richer inline media
 
 ### Added
 
+- A movable **active-message cursor** in the open chat: step bubble-by-bubble
+  with `ctrl+j` / `ctrl+k`. The cursor rises to the vertical middle and then the
+  viewport follows it (no jump), works even when the history is shorter than the
+  screen (so the top message in a 2–3 message chat is reachable), and is the
+  target for the context menu and per-message actions. Plain `j`/`k` line
+  scrolling keeps the cursor on screen (#124)
 - Static WEBP stickers now render as small inline images (with transparency,
   borderless — no message bubble) in Kitty mode; animated (`.tgs`) and video
   (`.webm`) stickers keep the alt-emoji placeholder, as do all stickers outside
@@ -35,6 +41,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Multi-line and wrapping messages were under-measured (the estimate assumed
   perfect character packing while rendering uses word-wrap), which could also
   clip the newest message at the bottom of a chat (#115)
+- Opening or playing a large document/video could crash the client with an
+  out-of-memory error — the whole file was buffered in memory. Downloads now
+  stream to a private temp file, bounded regardless of file size (#112)
 
 ## [1.3.1] - 2026-06-12
 

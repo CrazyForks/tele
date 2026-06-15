@@ -40,6 +40,7 @@ func (ml *MessageList) VisiblePhotoIDs() []int64 {
 
 func (ml *MessageList) ScrollToBottom() {
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+	ml.setCursorNewest()
 }
 
 func (ml *MessageList) ScrollToTop() {
@@ -109,6 +110,7 @@ func (ml *MessageList) ScrollToFirstUnread(readMaxID int) bool {
 			if i > 0 && ml.items[i-1].kind == itemUnreadSeparator {
 				start = i - 1
 			}
+			ml.cursorMsgID = item.msg.ID
 			ml.viewStart = start
 			ml.lineOffset = 0
 			lines := 0
@@ -124,11 +126,18 @@ func (ml *MessageList) ScrollToFirstUnread(readMaxID int) bool {
 	return false
 }
 
-// ScrollUp moves the viewport one line toward older messages.
+// ScrollUp moves the viewport one line toward older messages, dragging the
+// active-message cursor along if it would otherwise scroll off screen.
+func (ml *MessageList) ScrollUp() {
+	ml.scrollUpLine()
+	ml.clampCursorToViewport()
+}
+
+// scrollUpLine pans the viewport one line toward older messages.
 // When crossing a message boundary, small messages (h <= viewHeight) are entered at
 // lineOffset=h-2 so at least content+bottom are visible (never bottom-border-only).
 // Large messages are entered at their bottom portion (lineOffset=h-viewHeight).
-func (ml *MessageList) ScrollUp() {
+func (ml *MessageList) scrollUpLine() {
 	if ml.lineOffset > 0 {
 		ml.lineOffset--
 		return
@@ -145,10 +154,17 @@ func (ml *MessageList) ScrollUp() {
 	}
 }
 
-// ScrollDown moves the viewport one line toward newer messages.
+// ScrollDown moves the viewport one line toward newer messages, dragging the
+// active-message cursor along if it would otherwise scroll off screen.
+func (ml *MessageList) ScrollDown() {
+	ml.scrollDownLine()
+	ml.clampCursorToViewport()
+}
+
+// scrollDownLine pans the viewport one line toward newer messages.
 // Scrolls line-by-line but skips lineOffset=h-1 (bottom-border-only frame).
 // The at-bottom check (positionAtBottom) is the primary stop condition.
-func (ml *MessageList) ScrollDown() {
+func (ml *MessageList) scrollDownLine() {
 	botIdx, botOff := ml.positionAtBottom()
 	if ml.viewStart > botIdx || (ml.viewStart == botIdx && ml.lineOffset >= botOff) {
 		return
@@ -187,6 +203,7 @@ func (ml *MessageList) ScrollToMessage(id int) bool {
 		if item.kind != itemMessage || item.msg.ID != id {
 			continue
 		}
+		ml.cursorMsgID = id
 		ml.viewStart = i
 		ml.lineOffset = 0
 		lines := 0

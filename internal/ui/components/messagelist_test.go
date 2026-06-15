@@ -396,17 +396,15 @@ func TestMessageList_SelectedMessageID_AtBottom_SelectsLast(t *testing.T) {
 	assert.Equal(t, 6, ml.SelectedMessageID())
 }
 
-func TestMessageList_SelectedMessageID_AfterScrollUp_SelectsPrevious(t *testing.T) {
-	// viewHeight=3, 6 msgs each h=3 → viewStart=5 initially → msg6 selected.
-	// After one ScrollUp: viewStart=4, lineOffset=1.
-	//   msg5 (i=4): firstContentVP = 0 + (1-1) = 0 < 3 → selected
-	//   msg6 (i=5): linesUsed after msg5 slice = 2; firstContentVP = 2+1=3, not < 3
-	// → selectedID = 5
+func TestMessageList_SelectedMessageID_LineScrollKeepsCursorWhileVisible(t *testing.T) {
+	// A line scroll does not move the cursor as long as its bubble stays on
+	// screen; the cursor only follows the viewport once it would scroll off
+	// (covered by TestMessageList_LineScroll*_KeepsCursorInViewport).
 	ml := components.NewMessageList(3, 40)
 	ml.SetMessages(makeMessages(6))
 	assert.Equal(t, 6, ml.SelectedMessageID())
-	ml.ScrollUp()
-	assert.Equal(t, 5, ml.SelectedMessageID())
+	ml.ScrollUp() // msg 6 still partially visible
+	assert.Equal(t, 6, ml.SelectedMessageID())
 }
 
 func TestMessageList_SelectedMessageID_FirstContentCutOff_SelectsNext(t *testing.T) {

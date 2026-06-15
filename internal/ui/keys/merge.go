@@ -17,6 +17,7 @@ func KnownActions() map[Action]bool {
 		// Navigation / scrolling.
 		ActionUp: true, ActionDown: true, ActionGoTop: true, ActionGoBottom: true,
 		ActionScrollHalfDown: true, ActionScrollHalfUp: true,
+		ActionCursorUp: true, ActionCursorDown: true,
 		// Chat / editing.
 		ActionInsert: true, ActionNormal: true, ActionConfirm: true,
 		ActionSearch: true, ActionOpenInViewer: true, ActionOpenContextMenu: true,

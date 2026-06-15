@@ -148,6 +148,35 @@ func TestChat_Indicator_HiddenWhenComposerFocused(t *testing.T) {
 	assert.Contains(t, m.View(), "┃")
 }
 
+func TestChat_CursorUp_SelectsOlderMessage(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetMessages([]store.Message{
+		{ID: 1, ChatID: 1, Text: "first", Date: time.Now()},
+		{ID: 2, ChatID: 1, Text: "second", Date: time.Now()},
+		{ID: 3, ChatID: 1, Text: "third", Date: time.Now()},
+	})
+	m.Update(keys.ActionMsg{Action: keys.ActionCursorUp})
+	assert.Equal(t, 2, m.SelectedMessageID())
+	m.Update(keys.ActionMsg{Action: keys.ActionCursorDown})
+	assert.Equal(t, 3, m.SelectedMessageID())
+}
+
+func TestChat_CursorUp_LoadsMoreAtOldest(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetChat(&store.Chat{ID: 42, Title: "Test"})
+	m.SetMessages([]store.Message{
+		{ID: 1, ChatID: 42, Text: "first", Date: time.Now()},
+		{ID: 2, ChatID: 42, Text: "second", Date: time.Now()},
+	})
+	// 2 -> cursor steps to msg 1 (oldest) and asks to prefetch older history.
+	_, cmd := m.Update(keys.ActionMsg{Action: keys.ActionCursorUp})
+	require.NotNil(t, cmd)
+	lm, ok := cmd().(screens.LoadMoreMsg)
+	require.True(t, ok, "expected LoadMoreMsg at oldest cursor")
+	assert.Equal(t, int64(42), lm.ChatID)
+	assert.Equal(t, 1, lm.OffsetID)
+}
+
 func TestChat_SelectedMessageID_ReturnsLastVisible(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	m.SetMessages([]store.Message{

@@ -131,10 +131,13 @@ func (sb *StatusBar) hints() string {
 	case sb.activePane == "chat":
 		down := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionDown)
 		up := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionUp)
+		curDown := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCursorDown)
+		curUp := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCursorUp)
 		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
 		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
 		return joinHints(
 			hintNav(down, up, "scroll"),
+			hintNav(curDown, curUp, "select"),
 			hintKey(write, "write"),
 			hintKey(quit, "quit"),
 		)
@@ -165,7 +168,15 @@ func hintNav(downKey, upKey, desc string) string {
 	if downKey == "" && upKey == "" {
 		return ""
 	}
-	return downKey + "/" + upKey + " -> " + desc
+	combo := downKey + "/" + upKey
+	// Collapse a shared modifier prefix: "ctrl+j"/"ctrl+k" -> "ctrl+j/k".
+	if i := strings.LastIndex(downKey, "+"); i >= 0 {
+		prefix := downKey[:i+1]
+		if strings.HasPrefix(upKey, prefix) {
+			combo = downKey + "/" + upKey[len(prefix):]
+		}
+	}
+	return combo + " -> " + desc
 }
 
 func joinHints(parts ...string) string {
