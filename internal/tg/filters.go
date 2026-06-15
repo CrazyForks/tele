@@ -2,7 +2,6 @@ package tg
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
@@ -11,15 +10,13 @@ import (
 )
 
 func (c *GotdClient) GetDialogFilters(ctx context.Context) ([]store.FolderFilter, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
 	}
 
 	var filters []store.FolderFilter
-	err := WithRetry(ctx, func() error {
+	err = WithRetry(ctx, func() error {
 		result, err := api.MessagesGetDialogFilters(ctx)
 		if err != nil {
 			c.log.Error("MessagesGetDialogFilters failed", zap.Error(err))

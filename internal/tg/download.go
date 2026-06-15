@@ -24,11 +24,9 @@ func IsFileReferenceExpired(err error) bool {
 }
 
 func (c *GotdClient) DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
 	}
 
 	loc := &gotdtg.InputPhotoFileLocation{
@@ -53,11 +51,9 @@ func (c *GotdClient) DownloadPhoto(ctx context.Context, ref store.PhotoRef) (ima
 
 // DownloadDocument fetches the full document file as raw bytes.
 func (c *GotdClient) DownloadDocument(ctx context.Context, ref store.DocumentRef) ([]byte, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
 	}
 
 	loc := &gotdtg.InputDocumentFileLocation{
@@ -77,11 +73,9 @@ func (c *GotdClient) DownloadDocument(ctx context.Context, ref store.DocumentRef
 // DownloadDocumentThumb fetches and decodes the document's thumbnail named by
 // ref.ThumbSize for an inline preview.
 func (c *GotdClient) DownloadDocumentThumb(ctx context.Context, ref store.DocumentRef) (image.Image, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
 	}
 	if ref.ThumbSize == "" {
 		return nil, fmt.Errorf("document %d has no thumbnail", ref.ID)
@@ -111,11 +105,9 @@ func (c *GotdClient) DownloadDocumentThumb(ctx context.Context, ref store.Docume
 // image. Used for static WEBP stickers: unlike DownloadDocumentThumb it streams
 // the main file (no ThumbSize), so transparency from the full sticker is kept.
 func (c *GotdClient) DownloadDocumentImage(ctx context.Context, ref store.DocumentRef) (image.Image, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
 	}
 
 	loc := &gotdtg.InputDocumentFileLocation{

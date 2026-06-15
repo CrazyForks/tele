@@ -11,11 +11,9 @@ import (
 )
 
 func (c *GotdClient) MarkDialogUnread(ctx context.Context, peer store.Peer, unread bool) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	return WithRetry(ctx, func() error {
 		req := &tg.MessagesMarkDialogUnreadRequest{
@@ -28,11 +26,9 @@ func (c *GotdClient) MarkDialogUnread(ctx context.Context, peer store.Peer, unre
 }
 
 func (c *GotdClient) SetMuted(ctx context.Context, peer store.Peer, muted bool) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	return WithRetry(ctx, func() error {
 		var settings tg.InputPeerNotifySettings
@@ -54,11 +50,9 @@ func (c *GotdClient) SetMuted(ctx context.Context, peer store.Peer, muted bool) 
 // server (rather than rebuilding from the lossy store model) so existing
 // members keep their access hashes.
 func (c *GotdClient) AddToFolder(ctx context.Context, filterID int, peer store.Peer, add bool) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	return WithRetry(ctx, func() error {
 		result, err := api.MessagesGetDialogFilters(ctx)
@@ -88,11 +82,9 @@ func (c *GotdClient) AddToFolder(ctx context.Context, filterID int, peer store.P
 }
 
 func (c *GotdClient) SetArchived(ctx context.Context, peer store.Peer, archived bool) error {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
 	}
 	folderID := 0
 	if archived {

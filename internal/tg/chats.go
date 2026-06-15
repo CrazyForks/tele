@@ -23,11 +23,9 @@ func (c *GotdClient) GetArchivedDialogs(ctx context.Context) ([]store.Chat, erro
 }
 
 func (c *GotdClient) getDialogs(ctx context.Context, folderID int) ([]store.Chat, error) {
-	c.mu.RLock()
-	api := c.api
-	c.mu.RUnlock()
-	if api == nil {
-		return nil, fmt.Errorf("not connected")
+	api, err := c.acquireAPI()
+	if err != nil {
+		return nil, err
 	}
 
 	c.log.Debug("GetDialogs start")
