@@ -1,0 +1,201 @@
+package ui
+
+import (
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/screens"
+)
+
+func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.statusBar.SetStatus("")
+	if m.reactionPicker != nil {
+		newPicker, cmd := m.reactionPicker.Update(msg)
+		m.reactionPicker = newPicker
+		return m, cmd
+	}
+	// While context menu is open, route all keys to it.
+	if m.contextMenu != nil {
+		newCM, cmd := m.contextMenu.Update(msg)
+		m.contextMenu = newCM
+		return m, cmd
+	}
+	if m.chatMenu != nil {
+		newCM, cmd := m.chatMenu.Update(msg)
+		m.chatMenu = newCM
+		return m, cmd
+	}
+
+	keyStr := msg.String()
+	if m.verbose {
+		m.statusBar.SetLastKey(keyStr)
+	}
+
+	if m.searchModel != nil {
+		if keyStr == "ctrl+v" {
+			return m, readClipboardCmd()
+		}
+		newSearch, cmd := m.searchModel.Update(msg)
+		m.searchModel = newSearch
+		return m, cmd
+	}
+
+	// In insert mode, bypass global bindings and pass key directly to chat/composer
+	if m.focus == FocusChat && m.vimState.Mode == keys.ModeInsert {
+		if keyStr == "esc" {
+			m.vimState.Mode = keys.ModeNormal
+			m.statusBar.SetMode(keys.ModeNormal)
+			newPane, cmd := m.chat.Update(keys.ActionMsg{Action: keys.ActionNormal})
+			m.chat = newPane.(*screens.ChatModel)
+			return m, cmd
+		}
+		if keyStr == "ctrl+v" {
+			return m, readClipboardCmd()
+		}
+		newPane, cmd := m.chat.Update(msg)
+		m.chat = newPane.(*screens.ChatModel)
+		return m, tea.Batch(cmd, m.markReadCmd())
+	}
+
+	// Global bindings always take priority
+	switch m.keyMap.Resolve(keys.ContextGlobal, keyStr) {
+	case keys.ActionFocusChatList:
+		return m.focusPane(FocusChatList)
+	case keys.ActionFocusChat:
+		return m.focusPane(FocusChat)
+	case keys.ActionFocusPrev:
+		return m.focusPrev()
+	case keys.ActionFocusNext:
+		return m.focusNext()
+	case keys.ActionFocusFolders:
+		if m.folderBar != nil && m.folderBar.HasFolders() {
+			return m.focusPane(FocusFolders)
+		}
+		return m, nil
+	case keys.ActionQuit:
+		return m, tea.Quit
+	}
+
+	if keyStr == "/" {
+		if m.st != nil {
+			m.searchModel = screens.NewSearchModel(m.st.Chats(), m.width, m.height, m.keyMap)
+		}
+		return m, nil
+	}
+
+	if m.focus == FocusFolders {
+		action, res := m.matcher.Resolve(keys.ContextFolders, keyStr)
+		if res == keys.MatchPending {
+			return m, nil
+		}
+		if action != keys.ActionNone {
+			newPane, cmd := m.folderBar.Update(keys.ActionMsg{Action: action})
+			m.folderBar = newPane.(*screens.FoldersModel)
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	if m.focus == FocusChatList {
+		action, res := m.matcher.Resolve(keys.ContextChatList, keyStr)
+		if res == keys.MatchPending {
+			return m, nil
+		}
+		if action == keys.ActionOpenContextMenu {
+			if chat, ok := m.chatList.CursorChat(); ok && m.st != nil {
+				m.chatMenu = components.NewChatContextMenu(chat, m.st.FolderFilters(), m.keyMap)
+			}
+			return m, nil
+		}
+		if action != keys.ActionNone {
+			newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})
+			m.chatList = newPane.(*screens.ChatListModel)
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	// Chat pane: resolve through the matcher (supports chords).
+	action, res := m.matcher.Resolve(keys.ContextChat, keyStr)
+	if res == keys.MatchPending {
+		return m, nil
+	}
+	// Mode is a consequence of the resolved action.
+	switch action {
+	case keys.ActionInsert:
+		m.vimState.Mode = keys.ModeInsert
+	case keys.ActionNormal:
+		m.vimState.Mode = keys.ModeNormal
+	}
+	m.statusBar.SetMode(m.vimState.Mode)
+
+	// Esc in normal mode: close active chat and return to chatlist.
+	if action == keys.ActionNormal && m.focus == FocusChat {
+		m.chat.ClearPendingAction()
+		m.chat.SetChat(nil)
+		m.chat.SetMessages(nil)
+		m.currentChatID = 0
+		m.chatList.SetActiveByID(0)
+		return m.focusPane(FocusChatList)
+	}
+
+	if action == keys.ActionOpenInViewer && m.focus == FocusChat {
+		photoID := m.chat.SelectedMessagePhotoID()
+		if photoID != 0 {
+			img := m.fullImageCache[photoID]
+			if img == nil {
+				img = m.imageCache[photoID]
+			}
+			if img != nil {
+				go openInViewer(img, m.tmpDir)
+			}
+			return m, nil
+		}
+		if ref, ok := m.chat.SelectedMessageVideo(); ok {
+			return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
+		}
+		return m, nil
+	}
+
+	if action == keys.ActionPlayVoice && m.focus == FocusChat {
+		return m.handlePlayVoice()
+	}
+
+	if action == keys.ActionOpenContextMenu && m.focus == FocusChat {
+		if m.chat != nil {
+			msgID := m.chat.SelectedMessageID()
+			isOut := m.chat.SelectedMessageIsOut()
+			if msgID != 0 {
+				replyToMsgID := m.chat.SelectedMessageReplyToMsgID()
+				photoID := m.chat.SelectedMessagePhotoID()
+				_, hasVideo := m.chat.SelectedMessageVideo()
+				_, hasVoice := m.chat.SelectedMessageVoice()
+				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, photoID, hasVideo, hasVoice, m.keyMap)
+			}
+		}
+		return m, nil
+	}
+
+	if action == keys.ActionReply && m.focus == FocusChat {
+		if m.chat != nil {
+			return m, m.activateReply(m.chat.SelectedMessageID())
+		}
+		return m, nil
+	}
+
+	if action == keys.ActionEdit && m.focus == FocusChat {
+		if m.chat != nil && m.chat.SelectedMessageIsOut() {
+			return m, m.activateEdit(m.chat.SelectedMessageID())
+		}
+		return m, nil
+	}
+
+	if action != keys.ActionNone {
+		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
+		m.chat = newPane.(*screens.ChatModel)
+		return m, tea.Batch(cmd, m.markReadCmd())
+	}
+
+	return m, nil
+}

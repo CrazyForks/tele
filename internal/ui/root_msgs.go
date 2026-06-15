@@ -1,0 +1,88 @@
+package ui
+
+import (
+	"image"
+
+	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
+)
+
+type ChatHistoryMsg struct {
+	ChatID   int64
+	Messages []store.Message
+}
+
+type PhotoReadyMsg struct {
+	PhotoID int64
+	Image   image.Image
+}
+
+type FullPhotoReadyMsg struct {
+	PhotoID int64
+	Image   image.Image
+}
+
+// kittyTransmittedMsg is emitted after a photo's Kitty virtual placement has
+// been written to the terminal. Only then is the image marked ready, so the
+// placeholder grid is never painted before the placement exists.
+type kittyTransmittedMsg struct {
+	photoID int64
+	cols    int
+}
+
+// voicePlayReadyMsg carries a downloaded voice file ready to be played.
+type voicePlayReadyMsg struct {
+	docID int64
+	data  []byte
+}
+
+// voiceTickMsg drives the voice playback position/playhead updates.
+type voiceTickMsg struct{}
+
+// retransmitTickMsg fires after the photo-width debounce window. Only the tick
+// whose gen matches the latest scheduled one performs the retransmit; earlier
+// ticks were superseded by a newer width change.
+type retransmitTickMsg struct {
+	gen int
+}
+
+type markReadDoneMsg struct {
+	chatID int64
+	maxID  int
+}
+
+type historyChunkMsg struct {
+	chatID   int64
+	messages []store.Message
+	err      error
+}
+
+type FolderFiltersMsg struct {
+	Filters []store.FolderFilter
+}
+
+type clearTypingMsg struct{ serial int }
+
+// StatusErrMsg surfaces a transient, severity-tagged error in the status bar.
+type StatusErrMsg struct {
+	Text string
+	Sev  components.Severity
+}
+
+// ClearStatusErrMsg clears the status-bar error identified by Serial.
+type ClearStatusErrMsg struct{ Serial int }
+
+// chatLoadErrMsg reports a failed chat-open history load.
+type chatLoadErrMsg struct {
+	chatID int64
+	text   string
+}
+
+// mediaRefRefreshedMsg carries refreshed media refs after a FILE_REFERENCE_EXPIRED,
+// so the store can keep the fresh refs for subsequent opens.
+type mediaRefRefreshedMsg struct {
+	chatID int64
+	msgID  int
+	photo  *store.PhotoRef
+	doc    *store.DocumentRef
+}

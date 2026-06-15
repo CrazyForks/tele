@@ -8,6 +8,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
@@ -267,4 +268,76 @@ func buildOptimisticReactions(current []store.Reaction, emoji string) []store.Re
 		out = append(out, store.Reaction{Emoji: emoji, Count: 1, IsChosen: true})
 	}
 	return out
+}
+
+func durationFor(sev components.Severity) time.Duration {
+	switch sev {
+	case components.SeverityError:
+		return 10 * time.Second
+	case components.SeverityWarning:
+		return 8 * time.Second
+	default:
+		return 5 * time.Second
+	}
+}
+
+func (m RootModel) handleStatusErr(msg StatusErrMsg) (RootModel, tea.Cmd) {
+	serial := m.statusBar.SetError(msg.Text, msg.Sev)
+	d := durationFor(msg.Sev)
+	return m, tea.Tick(d, func(time.Time) tea.Msg { return ClearStatusErrMsg{Serial: serial} })
+}
+
+func (m RootModel) handleChatLoadErr(msg chatLoadErrMsg) (RootModel, tea.Cmd) {
+	if msg.chatID == m.currentChatID {
+		m.chat.SetLoading(false)
+		m.chat.SetLoadError(msg.text)
+	}
+	serial := m.statusBar.SetError(msg.text, components.SeverityError)
+	return m, tea.Tick(durationFor(components.SeverityError), func(time.Time) tea.Msg {
+		return ClearStatusErrMsg{Serial: serial}
+	})
+}
+
+// activateReply sets reply state for msgID, switches to insert mode, and returns the FocusComposer cmd.
+// Returns nil if msgID is zero.
+func (m *RootModel) activateReply(msgID int) tea.Cmd {
+	if msgID == 0 {
+		return nil
+	}
+	preview := "▌ Reply to message"
+	if m.st != nil {
+		for _, storeMsg := range m.st.Messages(m.currentChatID) {
+			if storeMsg.ID == msgID {
+				preview = components.BuildReplyPreview(storeMsg)
+				break
+			}
+		}
+	}
+	m.chat.SetReply(msgID, preview)
+	m.vimState.Mode = keys.ModeInsert
+	m.statusBar.SetMode(keys.ModeInsert)
+	return m.chat.FocusComposer()
+}
+
+// activateEdit sets edit state for msgID, pre-fills the composer with the
+// original text, switches to insert mode, and returns the FocusComposer cmd.
+// Returns nil if msgID is zero or the message is not found in the store.
+func (m *RootModel) activateEdit(msgID int) tea.Cmd {
+	if msgID == 0 {
+		return nil
+	}
+	if m.st == nil {
+		return nil
+	}
+	for _, storeMsg := range m.st.Messages(m.currentChatID) {
+		if storeMsg.ID == msgID {
+			preview := components.BuildEditPreview(storeMsg)
+			m.chat.SetEdit(msgID, preview)
+			m.chat.SetComposerValue(storeMsg.Text)
+			m.vimState.Mode = keys.ModeInsert
+			m.statusBar.SetMode(keys.ModeInsert)
+			return m.chat.FocusComposer()
+		}
+	}
+	return nil
 }
