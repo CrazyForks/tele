@@ -11,6 +11,16 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop notifications now post through a terminal-native OSC escape when the
+  terminal supports it (Ghostty/WezTerm/foot via OSC 777, iTerm2 via OSC 9):
+  clicking a notification focuses the exact tab/window the client runs in, and
+  the chat name shows as the notification title. Terminals without OSC support
+  fall back to the previous generic notifications (beeep). Previously every
+  notification went through beeep and, on macOS, clicking one opened Script
+  Editor instead of the terminal (#17)
+
 ## [1.4.0] - 2026-06-15 — Message cursor & richer inline media
 
 ### Added
