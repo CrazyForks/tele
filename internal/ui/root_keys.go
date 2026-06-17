@@ -58,23 +58,27 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.markReadCmd())
 	}
 
-	// Global bindings always take priority
-	switch m.keyMap.Resolve(keys.ContextGlobal, keyStr) {
-	case keys.ActionFocusChatList:
-		return m.focusPane(FocusChatList)
-	case keys.ActionFocusChat:
-		return m.focusPane(FocusChat)
-	case keys.ActionFocusPrev:
-		return m.focusPrev()
-	case keys.ActionFocusNext:
-		return m.focusNext()
-	case keys.ActionFocusFolders:
-		if m.folderBar != nil && m.folderBar.HasFolders() {
-			return m.focusPane(FocusFolders)
+	// Global bindings take priority, unless the focused context explicitly binds
+	// the key — a context-specific override (e.g. chatlist "confirm: l") must win
+	// over a conflicting global binding (issue #132).
+	if !m.matcher.ContextOwns(m.focusedContext(), keyStr) {
+		switch m.keyMap.Resolve(keys.ContextGlobal, keyStr) {
+		case keys.ActionFocusChatList:
+			return m.focusPane(FocusChatList)
+		case keys.ActionFocusChat:
+			return m.focusPane(FocusChat)
+		case keys.ActionFocusPrev:
+			return m.focusPrev()
+		case keys.ActionFocusNext:
+			return m.focusNext()
+		case keys.ActionFocusFolders:
+			if m.folderBar != nil && m.folderBar.HasFolders() {
+				return m.focusPane(FocusFolders)
+			}
+			return m, nil
+		case keys.ActionQuit:
+			return m, tea.Quit
 		}
-		return m, nil
-	case keys.ActionQuit:
-		return m, tea.Quit
 	}
 
 	if keyStr == "/" {

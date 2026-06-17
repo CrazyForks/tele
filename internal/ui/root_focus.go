@@ -7,6 +7,18 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
+// focusedContext maps the focused pane to its key-binding context.
+func (m RootModel) focusedContext() keys.Context {
+	switch m.focus {
+	case FocusFolders:
+		return keys.ContextFolders
+	case FocusChatList:
+		return keys.ContextChatList
+	default:
+		return keys.ContextChat
+	}
+}
+
 func (m RootModel) focusPrev() (tea.Model, tea.Cmd) {
 	hasFolders := m.folderBar != nil && m.folderBar.HasFolders()
 	switch m.focus {

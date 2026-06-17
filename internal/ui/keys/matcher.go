@@ -80,6 +80,30 @@ func (m *Matcher) Resolve(ctx Context, key string) (Action, MatchResult) {
 	return ActionNone, MatchNone
 }
 
+// ContextOwns reports whether ctx itself (excluding the global fallback) has an
+// explicit binding or a live chord prefix for key, accounting for any pending
+// chord prefix. It is read-only: the pending state is not mutated. Callers use
+// it to let a focused context claim a key that global also binds, so a
+// context-specific override wins over a conflicting global binding.
+func (m *Matcher) ContextOwns(ctx Context, key string) bool {
+	key = NormalizeKey(key)
+	seq := key
+	if m.pending != "" {
+		seq = m.pending + " " + key
+	}
+	if bindings, ok := m.km[ctx]; ok {
+		if _, ok := bindings[seq]; ok {
+			return true
+		}
+	}
+	if set, ok := m.prefixes[ctx]; ok {
+		if _, ok := set[seq]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Matcher) lookup(ctx Context, seq string) Action {
 	if bindings, ok := m.km[ctx]; ok {
 		if a, ok := bindings[seq]; ok {

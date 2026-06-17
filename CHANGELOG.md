@@ -31,6 +31,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   notification went through beeep and, on macOS, clicking one opened Script
   Editor instead of the terminal (#17)
 
+### Fixed
+
+- A keybinding override for a key that is also a global binding now takes
+  effect. Previously global bindings were resolved first and short-circuited the
+  dispatch, so e.g. `chatlist: { confirm: l }` did nothing because the global
+  `l` (focus-cycle) was consumed first. A key explicitly bound in the focused
+  context now wins over a conflicting global binding (#132)
+
 ## [1.4.0] - 2026-06-15 — Message cursor & richer inline media
 
 ### Added

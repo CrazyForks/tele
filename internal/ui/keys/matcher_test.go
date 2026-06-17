@@ -115,6 +115,18 @@ func TestMatcher_DefaultChatGG(t *testing.T) {
 	assert.Equal(t, keys.MatchAction, res)
 }
 
+func TestMatcher_ContextOwns(t *testing.T) {
+	m := keys.NewMatcher(testMatcherMap())
+	// Explicit terminal binding in the context.
+	assert.True(t, m.ContextOwns(keys.ContextChat, "j"))
+	// First token of a chord is a live prefix the context owns.
+	assert.True(t, m.ContextOwns(keys.ContextChat, "g"))
+	// A key bound only in global is NOT owned by the focused context.
+	assert.False(t, m.ContextOwns(keys.ContextChat, "ctrl+c"))
+	// Unbound key.
+	assert.False(t, m.ContextOwns(keys.ContextChat, "x"))
+}
+
 func TestMatcher_DefaultChatListGG(t *testing.T) {
 	m := keys.NewMatcher(keys.DefaultKeyMap())
 	_, res := m.Resolve(keys.ContextChatList, "g")

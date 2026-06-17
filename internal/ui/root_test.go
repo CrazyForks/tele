@@ -1285,6 +1285,32 @@ func TestRoot_Space_OpensChatMenu_OnChatList(t *testing.T) {
 	assert.True(t, m.ChatMenuOpen())
 }
 
+// TestRoot_RebindChatListConfirmToL_OpensChat reproduces issue #132. "l" is a
+// global focus-cycle key, but a chatlist-context override must win over global:
+// pressing it opens the chat under the cursor instead of cycling focus.
+func TestRoot_RebindChatListConfirmToL_OpensChat(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).
+		WithScreen(ui.ScreenMain).WithFocus(ui.FocusChatList)
+	nm, _ := m.Update(screens.TransitionToMainMsg{})
+	m = nm.(ui.RootModel)
+
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
+		"chatlist": {"confirm": {"l"}},
+	})
+	require.Empty(t, warns)
+	m = m.WithKeyMap(km)
+
+	nm, cmd := m.Update(tea.KeyPressMsg{Code: 'l', Text: "l"})
+	m = nm.(ui.RootModel)
+
+	require.NotNil(t, cmd, "l must trigger the chatlist confirm action")
+	_, ok := cmd().(screens.OpenChatMsg)
+	assert.True(t, ok, "l must open the chat under cursor, not cycle focus")
+	assert.Equal(t, ui.FocusChatList, m.CurrentFocus(), "focus must not cycle to the chat pane")
+}
+
 func TestRoot_ToggleMute_OptimisticUpdate(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(store.Chat{ID: 1, Title: "A", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
