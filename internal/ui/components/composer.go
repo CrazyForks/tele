@@ -21,7 +21,8 @@ type Composer struct {
 	hasDarkBackground bool
 	attachName        string
 	attachSize        int64
-	attachAs          store.MediaKind
+	attachKind        store.MediaKind // native kind (Photo/Video); labels the non-file toggle option
+	attachAs          store.MediaKind // current "send as" selection
 	attachOn          bool
 	attachToggle      bool
 }
@@ -80,11 +81,14 @@ func (c *Composer) Reset() {
 func (c *Composer) SetReplyPreview(preview string) { c.replyPreview = preview }
 func (c *Composer) ClearReplyPreview()             { c.replyPreview = "" }
 
-// SetAttachment stages a file as a chip above the textarea. toggleable controls
-// whether the "Send as: Photo/File" affordance is shown (image/video only).
-func (c *Composer) SetAttachment(name string, size int64, sendAs store.MediaKind, toggleable bool) {
+// SetAttachment stages a file as a chip above the textarea. nativeKind is the
+// file's detected media kind (Photo/Video), used to label the non-file toggle
+// option; sendAs is the current "send as" selection. toggleable controls whether
+// the "Send as: Photo|Video / File" affordance is shown (image/video only).
+func (c *Composer) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
 	c.attachName = name
 	c.attachSize = size
+	c.attachKind = nativeKind
 	c.attachAs = sendAs
 	c.attachToggle = toggleable
 	c.attachOn = true
@@ -105,13 +109,17 @@ func (c *Composer) attachmentLine() string {
 	}
 	line := fmt.Sprintf("📎 %s  %s", c.attachName, humanSize(c.attachSize))
 	if c.attachToggle {
-		photo, file := "Photo", "File"
-		if c.attachAs == store.MediaPhoto {
-			photo = "[Photo]"
-		} else {
-			file = "[File]"
+		kindLabel := "Photo"
+		if c.attachKind == store.MediaVideo {
+			kindLabel = "Video"
 		}
-		line += fmt.Sprintf("   Send as: %s %s", photo, file)
+		file := "File"
+		if c.attachAs == store.MediaFile {
+			file = "[File]"
+		} else {
+			kindLabel = "[" + kindLabel + "]"
+		}
+		line += fmt.Sprintf("   Send as: %s %s", kindLabel, file)
 	}
 	return line
 }

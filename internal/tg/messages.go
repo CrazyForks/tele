@@ -201,6 +201,36 @@ func BuildInputMediaUploadedDocument(f tg.InputFileClass, fileName, mime string)
 	}
 }
 
+// BuildInputMediaUploadedVideo wraps an uploaded InputFile into an
+// InputMediaUploadedDocument carrying DocumentAttributeVideo (always
+// SupportsStreaming; duration/w/h are passed through verbatim) plus
+// DocumentAttributeFilename. Unlike the generic document builder it does NOT set
+// ForceFile, so Telegram renders it as inline video. thumb is optional: when
+// non-nil it is attached as the document Thumb so the bubble has a preview before
+// the server generates its own. An empty mime falls back to video/mp4.
+func BuildInputMediaUploadedVideo(f tg.InputFileClass, fileName, mime string, dur, w, h int, thumb tg.InputFileClass) tg.InputMediaClass {
+	if mime == "" {
+		mime = "video/mp4"
+	}
+	doc := &tg.InputMediaUploadedDocument{
+		File:     f,
+		MimeType: mime,
+		Attributes: []tg.DocumentAttributeClass{
+			&tg.DocumentAttributeVideo{
+				SupportsStreaming: true,
+				Duration:          float64(dur),
+				W:                 w,
+				H:                 h,
+			},
+			&tg.DocumentAttributeFilename{FileName: fileName},
+		},
+	}
+	if thumb != nil {
+		doc.SetThumb(thumb)
+	}
+	return doc
+}
+
 func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) error {
 	api, err := c.acquireAPI()
 	if err != nil {

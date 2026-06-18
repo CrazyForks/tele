@@ -239,20 +239,25 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.pendingAttachment == nil {
 			return m, nil
 		}
-		build, ok := mediaBuilderFor(m.pendingAttachment)
-		if !ok {
-			// Unsupported "send as" (video/voice/round) is #107-109; ignore for now.
-			return m, nil
-		}
+		att := m.pendingAttachment
 		job := mediaSendJob{
 			peer:         msg.Peer,
-			path:         m.pendingAttachment.path,
-			name:         m.pendingAttachment.name,
-			size:         m.pendingAttachment.size,
-			kind:         m.pendingAttachment.sendAs,
+			path:         att.path,
+			name:         att.name,
+			size:         att.size,
+			kind:         att.sendAs,
 			caption:      msg.Caption,
 			replyToMsgID: msg.ReplyToMsgID,
-			buildMedia:   build,
+		}
+		if att.sendAs == store.MediaVideo {
+			job.buildMediaCtx = videoBuildMediaCtx(att.path, att.name, att.mime)
+		} else {
+			build, ok := mediaBuilderFor(att)
+			if !ok {
+				// Unsupported "send as" (voice/round) is #108-109; ignore for now.
+				return m, nil
+			}
+			job.buildMedia = build
 		}
 		m.clearPendingAttachment()
 		return m.handleSendMedia(job)

@@ -42,6 +42,20 @@ func TestLocalMediaLabel_File(t *testing.T) {
 	}
 }
 
+func TestLocalMediaLabel_Video(t *testing.T) {
+	got := localMediaLabel(&store.LocalMedia{Kind: store.MediaVideo, FileName: "clip.mp4"})
+	if got != "🎥 clip.mp4" {
+		t.Fatalf("video label want '🎥 clip.mp4', got %q", got)
+	}
+}
+
+func TestLocalMediaLabel_VideoNoName(t *testing.T) {
+	got := localMediaLabel(&store.LocalMedia{Kind: store.MediaVideo})
+	if got != "🎥 video" {
+		t.Fatalf("nameless video label want '🎥 video', got %q", got)
+	}
+}
+
 func TestPlaceholderFor_FileWithNameAndSize(t *testing.T) {
 	got := placeholderFor(&store.MediaRef{Kind: store.MediaFile, FileName: "report.pdf", Size: 1300000})
 	if !strings.Contains(got, "report.pdf") || !strings.Contains(got, "MB") {

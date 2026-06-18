@@ -673,3 +673,60 @@ func TestBuildInputMediaUploadedDocument_EmptyMIMEFallback(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "application/octet-stream", doc.MimeType)
 }
+
+func TestBuildInputMediaUploadedVideo_FullMetadataAndThumb(t *testing.T) {
+	f := &tg.InputFile{ID: 7, Parts: 1, Name: "clip.mp4"}
+	thumb := &tg.InputFile{ID: 8, Parts: 1, Name: "thumb.jpg"}
+	media := BuildInputMediaUploadedVideo(f, "clip.mp4", "video/mp4", 42, 1920, 1080, thumb)
+
+	doc, ok := media.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok, "got %T, want *tg.InputMediaUploadedDocument", media)
+	assert.Equal(t, f, doc.File)
+	assert.Equal(t, "video/mp4", doc.MimeType)
+	assert.False(t, doc.ForceFile, "video must NOT force the generic file path")
+
+	gotThumb, ok := doc.GetThumb()
+	require.True(t, ok, "thumb must be set")
+	assert.Equal(t, thumb, gotThumb)
+
+	var vid *tg.DocumentAttributeVideo
+	var fn *tg.DocumentAttributeFilename
+	for _, a := range doc.Attributes {
+		switch at := a.(type) {
+		case *tg.DocumentAttributeVideo:
+			vid = at
+		case *tg.DocumentAttributeFilename:
+			fn = at
+		}
+	}
+	require.NotNil(t, vid, "DocumentAttributeVideo must be present")
+	assert.True(t, vid.SupportsStreaming)
+	assert.Equal(t, 42.0, vid.Duration)
+	assert.Equal(t, 1920, vid.W)
+	assert.Equal(t, 1080, vid.H)
+	require.NotNil(t, fn)
+	assert.Equal(t, "clip.mp4", fn.FileName)
+}
+
+func TestBuildInputMediaUploadedVideo_NoThumbZeroMeta(t *testing.T) {
+	f := &tg.InputFile{ID: 1, Parts: 1, Name: "a.mp4"}
+	media := BuildInputMediaUploadedVideo(f, "a.mp4", "", 0, 0, 0, nil)
+
+	doc, ok := media.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok)
+	assert.Equal(t, "video/mp4", doc.MimeType, "empty mime must default to video/mp4")
+	_, hasThumb := doc.GetThumb()
+	assert.False(t, hasThumb, "no thumb arg means no Thumb set")
+
+	var vid *tg.DocumentAttributeVideo
+	for _, a := range doc.Attributes {
+		if at, ok := a.(*tg.DocumentAttributeVideo); ok {
+			vid = at
+		}
+	}
+	require.NotNil(t, vid)
+	assert.True(t, vid.SupportsStreaming, "streaming attribute is always set")
+	assert.Zero(t, vid.Duration)
+	assert.Zero(t, vid.W)
+	assert.Zero(t, vid.H)
+}

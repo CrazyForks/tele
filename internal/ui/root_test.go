@@ -542,6 +542,74 @@ func TestSendDocumentOptimisticAndConfirm(t *testing.T) {
 	assert.Equal(t, "report.pdf", last.Document.FileName)
 }
 
+func TestSendMedia_Video_SendsInlineVideoDocument(t *testing.T) {
+	mc := &mockTGClient{refreshFunc: func(msgID int) (store.Message, error) {
+		return store.Message{
+			ID:       msgID,
+			Document: &store.DocumentRef{ID: 9, FileName: "clip.mp4", ThumbSize: "m"},
+			Media:    &store.MediaRef{Kind: store.MediaVideo, FileName: "clip.mp4"},
+		}, nil
+	}}
+	m, st := newRootOnChat(t, mc)
+
+	// A .mp4 resolves (by extension) to video/mp4 -> MediaVideo default.
+	path := writeTempFile(t, "clip.mp4", "\x00\x00\x00\x18ftypmp42 fake")
+	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
+	m = nm.(ui.RootModel)
+
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Caption: "vid"})
+	m = nm.(ui.RootModel)
+
+	msgs := st.Messages(1)
+	require.NotEmpty(t, msgs)
+	last := msgs[len(msgs)-1]
+	require.NotNil(t, last.LocalMedia)
+	assert.Equal(t, store.MediaVideo, last.LocalMedia.Kind, "video bubble must carry MediaVideo kind")
+	assert.Less(t, last.ID, 0, "optimistic bubble must use a negative sentinel id")
+
+	// Drive the upload->send->confirm batch and the follow-up refresh command.
+	require.NotNil(t, cmd)
+	var followups []tea.Cmd
+	for _, inner := range drainMsgs(cmd()) {
+		if inner == nil {
+			continue
+		}
+		nm2, c := m.Update(inner)
+		m = nm2.(ui.RootModel)
+		if c != nil {
+			followups = append(followups, c)
+		}
+	}
+	for _, fc := range followups {
+		for _, inner := range drainMsgs(fc()) {
+			if inner == nil {
+				continue
+			}
+			nm2, _ := m.Update(inner)
+			m = nm2.(ui.RootModel)
+		}
+	}
+
+	// The inline-video document path must have been used: a video document
+	// (NOT ForceFile) carrying DocumentAttributeVideo with SupportsStreaming.
+	doc, ok := mc.lastSendMediaParams.Media.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok, "got %T, want *tg.InputMediaUploadedDocument", mc.lastSendMediaParams.Media)
+	assert.False(t, doc.ForceFile, "video must not force the generic file path")
+	var hasVideoAttr bool
+	for _, a := range doc.Attributes {
+		if v, ok := a.(*tg.DocumentAttributeVideo); ok && v.SupportsStreaming {
+			hasVideoAttr = true
+		}
+	}
+	assert.True(t, hasVideoAttr, "must carry a streaming DocumentAttributeVideo")
+
+	msgs = st.Messages(1)
+	last = msgs[len(msgs)-1]
+	assert.Equal(t, 4242, last.ID, "sentinel must be swapped to the real id")
+	require.NotNil(t, last.Document, "server document ref must be adopted")
+	assert.Equal(t, "clip.mp4", last.Document.FileName)
+}
+
 func drainMsgs(msg tea.Msg) []tea.Msg {
 	batch, ok := msg.(tea.BatchMsg)
 	if !ok {

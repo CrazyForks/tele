@@ -37,6 +37,13 @@ func localMediaLabel(lm *store.LocalMedia) string {
 		}
 		return "🖼 " + name
 	}
+	if lm.Kind == store.MediaVideo {
+		name := lm.FileName
+		if name == "" {
+			name = "video"
+		}
+		return "🎥 " + name
+	}
 	name := lm.FileName
 	if name == "" {
 		name = "file"

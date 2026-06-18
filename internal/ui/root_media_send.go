@@ -47,6 +47,11 @@ type mediaSendJob struct {
 	caption      string
 	replyToMsgID int
 	buildMedia   func(tg.InputFileClass) tg.InputMediaClass
+	// buildMediaCtx, when set, takes precedence over buildMedia. It runs inside the
+	// upload goroutine with client + ctx so video (#107) can probe metadata,
+	// generate and upload a thumbnail, then build the InputMedia. nil for
+	// photo/file, which need neither the client nor ctx.
+	buildMediaCtx func(ctx context.Context, client internaltg.Client, main tg.InputFileClass) (tg.InputMediaClass, error)
 }
 
 // mediaBuilderFor returns the InputMedia builder for a staged attachment's "send
@@ -67,7 +72,7 @@ func mediaBuilderFor(att *pendingAttachment) (func(tg.InputFileClass) tg.InputMe
 }
 
 func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
-	if m.tgClient == nil || m.st == nil || job.buildMedia == nil {
+	if m.tgClient == nil || m.st == nil || (job.buildMedia == nil && job.buildMediaCtx == nil) {
 		return m, nil
 	}
 	m.nextSentinel--
@@ -100,6 +105,7 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 	replyTo := job.replyToMsgID
 	path := job.path
 	buildMedia := job.buildMedia
+	buildMediaCtx := job.buildMediaCtx
 
 	// The uploader callback runs on the upload goroutine and cannot post tea.Msgs
 	// directly, so it forwards (sent,total) over a buffered channel; a pump cmd
@@ -119,7 +125,15 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 		if err != nil {
 			return sentMediaConfirmedMsg{chatID: chatID, sentinelID: sentinelID, failed: true}
 		}
-		media := buildMedia(f)
+		var media tg.InputMediaClass
+		if buildMediaCtx != nil {
+			media, err = buildMediaCtx(uploadCtx, client, f)
+			if err != nil {
+				return sentMediaConfirmedMsg{chatID: chatID, sentinelID: sentinelID, failed: true}
+			}
+		} else {
+			media = buildMedia(f)
+		}
 		realID, err := client.SendMedia(uploadCtx, internaltg.SendMediaParams{
 			Peer: peer, Media: media, Caption: caption, ReplyToMsgID: replyTo,
 		})

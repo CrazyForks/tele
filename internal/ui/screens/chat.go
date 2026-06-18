@@ -218,10 +218,12 @@ func (m *ChatModel) SetReply(msgID int, preview string) {
 	m.syncMsgListHeight()
 }
 
-// SetAttachment stages a file as a chip in the composer (#106). toggleable shows
-// the Photo/File affordance (image/video only).
-func (m *ChatModel) SetAttachment(name string, size int64, sendAs store.MediaKind, toggleable bool) {
-	m.composer.SetAttachment(name, size, sendAs, toggleable)
+// SetAttachment stages a file as a chip in the composer (#106). nativeKind is the
+// detected media kind (Photo/Video) labeling the non-file option; sendAs is the
+// current selection. toggleable shows the Photo|Video / File affordance
+// (image/video only).
+func (m *ChatModel) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
+	m.composer.SetAttachment(name, size, nativeKind, sendAs, toggleable)
 	m.syncMsgListHeight()
 }
 

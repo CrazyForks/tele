@@ -54,7 +54,7 @@ func (m RootModel) handleFileSelected(msg screens.FileSelectedMsg) (RootModel, t
 		size:   size,
 	}
 	toggleable := kind == store.MediaPhoto || kind == store.MediaVideo
-	m.chat.SetAttachment(name, size, m.pendingAttachment.sendAs, toggleable)
+	m.chat.SetAttachment(name, size, m.pendingAttachment.kind, m.pendingAttachment.sendAs, toggleable)
 	m.statusBar.SetAttachStaged(true)
 	// Enter real insert mode so the caption field is active (the composer focus
 	// alone does not flip the root's vim mode, which key routing depends on).
@@ -77,7 +77,7 @@ func (m RootModel) toggleSendAs() (RootModel, tea.Cmd) {
 	} else {
 		m.pendingAttachment.sendAs = store.MediaFile
 	}
-	m.chat.SetAttachment(m.pendingAttachment.name, m.pendingAttachment.size, m.pendingAttachment.sendAs, true)
+	m.chat.SetAttachment(m.pendingAttachment.name, m.pendingAttachment.size, m.pendingAttachment.kind, m.pendingAttachment.sendAs, true)
 	return m, nil
 }
 

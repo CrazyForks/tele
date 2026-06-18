@@ -16,7 +16,7 @@ func TestComposerAttachmentChip(t *testing.T) {
 	c := components.NewComposer(40)
 	base := c.VisualHeight()
 
-	c.SetAttachment("pic.jpg", 2100000, store.MediaPhoto, true)
+	c.SetAttachment("pic.jpg", 2100000, store.MediaPhoto, store.MediaPhoto, true)
 	if !c.HasAttachment() {
 		t.Fatal("HasAttachment = false after SetAttachment")
 	}
@@ -37,6 +37,31 @@ func TestComposerAttachmentChip(t *testing.T) {
 	}
 	if c.VisualHeight() != base {
 		t.Fatalf("VisualHeight not restored: %d != %d", c.VisualHeight(), base)
+	}
+}
+
+func TestComposerAttachmentChip_Video(t *testing.T) {
+	c := components.NewComposer(60)
+
+	// Native video, currently sending as video: the toggle must read "Video"
+	// (not "Photo") and bracket the selected Video option.
+	c.SetAttachment("clip.mov", 5_000_000, store.MediaVideo, store.MediaVideo, true)
+	v := c.View()
+	if !strings.Contains(v, "[Video]") {
+		t.Fatalf("video chip must label+bracket the Video option:\n%s", v)
+	}
+	if strings.Contains(v, "Photo") {
+		t.Fatalf("video chip must not mention Photo:\n%s", v)
+	}
+
+	// Toggled to file: the alternative must still read "Video", File bracketed.
+	c.SetAttachment("clip.mov", 5_000_000, store.MediaVideo, store.MediaFile, true)
+	v = c.View()
+	if !strings.Contains(v, "Video") || !strings.Contains(v, "[File]") {
+		t.Fatalf("toggled-to-file video chip want 'Video [File]':\n%s", v)
+	}
+	if strings.Contains(v, "[Video]") {
+		t.Fatalf("File is selected, Video must not be bracketed:\n%s", v)
 	}
 }
 

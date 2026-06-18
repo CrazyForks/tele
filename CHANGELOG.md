@@ -23,6 +23,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   pick an image/video and toggle `ctrl+t` to "File") to keep the original bytes,
   optionally add a caption, and send. The document uploads with a progress bar
   and renders as `📎 name · size`. Built on the #128 upload pipeline (#129)
+- Send videos from the composer: pick a video file to send it as inline video
+  (toggle `ctrl+t` to send as a plain file instead), optionally add a caption,
+  and send. When `ffmpeg`/`ffprobe` are on `PATH` the duration, dimensions and a
+  thumbnail frame are attached; without them the video is still sent and Telegram
+  generates the preview server-side. The outgoing bubble shows `🎥 name` with an
+  upload progress bar and renders inline once sent. Built on the #128 upload
+  pipeline (#107)
 - Foundational outbound-media plumbing: a chunked file-upload pipeline (with a
   progress callback) and a generic, type-agnostic `SendMedia` that posts through
   the same optimistic + update-suppression path as text messages. Also a shared
