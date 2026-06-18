@@ -652,3 +652,24 @@ func TestBuildSendMediaRequest_WithoutReply(t *testing.T) {
 	assert.Nil(t, req.ReplyTo)
 	assert.Equal(t, "", req.Message)
 }
+
+func TestBuildInputMediaUploadedDocument(t *testing.T) {
+	f := &tg.InputFile{ID: 7, Parts: 1, Name: "report.pdf"}
+	media := BuildInputMediaUploadedDocument(f, "report.pdf", "application/pdf")
+	doc, ok := media.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok, "got %T, want *tg.InputMediaUploadedDocument", media)
+	assert.Equal(t, f, doc.File)
+	assert.Equal(t, "application/pdf", doc.MimeType)
+	assert.True(t, doc.ForceFile, "ForceFile must be set so an image is not reinterpreted as a photo")
+	require.Len(t, doc.Attributes, 1)
+	fn, ok := doc.Attributes[0].(*tg.DocumentAttributeFilename)
+	require.True(t, ok, "got %T, want *tg.DocumentAttributeFilename", doc.Attributes[0])
+	assert.Equal(t, "report.pdf", fn.FileName)
+}
+
+func TestBuildInputMediaUploadedDocument_EmptyMIMEFallback(t *testing.T) {
+	media := BuildInputMediaUploadedDocument(&tg.InputFile{}, "a.bin", "")
+	doc, ok := media.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok)
+	assert.Equal(t, "application/octet-stream", doc.MimeType)
+}

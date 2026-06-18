@@ -19,6 +19,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   progress bar and can be cancelled with `x` before it completes; `ctrl+t`
   toggles the staged file between Photo and File. Built on the #128 upload
   pipeline (#106)
+- Send any file as a document from the composer: pick a non-image/video file (or
+  pick an image/video and toggle `ctrl+t` to "File") to keep the original bytes,
+  optionally add a caption, and send. The document uploads with a progress bar
+  and renders as `📎 name · size`. Built on the #128 upload pipeline (#129)
 - Foundational outbound-media plumbing: a chunked file-upload pipeline (with a
   progress callback) and a generic, type-agnostic `SendMedia` that posts through
   the same optimistic + update-suppression path as text messages. Also a shared

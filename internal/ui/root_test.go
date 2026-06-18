@@ -480,6 +480,68 @@ func TestSendPhotoFailureMarksFailed(t *testing.T) {
 	assert.Equal(t, store.UploadFailed, last.LocalMedia.UploadState)
 }
 
+func TestSendDocumentOptimisticAndConfirm(t *testing.T) {
+	// RefreshMessage supplies the server's document ref after the send confirms.
+	mc := &mockTGClient{refreshFunc: func(msgID int) (store.Message, error) {
+		return store.Message{
+			ID:       msgID,
+			Document: &store.DocumentRef{ID: 9, FileName: "report.pdf", Size: 4096},
+			Media:    &store.MediaRef{Kind: store.MediaFile, FileName: "report.pdf", Size: 4096},
+		}, nil
+	}}
+	m, st := newRootOnChat(t, mc)
+
+	// A .pdf resolves (by extension) to application/pdf -> MediaFile default.
+	path := writeTempFile(t, "report.pdf", "%PDF-1.4 hello")
+	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
+	m = nm.(ui.RootModel)
+
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Caption: "doc"})
+	m = nm.(ui.RootModel)
+
+	msgs := st.Messages(1)
+	require.NotEmpty(t, msgs)
+	last := msgs[len(msgs)-1]
+	require.NotNil(t, last.LocalMedia)
+	assert.Equal(t, store.MediaFile, last.LocalMedia.Kind, "document bubble must carry MediaFile kind")
+	assert.Less(t, last.ID, 0, "optimistic bubble must use a negative sentinel id")
+
+	// Drive the upload->send->confirm batch and the follow-up refresh command.
+	require.NotNil(t, cmd)
+	var followups []tea.Cmd
+	for _, inner := range drainMsgs(cmd()) {
+		if inner == nil {
+			continue
+		}
+		nm2, c := m.Update(inner)
+		m = nm2.(ui.RootModel)
+		if c != nil {
+			followups = append(followups, c)
+		}
+	}
+	for _, fc := range followups {
+		for _, inner := range drainMsgs(fc()) {
+			if inner == nil {
+				continue
+			}
+			nm2, _ := m.Update(inner)
+			m = nm2.(ui.RootModel)
+		}
+	}
+
+	// The generic (forced) document path must have been used.
+	doc, ok := mc.lastSendMediaParams.Media.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok, "got %T, want *tg.InputMediaUploadedDocument", mc.lastSendMediaParams.Media)
+	assert.True(t, doc.ForceFile)
+
+	msgs = st.Messages(1)
+	last = msgs[len(msgs)-1]
+	assert.Equal(t, 4242, last.ID, "sentinel must be swapped to the real id")
+	assert.Nil(t, last.LocalMedia, "LocalMedia must be cleared after server media adopted")
+	require.NotNil(t, last.Document, "server document ref must be adopted")
+	assert.Equal(t, "report.pdf", last.Document.FileName)
+}
+
 func drainMsgs(msg tea.Msg) []tea.Msg {
 	batch, ok := msg.(tea.BatchMsg)
 	if !ok {

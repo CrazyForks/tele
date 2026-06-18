@@ -239,9 +239,9 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.pendingAttachment == nil {
 			return m, nil
 		}
-		build, ok := mediaBuilderFor(m.pendingAttachment.sendAs)
+		build, ok := mediaBuilderFor(m.pendingAttachment)
 		if !ok {
-			// Non-photo "send as" (e.g. File) is #129; ignore for now.
+			// Unsupported "send as" (video/voice/round) is #107-109; ignore for now.
 			return m, nil
 		}
 		job := mediaSendJob{

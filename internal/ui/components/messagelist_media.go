@@ -27,14 +27,21 @@ func renderUploadBar(frac float64, width int) string {
 	return fmt.Sprintf("%s %3.0f%%", bar, frac*100)
 }
 
-// localMediaLabel is the first line of an optimistic media bubble: a glyph plus
-// the local file name.
+// localMediaLabel is the first line of an optimistic media bubble: a kind glyph
+// plus the local file name. Photos use 🖼; documents (and any other kind) use 📎.
 func localMediaLabel(lm *store.LocalMedia) string {
+	if lm.Kind == store.MediaPhoto {
+		name := lm.FileName
+		if name == "" {
+			name = "photo"
+		}
+		return "🖼 " + name
+	}
 	name := lm.FileName
 	if name == "" {
-		name = "photo"
+		name = "file"
 	}
-	return "🖼 " + name
+	return "📎 " + name
 }
 
 // uploadStatusLine returns the status line under an optimistic media bubble:
@@ -157,12 +164,24 @@ func placeholderFor(m *store.MediaRef) string {
 	case store.MediaGIF:
 		return "🎞 GIF"
 	case store.MediaFile:
-		return "📎 file"
+		return fileLabel(m)
 	case store.MediaLocation:
 		return "📍 location"
 	default:
 		return "📦 media"
 	}
+}
+
+// fileLabel renders a generic document's placeholder: a paperclip plus the file
+// name and a human-readable size when both are known, falling back to "📎 file".
+func fileLabel(m *store.MediaRef) string {
+	if m.FileName == "" {
+		return "📎 file"
+	}
+	if m.Size > 0 {
+		return "📎 " + m.FileName + " · " + humanSize(m.Size)
+	}
+	return "📎 " + m.FileName
 }
 
 // durationLabel appends a mm:ss suffix to a base label when the duration is known.

@@ -49,13 +49,18 @@ type mediaSendJob struct {
 	buildMedia   func(tg.InputFileClass) tg.InputMediaClass
 }
 
-// mediaBuilderFor returns the InputMedia builder for a "send as" kind. Only the
-// Photo branch is implemented in #106; video (#107) and document (#129) add their
-// cases here. ok=false means the kind is not yet supported.
-func mediaBuilderFor(sendAs store.MediaKind) (func(tg.InputFileClass) tg.InputMediaClass, bool) {
-	switch sendAs {
+// mediaBuilderFor returns the InputMedia builder for a staged attachment's "send
+// as" kind. Photo and File (document) are implemented; video (#107), voice
+// (#108) and round (#109) add their cases here. ok=false means not yet supported.
+func mediaBuilderFor(att *pendingAttachment) (func(tg.InputFileClass) tg.InputMediaClass, bool) {
+	switch att.sendAs {
 	case store.MediaPhoto:
 		return internaltg.BuildInputMediaUploadedPhoto, true
+	case store.MediaFile:
+		name, mime := att.name, att.mime
+		return func(f tg.InputFileClass) tg.InputMediaClass {
+			return internaltg.BuildInputMediaUploadedDocument(f, name, mime)
+		}, true
 	default:
 		return nil, false
 	}
@@ -164,7 +169,7 @@ func (m RootModel) handleSentMediaConfirmed(msg sentMediaConfirmedMsg) (RootMode
 			m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
 		}
 		return m, func() tea.Msg {
-			return StatusErrMsg{Text: "photo send failed", Sev: components.SeverityWarning}
+			return StatusErrMsg{Text: "media send failed", Sev: components.SeverityWarning}
 		}
 	}
 	m.st.UpdateMessageID(msg.chatID, msg.sentinelID, msg.realID)

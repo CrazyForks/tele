@@ -182,6 +182,25 @@ func BuildInputMediaUploadedPhoto(f tg.InputFileClass) tg.InputMediaClass {
 	return &tg.InputMediaUploadedPhoto{File: f}
 }
 
+// BuildInputMediaUploadedDocument wraps an uploaded InputFile into an
+// InputMediaUploadedDocument for messages.sendMedia, forcing the generic
+// document path (ForceFile) so Telegram does not reinterpret an image as a
+// photo. The filename is attached via DocumentAttributeFilename; an empty MIME
+// falls back to application/octet-stream.
+func BuildInputMediaUploadedDocument(f tg.InputFileClass, fileName, mime string) tg.InputMediaClass {
+	if mime == "" {
+		mime = "application/octet-stream"
+	}
+	return &tg.InputMediaUploadedDocument{
+		File:     f,
+		MimeType: mime,
+		Attributes: []tg.DocumentAttributeClass{
+			&tg.DocumentAttributeFilename{FileName: fileName},
+		},
+		ForceFile: true,
+	}
+}
+
 func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) error {
 	api, err := c.acquireAPI()
 	if err != nil {
