@@ -29,6 +29,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Changed
 
+- Status-bar key hints now use a btop-style layout: the trigger key is the only
+  coloured element — highlighted in place inside the description word when the
+  key is a letter that appears in it (e.g. `quit`), or shown as an accented
+  prefix/suffix otherwise (`f attach`, `ctrl+j/k select`, `send ↵`). The `key ->
+  desc` arrows are gone; hints stay separated by ` · `. The accent colour follows
+  the vim mode (blue in NORMAL, green in INSERT) and the mapping is still derived
+  from the live keymap, so custom keybindings display correctly (#133)
 - Desktop notifications now post through a terminal-native OSC escape when the
   terminal supports it (Ghostty/WezTerm/foot via OSC 777, iTerm2 via OSC 9):
   clicking a notification focuses the exact tab/window the client runs in, and

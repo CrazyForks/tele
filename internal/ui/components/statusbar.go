@@ -3,6 +3,8 @@ package components
 import (
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -119,30 +121,31 @@ func (sb *StatusBar) hints() string {
 	if sb.keyMap == nil {
 		return ""
 	}
+	a := sb.accentStyle()
 	switch {
 	case sb.pickerOpen:
 		confirm := sb.keyMap.KeyFor(keys.ContextFilePicker, keys.ActionConfirm)
 		cancel := sb.keyMap.KeyFor(keys.ContextFilePicker, keys.ActionCancel)
 		return joinHints(
-			"type -> filter",
-			hintKey(confirm, "open/select"),
-			hintKey(cancel, "cancel"),
+			hintLiteral("type", "filter", a),
+			hintKey(confirm, "open/select", a),
+			hintKey(cancel, "cancel", a),
 		)
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert && sb.attachStaged:
 		send := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionConfirm)
 		toggle := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionToggleSendAs)
 		normal := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionNormal)
 		return joinHints(
-			hintKey(send, "send"),
-			hintKey(toggle, "photo/file"),
-			hintKey(normal, "normal"),
+			hintKey(send, "send", a),
+			hintKey(toggle, "photo/file", a),
+			hintKey(normal, "normal", a),
 		)
 	case sb.activePane == "chat" && sb.attachStaged:
 		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
 		drop := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCancelUpload)
 		return joinHints(
-			hintKey(write, "caption"),
-			hintKey(drop, "drop file"),
+			hintKey(write, "caption", a),
+			hintKey(drop, "drop file", a),
 		)
 	case sb.activePane == "folders":
 		down := sb.keyMap.KeyFor(keys.ContextFolders, keys.ActionDown)
@@ -150,14 +153,14 @@ func (sb *StatusBar) hints() string {
 		sel := sb.keyMap.KeyFor(keys.ContextFolders, keys.ActionConfirm)
 		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
 		return joinHints(
-			hintNav(down, up, "move"),
-			hintKey(sel, "select"),
-			hintKey(quit, "quit"),
+			hintNav(down, up, "move", a),
+			hintKey(sel, "select", a),
+			hintKey(quit, "quit", a),
 		)
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert:
 		send := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionConfirm)
 		normal := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionNormal)
-		return joinHints(hintKey(send, "send"), hintKey(normal, "normal"))
+		return joinHints(hintKey(send, "send", a), hintKey(normal, "normal", a))
 	case sb.activePane == "chat":
 		down := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionDown)
 		up := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionUp)
@@ -167,11 +170,11 @@ func (sb *StatusBar) hints() string {
 		attach := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionAttach)
 		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
 		return joinHints(
-			hintNav(down, up, "scroll"),
-			hintNav(curDown, curUp, "select"),
-			hintKey(write, "write"),
-			hintKey(attach, "attach"),
-			hintKey(quit, "quit"),
+			hintNav(down, up, "scroll", a),
+			hintNav(curDown, curUp, "select", a),
+			hintKey(write, "write", a),
+			hintKey(attach, "attach", a),
+			hintKey(quit, "quit", a),
 		)
 	case sb.activePane == "chatlist":
 		down := sb.keyMap.KeyFor(keys.ContextChatList, keys.ActionDown)
@@ -180,35 +183,35 @@ func (sb *StatusBar) hints() string {
 		search := sb.keyMap.KeyFor(keys.ContextChatList, keys.ActionSearch)
 		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
 		return joinHints(
-			hintNav(down, up, "move"),
-			hintKey(open, "open"),
-			hintKey(search, "search"),
-			hintKey(quit, "quit"),
+			hintNav(down, up, "move", a),
+			hintKey(open, "open", a),
+			hintKey(search, "search", a),
+			hintKey(quit, "quit", a),
 		)
 	}
 	return ""
 }
 
-func hintKey(key, desc string) string {
+func hintKey(key, desc string, accent lipgloss.Style) string {
 	if key == "" {
 		return ""
 	}
-	return key + " -> " + desc
+	text, spans := hintLayout(key, desc)
+	return applyAccent(text, spans, accent)
 }
 
-func hintNav(downKey, upKey, desc string) string {
-	if downKey == "" && upKey == "" {
+func hintNav(downKey, upKey, desc string, accent lipgloss.Style) string {
+	text, spans := navLayout(downKey, upKey, desc)
+	if text == "" {
 		return ""
 	}
-	combo := downKey + "/" + upKey
-	// Collapse a shared modifier prefix: "ctrl+j"/"ctrl+k" -> "ctrl+j/k".
-	if i := strings.LastIndex(downKey, "+"); i >= 0 {
-		prefix := downKey[:i+1]
-		if strings.HasPrefix(upKey, prefix) {
-			combo = downKey + "/" + upKey[len(prefix):]
-		}
-	}
-	return combo + " -> " + desc
+	return applyAccent(text, spans, accent)
+}
+
+// hintLiteral renders a non-key keyword (e.g. the picker's "type" filter hint)
+// as an accented indicator followed by the plain description.
+func hintLiteral(keyword, desc string, accent lipgloss.Style) string {
+	return applyAccent(keyword+" "+desc, []span{{0, utf8.RuneCountInString(keyword)}}, accent)
 }
 
 func joinHints(parts ...string) string {
@@ -218,5 +221,105 @@ func joinHints(parts ...string) string {
 			out = append(out, p)
 		}
 	}
-	return strings.Join(out, " · ")
+	return strings.Join(out, barStyle.Render(" · "))
+}
+
+// span is a rune range [lo,hi) within a hint's visible text that should be
+// rendered in the accent color.
+type span struct{ lo, hi int }
+
+const enterGlyph = "↵"
+
+// hintLayout computes the visible text for a single-key hint plus the accent
+// spans, implementing the btop rules: a single letter present in the word is
+// highlighted in place; enter/return becomes a trailing glyph; otherwise the
+// key is rendered as an accented prefix.
+func hintLayout(key, desc string) (string, []span) {
+	switch key {
+	case "":
+		return desc, nil
+	case "enter", "return":
+		text := desc + " " + enterGlyph
+		lo := utf8.RuneCountInString(desc) + 1
+		return text, []span{{lo, lo + 1}}
+	}
+	if utf8.RuneCountInString(key) == 1 {
+		r, _ := utf8.DecodeRuneInString(key)
+		if unicode.IsLetter(r) {
+			if i := wordRuneIndex(desc, r); i >= 0 {
+				return desc, []span{{i, i + 1}}
+			}
+		}
+	}
+	// Prefix form: accented key, then the plain word.
+	return key + " " + desc, []span{{0, utf8.RuneCountInString(key)}}
+}
+
+// wordRuneIndex returns the rune index of the first case-insensitive match of
+// r in word, or -1 when absent.
+func wordRuneIndex(word string, r rune) int {
+	target := unicode.ToLower(r)
+	for i, c := range []rune(word) {
+		if unicode.ToLower(c) == target {
+			return i
+		}
+	}
+	return -1
+}
+
+// navLayout computes the visible text and accent spans for a navigation pair
+// (down/up keys sharing one description). A vertical arrow pair renders as
+// "↑ desc ↓" glyphs; any other pair renders as an accented "down/up" prefix
+// with a collapsed shared modifier (ctrl+j / ctrl+k -> ctrl+j/k).
+func navLayout(downKey, upKey, desc string) (string, []span) {
+	if downKey == "" && upKey == "" {
+		return "", nil
+	}
+	if downKey == "down" && upKey == "up" {
+		text := "↑ " + desc + " ↓"
+		hi := utf8.RuneCountInString(text)
+		return text, []span{{0, 1}, {hi - 1, hi}}
+	}
+	combo := downKey + "/" + upKey
+	if i := strings.LastIndex(downKey, "+"); i >= 0 {
+		prefix := downKey[:i+1]
+		if strings.HasPrefix(upKey, prefix) {
+			combo = downKey + "/" + upKey[len(prefix):]
+		}
+	}
+	return combo + " " + desc, []span{{0, utf8.RuneCountInString(combo)}}
+}
+
+// applyAccent renders each accent span of text in the accent style and every
+// other run in the base bar style. Every run sets its own background so the bar
+// background survives the reset sequences emitted between runs. Spans must be
+// sorted and non-overlapping.
+func applyAccent(text string, spans []span, accent lipgloss.Style) string {
+	if len(spans) == 0 {
+		return barStyle.Render(text)
+	}
+	rs := []rune(text)
+	var b strings.Builder
+	i := 0
+	for _, sp := range spans {
+		if sp.lo > i {
+			b.WriteString(barStyle.Render(string(rs[i:sp.lo])))
+		}
+		b.WriteString(accent.Render(string(rs[sp.lo:sp.hi])))
+		i = sp.hi
+	}
+	if i < len(rs) {
+		b.WriteString(barStyle.Render(string(rs[i:])))
+	}
+	return b.String()
+}
+
+// accentStyle returns the key-accent style for the current vim mode: bright
+// blue in NORMAL, bright green in INSERT, both over the bar background.
+func (sb *StatusBar) accentStyle() lipgloss.Style {
+	fg := lipgloss.Color("39") // bright blue — NORMAL
+	if sb.mode == keys.ModeInsert {
+		fg = lipgloss.Color("40") // bright green — INSERT
+	}
+	return lipgloss.NewStyle().Background(barBg).Foreground(fg)
 }
