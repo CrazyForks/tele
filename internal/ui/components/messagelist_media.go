@@ -1,6 +1,7 @@
 package components
 
 import (
+	"fmt"
 	"image"
 	"strings"
 
@@ -8,6 +9,45 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
+
+// renderUploadBar draws a fixed-width progress bar like "▰▰▰▱▱ 60%".
+func renderUploadBar(frac float64, width int) string {
+	if frac < 0 {
+		frac = 0
+	}
+	if frac > 1 {
+		frac = 1
+	}
+	cells := width - 5 // leave room for " NNN%"
+	if cells < 1 {
+		cells = 1
+	}
+	filled := int(frac*float64(cells) + 0.5)
+	bar := strings.Repeat("▰", filled) + strings.Repeat("▱", cells-filled)
+	return fmt.Sprintf("%s %3.0f%%", bar, frac*100)
+}
+
+// localMediaLabel is the first line of an optimistic media bubble: a glyph plus
+// the local file name.
+func localMediaLabel(lm *store.LocalMedia) string {
+	name := lm.FileName
+	if name == "" {
+		name = "photo"
+	}
+	return "🖼 " + name
+}
+
+// uploadStatusLine returns the status line under an optimistic media bubble:
+// a progress bar while uploading, or an error indicator if failed.
+func uploadStatusLine(lm *store.LocalMedia, width int) string {
+	if lm == nil {
+		return ""
+	}
+	if lm.UploadState == store.UploadFailed {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("✗ upload failed")
+	}
+	return renderUploadBar(lm.UploadProgress, width)
+}
 
 // PhotoContentCols exposes the width (in cells) photos are rendered at.
 func (ml *MessageList) PhotoContentCols() int {

@@ -175,6 +175,13 @@ func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass
 	return req
 }
 
+// BuildInputMediaUploadedPhoto wraps an uploaded InputFile into an
+// InputMediaUploadedPhoto for messages.sendMedia. The server recompresses it and
+// produces an inline photo. Caption/entities are carried separately by SendMedia.
+func BuildInputMediaUploadedPhoto(f tg.InputFileClass) tg.InputMediaClass {
+	return &tg.InputMediaUploadedPhoto{File: f}
+}
+
 func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) error {
 	api, err := c.acquireAPI()
 	if err != nil {

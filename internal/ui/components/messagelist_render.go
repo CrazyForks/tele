@@ -125,6 +125,21 @@ func (ml *MessageList) measureBubble(msg store.Message) bubbleMetrics {
 		}
 	}
 
+	// Optimistic outgoing media bubble: reserve room for the file label and a
+	// reasonable progress-bar width.
+	if msg.LocalMedia != nil {
+		if w := lipgloss.Width(localMediaLabel(msg.LocalMedia)); w > actualW {
+			actualW = w
+		}
+		const minUploadBarW = 24
+		if actualW < minUploadBarW {
+			actualW = minUploadBarW
+		}
+		if actualW > maxContentW {
+			actualW = maxContentW
+		}
+	}
+
 	// Ensure bubble is wide enough for the forwarded-message header block.
 	if msg.Forward != nil {
 		if minW := measureForwardBlock(msg.Forward.From, maxContentW); actualW < minW {
@@ -273,6 +288,14 @@ func (ml *MessageList) bubbleContentLines(msg store.Message, m bubbleMetrics) []
 		}
 		sideLines = append(sideLines, ml.renderPreviewLines(origSenderID, name, snippet, actualW, bs)...)
 		if msg.Text != "" || msg.Media != nil {
+			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
+		}
+	}
+
+	if msg.LocalMedia != nil {
+		sideLines = append(sideLines, labelLine(localMediaLabel(msg.LocalMedia), actualW, b, bs))
+		sideLines = append(sideLines, labelLine(uploadStatusLine(msg.LocalMedia, actualW), actualW, b, bs))
+		if msg.Text != "" {
 			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
 		}
 	}

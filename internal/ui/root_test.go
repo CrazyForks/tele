@@ -5,10 +5,14 @@ import (
 	"errors"
 	"image"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -32,6 +36,9 @@ type mockTGClient struct {
 	downloadDocFileFunc  func(dst io.Writer) error
 	refreshFunc          func(msgID int) (store.Message, error)
 	lastSendCtx          context.Context
+	sendMediaErr         error
+	uploadErr            error
+	lastSendMediaParams  internaltg.SendMediaParams
 }
 
 func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
@@ -61,8 +68,21 @@ func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, _ string, 
 	}
 	return 42, nil
 }
-func (m *mockTGClient) SendMedia(_ context.Context, _ internaltg.SendMediaParams) (int, error) {
-	return 0, nil
+func (m *mockTGClient) SendMedia(_ context.Context, p internaltg.SendMediaParams) (int, error) {
+	m.lastSendMediaParams = p
+	if m.sendMediaErr != nil {
+		return 0, m.sendMediaErr
+	}
+	return 4242, nil
+}
+func (m *mockTGClient) UploadFile(_ context.Context, p internaltg.UploadParams) (tg.InputFileClass, error) {
+	if m.uploadErr != nil {
+		return nil, m.uploadErr
+	}
+	if p.OnProgress != nil {
+		p.OnProgress(100, 100)
+	}
+	return &tg.InputFile{ID: 1, Parts: 1, Name: "a.jpg"}, nil
 }
 func (m *mockTGClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
 func (m *mockTGClient) MarkDialogUnread(_ context.Context, _ store.Peer, _ bool) error {
@@ -265,6 +285,201 @@ func TestDownloadStickerCmd_EmitsPhotoReady(t *testing.T) {
 }
 
 // drainMsgs flattens a (possibly batched) cmd result into its concrete messages.
+// newRootOnChat builds a main-screen RootModel focused on a single chat (id 1),
+// draining the open-chat command so history loading settles.
+func newRootOnChat(t *testing.T, mc *mockTGClient) (ui.RootModel, store.Store) {
+	t.Helper()
+	st := store.NewMemory()
+	chat := store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	st.SetChat(chat)
+	m := ui.NewRootModel(mc, st, 50, false).WithScreen(ui.ScreenMain)
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(ui.RootModel)
+	nm, cmd := m.Update(screens.OpenChatMsg{Chat: chat})
+	m = nm.(ui.RootModel)
+	if cmd != nil {
+		for _, inner := range drainMsgs(cmd()) {
+			if inner == nil {
+				continue
+			}
+			nm2, _ := m.Update(inner)
+			m = nm2.(ui.RootModel)
+		}
+	}
+	return m, st
+}
+
+func writeTempFile(t *testing.T, name, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestAttachOpensPickerAndStages(t *testing.T) {
+	m, _ := newRootOnChat(t, &mockTGClient{})
+
+	nm, _ := m.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
+	m = nm.(ui.RootModel)
+	if !m.FilePickerOpen() {
+		t.Fatal("file picker not open after 'f'")
+	}
+
+	path := writeTempFile(t, "pic.jpg", "x")
+	nm, _ = m.Update(screens.FileSelectedMsg{Path: path})
+	m = nm.(ui.RootModel)
+	if m.FilePickerOpen() {
+		t.Fatal("picker still open after selection")
+	}
+	if !m.Chat().HasAttachment() {
+		t.Fatal("composer chip not set after selection")
+	}
+}
+
+func TestAttachEntersInsertAndEscKeepsChip(t *testing.T) {
+	m, _ := newRootOnChat(t, &mockTGClient{})
+	path := writeTempFile(t, "pic.jpg", "x")
+
+	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
+	m = nm.(ui.RootModel)
+	// Selecting a file must enter real insert mode (the caption field is active).
+	if m.VimMode() != keys.ModeInsert {
+		t.Fatalf("after selecting a file mode = %v, want insert", m.VimMode())
+	}
+
+	// esc leaves insert mode but keeps the staged attachment.
+	nm, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = nm.(ui.RootModel)
+	if m.VimMode() != keys.ModeNormal {
+		t.Fatalf("after esc mode = %v, want normal", m.VimMode())
+	}
+	if !m.Chat().HasAttachment() {
+		t.Fatal("esc must keep the staged attachment chip")
+	}
+
+	// In normal mode, the cancel key drops the staged attachment.
+	nm, _ = m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m = nm.(ui.RootModel)
+	if m.Chat().HasAttachment() {
+		t.Fatal("'x' must drop the staged attachment")
+	}
+}
+
+func TestToggleSendAsWorksOnRussianLayout(t *testing.T) {
+	m, _ := newRootOnChat(t, &mockTGClient{})
+	path := writeTempFile(t, "pic.jpg", "x")
+	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
+	m = nm.(ui.RootModel)
+	// Staged photo starts as [Photo].
+	if !strings.Contains(m.View().Content, "[Photo]") {
+		t.Fatalf("expected [Photo] before toggle:\n%s", m.View().Content)
+	}
+	// ctrl+т on the Russian ЙЦУКЕН layout is reported as ctrl+<Cyrillic е> (the
+	// physical 't' key); it must toggle exactly like ctrl+t on a Latin layout.
+	nm, _ = m.Update(tea.KeyPressMsg{Code: 'е', Mod: tea.ModCtrl})
+	m = nm.(ui.RootModel)
+	if !strings.Contains(m.View().Content, "[File]") {
+		t.Fatalf("ctrl+<cyrillic e> did not toggle to [File]:\n%s", m.View().Content)
+	}
+}
+
+func TestAttachPickerIsRendered(t *testing.T) {
+	m, _ := newRootOnChat(t, &mockTGClient{})
+	nm, _ := m.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
+	m = nm.(ui.RootModel)
+	if !m.FilePickerOpen() {
+		t.Fatal("file picker not open after 'f'")
+	}
+	if !strings.Contains(m.View().Content, "filter") {
+		t.Fatalf("open file picker is not rendered in the view:\n%s", m.View().Content)
+	}
+}
+
+func TestSendPhotoOptimisticAndConfirm(t *testing.T) {
+	// RefreshMessage supplies the server's media refs after the send confirms.
+	mc := &mockTGClient{refreshFunc: func(msgID int) (store.Message, error) {
+		return store.Message{
+			ID:    msgID,
+			Photo: &store.PhotoRef{ID: 9},
+			Media: &store.MediaRef{Kind: store.MediaPhoto},
+		}, nil
+	}}
+	m, st := newRootOnChat(t, mc)
+
+	path := writeTempFile(t, "pic.jpg", "hello")
+	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
+	m = nm.(ui.RootModel)
+
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Caption: "hi"})
+	m = nm.(ui.RootModel)
+
+	msgs := st.Messages(1)
+	require.NotEmpty(t, msgs)
+	last := msgs[len(msgs)-1]
+	require.NotNil(t, last.LocalMedia)
+	assert.Equal(t, path, last.LocalMedia.Path)
+	assert.Equal(t, store.MediaPhoto, last.LocalMedia.Kind)
+	assert.True(t, last.IsOut)
+	assert.Less(t, last.ID, 0, "optimistic bubble must use a negative sentinel id")
+
+	// Drive the send batch (upload→confirm, progress) and the follow-up refresh
+	// command the confirm handler returns.
+	require.NotNil(t, cmd)
+	var followups []tea.Cmd
+	for _, inner := range drainMsgs(cmd()) {
+		if inner == nil {
+			continue
+		}
+		nm2, c := m.Update(inner)
+		m = nm2.(ui.RootModel)
+		if c != nil {
+			followups = append(followups, c)
+		}
+	}
+	for _, fc := range followups {
+		for _, inner := range drainMsgs(fc()) {
+			if inner == nil {
+				continue
+			}
+			nm2, _ := m.Update(inner)
+			m = nm2.(ui.RootModel)
+		}
+	}
+
+	msgs = st.Messages(1)
+	last = msgs[len(msgs)-1]
+	assert.Equal(t, 4242, last.ID, "sentinel must be swapped to the real id")
+	assert.Nil(t, last.LocalMedia, "LocalMedia must be cleared after server media adopted")
+	require.NotNil(t, last.Photo, "server photo ref must be adopted so it renders without manual refresh")
+	assert.Equal(t, int64(9), last.Photo.ID)
+}
+
+func TestSendPhotoFailureMarksFailed(t *testing.T) {
+	mc := &mockTGClient{sendMediaErr: errors.New("boom")}
+	m, st := newRootOnChat(t, mc)
+
+	path := writeTempFile(t, "a.jpg", "x")
+	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
+	m = nm.(ui.RootModel)
+
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m = nm.(ui.RootModel)
+	require.NotNil(t, cmd)
+	for _, inner := range drainMsgs(cmd()) {
+		if inner == nil {
+			continue
+		}
+		nm2, _ := m.Update(inner)
+		m = nm2.(ui.RootModel)
+	}
+
+	last := st.Messages(1)[0]
+	require.NotNil(t, last.LocalMedia)
+	assert.Equal(t, store.UploadFailed, last.LocalMedia.UploadState)
+}
+
 func drainMsgs(msg tea.Msg) []tea.Msg {
 	batch, ok := msg.(tea.BatchMsg)
 	if !ok {

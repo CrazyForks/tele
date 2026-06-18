@@ -89,6 +89,11 @@ type RootModel struct {
 	typingSerial      int
 	tmpDir            string
 	voicePlayer       *audio.Player
+	filePicker        *screens.FilePickerModel
+	pendingAttachment *pendingAttachment
+	lastPickerDir     string
+	uploadCancels     map[int]context.CancelFunc
+	uploadProgress    map[int]chan uploadProgressMsg
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -118,6 +123,8 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		kittyStore:        media.NewKittyStore(),
 		kittyLive:         make(map[int64]bool),
 		logo:              components.NewLogoLoader(80),
+		uploadCancels:     make(map[int]context.CancelFunc),
+		uploadProgress:    make(map[int]chan uploadProgressMsg),
 	}
 }
 
@@ -172,6 +179,7 @@ func (m RootModel) Search() *screens.SearchModel { return m.searchModel }
 func (m RootModel) ContextMenuOpen() bool        { return m.contextMenu != nil }
 func (m RootModel) ChatMenuOpen() bool           { return m.chatMenu != nil }
 func (m RootModel) ReactionPickerOpen() bool     { return m.reactionPicker != nil }
+func (m RootModel) FilePickerOpen() bool         { return m.filePicker != nil }
 
 // SetLoginModel injects the login model after NewRootModel (called by app.go).
 func (m *RootModel) SetLoginModel(lm screens.LoginModel) {
@@ -221,6 +229,39 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleEditSend(msg)
 	case screens.SetTypingRequest:
 		return m.handleSetTyping(msg)
+	case screens.FileSelectedMsg:
+		return m.handleFileSelected(msg)
+	case screens.CloseFilePickerMsg:
+		m.filePicker = nil
+		m.statusBar.SetPickerOpen(false)
+		return m, nil
+	case screens.SendMediaRequest:
+		if m.pendingAttachment == nil {
+			return m, nil
+		}
+		build, ok := mediaBuilderFor(m.pendingAttachment.sendAs)
+		if !ok {
+			// Non-photo "send as" (e.g. File) is #129; ignore for now.
+			return m, nil
+		}
+		job := mediaSendJob{
+			peer:         msg.Peer,
+			path:         m.pendingAttachment.path,
+			name:         m.pendingAttachment.name,
+			size:         m.pendingAttachment.size,
+			kind:         m.pendingAttachment.sendAs,
+			caption:      msg.Caption,
+			replyToMsgID: msg.ReplyToMsgID,
+			buildMedia:   build,
+		}
+		m.clearPendingAttachment()
+		return m.handleSendMedia(job)
+	case uploadProgressMsg:
+		return m.handleUploadProgress(msg)
+	case sentMediaConfirmedMsg:
+		return m.handleSentMediaConfirmed(msg)
+	case sentMediaRefreshedMsg:
+		return m.handleSentMediaRefreshed(msg)
 	case sentMsgConfirmedMsg:
 		return m.handleSentMsgConfirmed(msg)
 	case reactionFailedMsg:

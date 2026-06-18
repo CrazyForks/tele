@@ -13,6 +13,7 @@ const (
 	ContextDeleteSubMenu Context = "delete_submenu"
 	ContextChatMenu      Context = "chat_menu"
 	ContextFolderSubMenu Context = "folder_submenu"
+	ContextFilePicker    Context = "filepicker"
 )
 
 const (
@@ -87,10 +88,13 @@ func DefaultKeyMap() KeyMap {
 			"e":      ActionEdit,
 			"o":      ActionOpenInViewer,
 			"p":      ActionPlayVoice,
+			"f":      ActionAttach,
+			"x":      ActionCancelUpload,
 		},
 		ContextComposer: {
-			"enter": ActionConfirm,
-			"esc":   ActionNormal,
+			"enter":  ActionConfirm,
+			"esc":    ActionNormal,
+			"ctrl+t": ActionToggleSendAs,
 		},
 		ContextContextMenu: {
 			"j":     ActionDown,
@@ -147,6 +151,16 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+j": ActionDown,
 			"up":     ActionUp,
 			"ctrl+k": ActionUp,
+		},
+		ContextFilePicker: {
+			"esc":    ActionCancel,
+			"enter":  ActionConfirm,
+			"down":   ActionDown,
+			"ctrl+j": ActionDown,
+			"j":      ActionDown,
+			"up":     ActionUp,
+			"ctrl+k": ActionUp,
+			"k":      ActionUp,
 		},
 	}
 }

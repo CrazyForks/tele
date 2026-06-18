@@ -1,12 +1,15 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 const maxComposerLines = 5
@@ -16,6 +19,11 @@ type Composer struct {
 	replyPreview      string
 	focused           bool
 	hasDarkBackground bool
+	attachName        string
+	attachSize        int64
+	attachAs          store.MediaKind
+	attachOn          bool
+	attachToggle      bool
 }
 
 func NewComposer(width int) *Composer {
@@ -72,6 +80,55 @@ func (c *Composer) Reset() {
 func (c *Composer) SetReplyPreview(preview string) { c.replyPreview = preview }
 func (c *Composer) ClearReplyPreview()             { c.replyPreview = "" }
 
+// SetAttachment stages a file as a chip above the textarea. toggleable controls
+// whether the "Send as: Photo/File" affordance is shown (image/video only).
+func (c *Composer) SetAttachment(name string, size int64, sendAs store.MediaKind, toggleable bool) {
+	c.attachName = name
+	c.attachSize = size
+	c.attachAs = sendAs
+	c.attachToggle = toggleable
+	c.attachOn = true
+}
+
+func (c *Composer) ClearAttachment() {
+	c.attachOn = false
+	c.attachName = ""
+	c.attachToggle = false
+}
+
+func (c *Composer) HasAttachment() bool { return c.attachOn }
+
+// attachmentLine renders the chip shown above the textarea, or "" if none.
+func (c *Composer) attachmentLine() string {
+	if !c.attachOn {
+		return ""
+	}
+	line := fmt.Sprintf("📎 %s  %s", c.attachName, humanSize(c.attachSize))
+	if c.attachToggle {
+		photo, file := "Photo", "File"
+		if c.attachAs == store.MediaPhoto {
+			photo = "[Photo]"
+		} else {
+			file = "[File]"
+		}
+		line += fmt.Sprintf("   Send as: %s %s", photo, file)
+	}
+	return line
+}
+
+func humanSize(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for v := n / unit; v >= unit; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
 // VisualHeight returns the total number of terminal rows that View() occupies:
 // textarea lines + 2 border rows + preview lines (0 if no preview).
 func (c *Composer) VisualHeight() int {
@@ -79,16 +136,22 @@ func (c *Composer) VisualHeight() int {
 	if c.replyPreview != "" {
 		h += strings.Count(c.replyPreview, "\n") + 2
 	}
+	if c.attachOn {
+		h++
+	}
 	return h
 }
 
 func (c *Composer) View() string {
-	var content string
-	if c.replyPreview != "" {
-		content = c.replyPreview + "\n\n" + c.ta.View()
-	} else {
-		content = c.ta.View()
+	var parts []string
+	if line := c.attachmentLine(); line != "" {
+		parts = append(parts, line)
 	}
+	if c.replyPreview != "" {
+		parts = append(parts, c.replyPreview, "")
+	}
+	parts = append(parts, c.ta.View())
+	content := strings.Join(parts, "\n")
 
 	// Do not set an explicit Width here: the textarea already pads every line
 	// to its full inner width, producing a perfect content rectangle. Letting

@@ -175,7 +175,20 @@ type LocalMedia struct {
 	Kind     MediaKind
 	FileName string
 	Size     int64
+	// UploadProgress is the fraction uploaded (0..1) for the optimistic bubble.
+	UploadProgress float64
+	// UploadState tracks the optimistic upload; the zero value is UploadUploading.
+	// Success clears LocalMedia entirely, so there is no "done" state.
+	UploadState UploadState
 }
+
+// UploadState is the state of an in-flight optimistic media upload.
+type UploadState int
+
+const (
+	UploadUploading UploadState = iota
+	UploadFailed
+)
 
 // ForwardInfo describes the origin of a forwarded message.
 type ForwardInfo struct {

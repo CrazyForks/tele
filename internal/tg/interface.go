@@ -5,6 +5,7 @@ import (
 	"image"
 	"io"
 
+	"github.com/gotd/td/tg"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -22,6 +23,10 @@ type Client interface {
 	// returning the confirmed message ID. It is type-agnostic: the caller builds
 	// the InputMedia (photo/document/...); SendMedia knows nothing about MIME.
 	SendMedia(ctx context.Context, p SendMediaParams) (int, error)
+	// UploadFile uploads a local file in chunks and returns the resulting
+	// InputFile, ready to wrap in an InputMedia. Cancel via ctx. OnProgress is
+	// nil-safe and may be called concurrently-serialized by the uploader.
+	UploadFile(ctx context.Context, p UploadParams) (tg.InputFileClass, error)
 	MarkRead(ctx context.Context, peer store.Peer, maxID int) error
 	// MarkDialogUnread sets or clears the manual unread mark on a dialog.
 	MarkDialogUnread(ctx context.Context, peer store.Peer, unread bool) error

@@ -6,6 +6,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/gotd/td/tg"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/stretchr/testify/assert"
@@ -45,6 +46,10 @@ func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string, _
 
 func (m *mockClient) SendMedia(_ context.Context, _ internaltg.SendMediaParams) (int, error) {
 	return 0, nil
+}
+
+func (m *mockClient) UploadFile(_ context.Context, _ internaltg.UploadParams) (tg.InputFileClass, error) {
+	return &tg.InputFile{ID: 1, Parts: 1, Name: "a.jpg"}, nil
 }
 
 func (m *mockClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }

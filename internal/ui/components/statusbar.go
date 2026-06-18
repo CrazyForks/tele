@@ -40,6 +40,10 @@ type StatusBar struct {
 	errText    string
 	errSev     Severity
 	errSerial  int
+	// attachStaged is true while a file is staged in the composer (chip shown);
+	// pickerOpen is true while the file-picker overlay is open. Both drive hints.
+	attachStaged bool
+	pickerOpen   bool
 }
 
 func NewStatusBar(width int) *StatusBar {
@@ -53,6 +57,8 @@ func (sb *StatusBar) SetVerbose(v bool)        { sb.verbose = v }
 func (sb *StatusBar) SetLastKey(k string)      { sb.lastKey = k }
 func (sb *StatusBar) SetActivePane(p string)   { sb.activePane = p }
 func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
+func (sb *StatusBar) SetAttachStaged(v bool)   { sb.attachStaged = v }
+func (sb *StatusBar) SetPickerOpen(v bool)     { sb.pickerOpen = v }
 
 // SetError shows a transient, severity-tagged message and returns the serial
 // identifying it, so a later ClearError only clears this exact message.
@@ -114,6 +120,30 @@ func (sb *StatusBar) hints() string {
 		return ""
 	}
 	switch {
+	case sb.pickerOpen:
+		confirm := sb.keyMap.KeyFor(keys.ContextFilePicker, keys.ActionConfirm)
+		cancel := sb.keyMap.KeyFor(keys.ContextFilePicker, keys.ActionCancel)
+		return joinHints(
+			"type -> filter",
+			hintKey(confirm, "open/select"),
+			hintKey(cancel, "cancel"),
+		)
+	case sb.activePane == "chat" && sb.mode == keys.ModeInsert && sb.attachStaged:
+		send := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionConfirm)
+		toggle := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionToggleSendAs)
+		normal := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionNormal)
+		return joinHints(
+			hintKey(send, "send"),
+			hintKey(toggle, "photo/file"),
+			hintKey(normal, "normal"),
+		)
+	case sb.activePane == "chat" && sb.attachStaged:
+		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
+		drop := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCancelUpload)
+		return joinHints(
+			hintKey(write, "caption"),
+			hintKey(drop, "drop file"),
+		)
 	case sb.activePane == "folders":
 		down := sb.keyMap.KeyFor(keys.ContextFolders, keys.ActionDown)
 		up := sb.keyMap.KeyFor(keys.ContextFolders, keys.ActionUp)
@@ -134,11 +164,13 @@ func (sb *StatusBar) hints() string {
 		curDown := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCursorDown)
 		curUp := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCursorUp)
 		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
+		attach := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionAttach)
 		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
 		return joinHints(
 			hintNav(down, up, "scroll"),
 			hintNav(curDown, curUp, "select"),
 			hintKey(write, "write"),
+			hintKey(attach, "attach"),
 			hintKey(quit, "quit"),
 		)
 	case sb.activePane == "chatlist":

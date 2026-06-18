@@ -119,6 +119,9 @@ func (m RootModel) View() tea.View {
 		if m.reactionPicker != nil {
 			content = m.overlayMenuNearBubble(content, m.reactionPicker.View(), chatPanelLeft, chatBoxW)
 		}
+		if m.filePicker != nil {
+			content = overlayCenter(content, m.filePicker.View(), m.width, m.height)
+		}
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true

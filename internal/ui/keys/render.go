@@ -9,7 +9,7 @@ import (
 // contextOrder is the stable order contexts are rendered in for the config dump.
 var contextOrder = []Context{
 	ContextGlobal, ContextFolders, ContextChatList, ContextChat,
-	ContextComposer, ContextSearch, ContextContextMenu, ContextDeleteSubMenu,
+	ContextComposer, ContextSearch, ContextFilePicker, ContextContextMenu, ContextDeleteSubMenu,
 }
 
 // DefaultKeybindingsYAML renders the default keymap as a fully commented-out

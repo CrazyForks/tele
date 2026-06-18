@@ -41,9 +41,26 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// While the file picker is open it owns all keys.
+	if m.filePicker != nil {
+		if keyStr == "ctrl+v" {
+			return m, readClipboardCmd()
+		}
+		newPicker, cmd := m.filePicker.Update(msg)
+		m.filePicker = newPicker
+		return m, cmd
+	}
+
 	// In insert mode, bypass global bindings and pass key directly to chat/composer
 	if m.focus == FocusChat && m.vimState.Mode == keys.ModeInsert {
+		// Normalize so the toggle fires on the same physical key under non-Latin
+		// layouts (e.g. Russian ЙЦУКЕН), like the other bindings.
+		if keys.NormalizeKey(keyStr) == "ctrl+t" && m.pendingAttachment != nil {
+			return m.toggleSendAs()
+		}
 		if keyStr == "esc" {
+			// esc only leaves insert mode; a staged attachment is kept (drop it
+			// explicitly with the cancel key in normal mode).
 			m.vimState.Mode = keys.ModeNormal
 			m.statusBar.SetMode(keys.ModeNormal)
 			newPane, cmd := m.chat.Update(keys.ActionMsg{Action: keys.ActionNormal})
@@ -179,6 +196,14 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	}
+
+	if action == keys.ActionAttach && m.focus == FocusChat {
+		return m.openFilePicker()
+	}
+
+	if action == keys.ActionCancelUpload && m.focus == FocusChat {
+		return m.handleCancelUpload()
 	}
 
 	if action == keys.ActionReply && m.focus == FocusChat {

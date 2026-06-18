@@ -6,10 +6,39 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestComposerAttachmentChip(t *testing.T) {
+	c := components.NewComposer(40)
+	base := c.VisualHeight()
+
+	c.SetAttachment("pic.jpg", 2100000, store.MediaPhoto, true)
+	if !c.HasAttachment() {
+		t.Fatal("HasAttachment = false after SetAttachment")
+	}
+	if c.VisualHeight() <= base {
+		t.Fatalf("VisualHeight did not grow with chip: %d <= %d", c.VisualHeight(), base)
+	}
+	v := c.View()
+	if !strings.Contains(v, "pic.jpg") {
+		t.Fatalf("chip missing filename:\n%s", v)
+	}
+	if !strings.Contains(v, "Send as") {
+		t.Fatalf("toggleable chip missing 'Send as':\n%s", v)
+	}
+
+	c.ClearAttachment()
+	if c.HasAttachment() {
+		t.Fatal("HasAttachment = true after ClearAttachment")
+	}
+	if c.VisualHeight() != base {
+		t.Fatalf("VisualHeight not restored: %d != %d", c.VisualHeight(), base)
+	}
+}
 
 func TestComposer_Value(t *testing.T) {
 	c := components.NewComposer(60)

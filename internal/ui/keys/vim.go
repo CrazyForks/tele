@@ -44,6 +44,9 @@ const (
 	ActionAddToFolder     Action = "add_to_folder"
 	ActionArchive         Action = "archive"
 	ActionUnarchive       Action = "unarchive"
+	ActionAttach          Action = "attach"
+	ActionToggleSendAs    Action = "toggle_send_as"
+	ActionCancelUpload    Action = "cancel_upload"
 )
 
 type VimState struct {

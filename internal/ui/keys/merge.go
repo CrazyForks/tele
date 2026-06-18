@@ -24,6 +24,8 @@ func KnownActions() map[Action]bool {
 		ActionCancel: true, ActionReply: true, ActionReact: true, ActionEdit: true,
 		ActionDelete: true, ActionDeleteRevoke: true, ActionDeleteMe: true,
 		ActionJumpToOriginal: true, ActionPlayVoice: true,
+		// Media attach / send.
+		ActionAttach: true, ActionToggleSendAs: true, ActionCancelUpload: true,
 	}
 }
 
@@ -33,6 +35,7 @@ func KnownContexts() map[Context]bool {
 		ContextGlobal: true, ContextFolders: true, ContextChatList: true,
 		ContextChat: true, ContextComposer: true, ContextSearch: true,
 		ContextContextMenu: true, ContextDeleteSubMenu: true,
+		ContextFilePicker: true,
 	}
 }
 

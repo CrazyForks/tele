@@ -13,6 +13,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Send photos from the composer: press `f` in a chat to open a file browser
+  (navigate, type-to-filter, or paste a path), pick an image, optionally add a
+  caption, and send. The outgoing bubble appears immediately with an upload
+  progress bar and can be cancelled with `x` before it completes; `ctrl+t`
+  toggles the staged file between Photo and File. Built on the #128 upload
+  pipeline (#106)
 - Foundational outbound-media plumbing: a chunked file-upload pipeline (with a
   progress callback) and a generic, type-agnostic `SendMedia` that posts through
   the same optimistic + update-suppression path as text messages. Also a shared

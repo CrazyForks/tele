@@ -82,6 +82,63 @@ func (s *SQLiteStore) UpdateMessageID(chatID int64, oldID, newID int) {
 	}
 }
 
+// localMediaByIDLocked returns a pointer to the LocalMedia of the message with
+// the given ID. Optimistic sentinel IDs are unique (negative) and the msgChat
+// index only covers shared-pts peers, so this scans all chats. Caller holds s.mu.
+func (s *SQLiteStore) localMediaByIDLocked(id int) *LocalMedia {
+	for chatID := range s.messages {
+		for i := range s.messages[chatID] {
+			if s.messages[chatID][i].ID == id {
+				return s.messages[chatID][i].LocalMedia
+			}
+		}
+	}
+	return nil
+}
+
+func (s *SQLiteStore) UpdateLocalMediaProgress(sentinelID int, frac float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if lm := s.localMediaByIDLocked(sentinelID); lm != nil {
+		lm.UploadProgress = frac
+	}
+}
+
+func (s *SQLiteStore) MarkLocalMediaFailed(sentinelID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if lm := s.localMediaByIDLocked(sentinelID); lm != nil {
+		lm.UploadState = UploadFailed
+	}
+}
+
+func (s *SQLiteStore) ClearLocalMedia(sentinelID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for chatID := range s.messages {
+		for i := range s.messages[chatID] {
+			if s.messages[chatID][i].ID == sentinelID {
+				s.messages[chatID][i].LocalMedia = nil
+				return
+			}
+		}
+	}
+}
+
+func (s *SQLiteStore) AdoptServerMedia(chatID int64, msgID int, photo *PhotoRef, doc *DocumentRef, media *MediaRef) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.messages[chatID] {
+		if s.messages[chatID][i].ID == msgID {
+			s.messages[chatID][i].Photo = photo
+			s.messages[chatID][i].Document = doc
+			s.messages[chatID][i].Media = media
+			s.messages[chatID][i].LocalMedia = nil
+			return
+		}
+	}
+}
+
 func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, editDate time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

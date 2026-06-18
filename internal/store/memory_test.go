@@ -9,6 +9,47 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMemory_LocalMediaUploadLifecycle(t *testing.T) {
+	s := store.NewMemory()
+	s.AppendMessage(store.Message{
+		ID: -1, ChatID: 7, IsOut: true,
+		LocalMedia: &store.LocalMedia{Path: "/tmp/a.jpg", Kind: store.MediaPhoto},
+	})
+
+	s.UpdateLocalMediaProgress(-1, 0.5)
+	got := s.Messages(7)
+	require.Len(t, got, 1)
+	require.NotNil(t, got[0].LocalMedia)
+	assert.InDelta(t, 0.5, got[0].LocalMedia.UploadProgress, 1e-9)
+
+	s.MarkLocalMediaFailed(-1)
+	got = s.Messages(7)
+	require.NotNil(t, got[0].LocalMedia)
+	assert.Equal(t, store.UploadFailed, got[0].LocalMedia.UploadState)
+
+	s.ClearLocalMedia(-1)
+	got = s.Messages(7)
+	assert.Nil(t, got[0].LocalMedia)
+}
+
+func TestMemory_AdoptServerMedia(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}})
+	s.AppendMessage(store.Message{
+		ID: 4242, ChatID: 7, IsOut: true,
+		LocalMedia: &store.LocalMedia{Path: "/tmp/a.jpg", Kind: store.MediaPhoto},
+	})
+
+	s.AdoptServerMedia(7, 4242, &store.PhotoRef{ID: 9}, nil, &store.MediaRef{Kind: store.MediaPhoto})
+	got := s.Messages(7)
+	require.Len(t, got, 1)
+	assert.Nil(t, got[0].LocalMedia, "LocalMedia must be cleared")
+	require.NotNil(t, got[0].Photo)
+	assert.Equal(t, int64(9), got[0].Photo.ID)
+	require.NotNil(t, got[0].Media)
+	assert.Equal(t, store.MediaPhoto, got[0].Media.Kind)
+}
+
 func TestMemory_UpdateMessageMedia(t *testing.T) {
 	s := store.NewMemory()
 	s.SetMessages(7, []store.Message{

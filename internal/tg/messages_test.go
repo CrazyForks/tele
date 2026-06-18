@@ -625,6 +625,14 @@ func TestConvertMessage_RealEdit_SetsEditDate(t *testing.T) {
 	require.NotNil(t, msg.EditDate, "a real edit keeps the edited marker")
 }
 
+func TestBuildInputMediaUploadedPhoto(t *testing.T) {
+	f := &tg.InputFile{ID: 42, Parts: 1, Name: "a.jpg"}
+	media := BuildInputMediaUploadedPhoto(f)
+	photo, ok := media.(*tg.InputMediaUploadedPhoto)
+	require.True(t, ok, "got %T, want *tg.InputMediaUploadedPhoto", media)
+	assert.Equal(t, f, photo.File)
+}
+
 func TestBuildSendMediaRequest_WithReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10, AccessHash: 20}
 	media := &tg.InputMediaUploadedPhoto{}

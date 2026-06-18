@@ -12,6 +12,15 @@ func TestKeyMap_Resolve_ChatList(t *testing.T) {
 	assert.Equal(t, keys.ActionDown, km.Resolve(keys.ContextChatList, "j"))
 }
 
+func TestFilePickerBindings(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	assert.Equal(t, keys.ActionAttach, km.Resolve(keys.ContextChat, "f"))
+	assert.Equal(t, keys.ActionCancelUpload, km.Resolve(keys.ContextChat, "x"))
+	assert.Equal(t, keys.ActionToggleSendAs, km.Resolve(keys.ContextComposer, "ctrl+t"))
+	assert.Equal(t, keys.ActionConfirm, km.Resolve(keys.ContextFilePicker, "enter"))
+	assert.Equal(t, keys.ActionCancel, km.Resolve(keys.ContextFilePicker, "esc"))
+}
+
 func TestKeyMap_Resolve_GlobalFallback(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	assert.Equal(t, keys.ActionFocusChatList, km.Resolve(keys.ContextChatList, "1"))

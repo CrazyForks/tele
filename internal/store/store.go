@@ -13,6 +13,18 @@ type Store interface {
 	UpdateMessageText(chatID int64, msgID int, text string, editDate time.Time)
 	UpdateMessageReactions(chatID int64, msgID int, reactions []Reaction)
 	UpdateMessageMedia(chatID int64, msgID int, photo *PhotoRef, document *DocumentRef)
+	// UpdateLocalMediaProgress sets the upload fraction (0..1) on an optimistic
+	// outgoing message's LocalMedia, located by its (negative) sentinel ID.
+	UpdateLocalMediaProgress(sentinelID int, frac float64)
+	// MarkLocalMediaFailed marks an optimistic message's upload as failed.
+	MarkLocalMediaFailed(sentinelID int)
+	// ClearLocalMedia drops the LocalMedia from a message once the upload is
+	// confirmed (the bubble then renders from the server-confirmed media).
+	ClearLocalMedia(sentinelID int)
+	// AdoptServerMedia replaces a just-sent message's media refs with the ones the
+	// server assigned (fetched via RefreshMessage) and clears LocalMedia, so the
+	// outgoing photo renders inline without waiting for a manual refresh.
+	AdoptServerMedia(chatID int64, msgID int, photo *PhotoRef, doc *DocumentRef, media *MediaRef)
 	RemoveMessage(chatID int64, msgID int)
 	RemoveMessages(chatID int64, msgIDs []int)
 	RemoveMessagesByID(msgIDs []int) (affected []int64)

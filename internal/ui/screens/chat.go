@@ -19,6 +19,14 @@ type SendMsgRequest struct {
 	ReplyToMsgID int
 }
 
+// SendMediaRequest is emitted when enter is pressed with a staged attachment.
+// It carries no file details; the root fills those from its pendingAttachment.
+type SendMediaRequest struct {
+	Peer         store.Peer
+	Caption      string
+	ReplyToMsgID int
+}
+
 type EditSendRequest struct {
 	Peer  store.Peer
 	MsgID int
@@ -210,6 +218,20 @@ func (m *ChatModel) SetReply(msgID int, preview string) {
 	m.syncMsgListHeight()
 }
 
+// SetAttachment stages a file as a chip in the composer (#106). toggleable shows
+// the Photo/File affordance (image/video only).
+func (m *ChatModel) SetAttachment(name string, size int64, sendAs store.MediaKind, toggleable bool) {
+	m.composer.SetAttachment(name, size, sendAs, toggleable)
+	m.syncMsgListHeight()
+}
+
+func (m *ChatModel) ClearAttachment() {
+	m.composer.ClearAttachment()
+	m.syncMsgListHeight()
+}
+
+func (m *ChatModel) HasAttachment() bool { return m.composer.HasAttachment() }
+
 // FocusComposer focuses the composer and switches to insert mode.
 // Returns a blink Cmd that must be returned from the parent Update.
 func (m *ChatModel) FocusComposer() tea.Cmd {
@@ -335,6 +357,22 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		if m.composerFocused {
+			if msg.Code == tea.KeyEnter && msg.Mod == 0 && m.composer.HasAttachment() {
+				caption := m.composer.Value()
+				replyID := m.replyToMsgID
+				m.clearPendingAction()
+				m.composer.Reset()
+				m.composer.ClearAttachment()
+				m.syncMsgListHeight()
+				m.lastTypingAt = time.Time{}
+				if m.chat == nil {
+					return m, nil
+				}
+				peer := m.chat.Peer
+				return m, func() tea.Msg {
+					return SendMediaRequest{Peer: peer, Caption: caption, ReplyToMsgID: replyID}
+				}
+			}
 			if msg.Code == tea.KeyEnter && msg.Mod == 0 {
 				text := m.composer.Value()
 				replyID := m.replyToMsgID

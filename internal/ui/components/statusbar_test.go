@@ -27,6 +27,42 @@ func TestStatusBar_StatusText(t *testing.T) {
 	assert.Contains(t, sb.View(), "Loading...")
 }
 
+func TestStatusBar_ChatHintsIncludeAttach(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(160)
+	sb.SetKeyMap(km)
+	sb.SetActivePane("chat")
+	sb.SetMode(keys.ModeNormal)
+	assert.Contains(t, sb.View(), "f -> attach")
+}
+
+func TestStatusBar_PickerHints(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(160)
+	sb.SetKeyMap(km)
+	sb.SetActivePane("chat")
+	sb.SetPickerOpen(true)
+	view := sb.View()
+	assert.Contains(t, view, "filter")
+	assert.Contains(t, view, "enter -> open/select")
+}
+
+func TestStatusBar_StagedAttachmentHints(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(160)
+	sb.SetKeyMap(km)
+	sb.SetActivePane("chat")
+	sb.SetAttachStaged(true)
+
+	sb.SetMode(keys.ModeInsert)
+	insertView := sb.View()
+	assert.Contains(t, insertView, "enter -> send")
+	assert.Contains(t, insertView, "ctrl+t -> photo/file")
+
+	sb.SetMode(keys.ModeNormal)
+	assert.Contains(t, sb.View(), "x -> drop file")
+}
+
 func TestStatusBar_ChatlistHints(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(120)
