@@ -17,6 +17,26 @@ type PhotoReadyMsg struct {
 	Image   image.Image
 }
 
+// gifFileReadyMsg carries the temp-file path of a downloaded GIF (the full MP4),
+// ready to be decoded into frames.
+type gifFileReadyMsg struct {
+	docID int64
+	msgID int
+	path  string
+}
+
+// gifFramesReadyMsg carries the decoded frames of a GIF, ready to cache and loop.
+type gifFramesReadyMsg struct {
+	docID  int64
+	frames []image.Image
+}
+
+// gifTickMsg advances the active GIF animation by one frame. gen guards against
+// stale ticks from a previous selection.
+type gifTickMsg struct {
+	gen int
+}
+
 type FullPhotoReadyMsg struct {
 	PhotoID int64
 	Image   image.Image

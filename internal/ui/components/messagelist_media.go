@@ -211,6 +211,10 @@ func (ml *MessageList) PreviewImageID(msg store.Message) (int64, bool) {
 		return msg.Photo.ID, true
 	case msg.Media.Kind.IsVideo() && msg.Document != nil && msg.Document.ThumbSize != "":
 		return msg.Document.ID, true
+	case msg.Media.Kind == store.MediaGIF && msg.Document != nil && msg.Document.ThumbSize != "":
+		// Telegram GIFs are silent MP4s; show the document thumbnail inline like a
+		// video (Phase 2b animates the selected one).
+		return msg.Document.ID, true
 	case ml.imageMode == media.ModeKitty && store.IsStaticSticker(msg.Media, msg.Document):
 		return msg.Document.ID, true
 	}
@@ -222,11 +226,18 @@ func (ml *MessageList) PreviewImageIDForTest(msg store.Message) (int64, bool) {
 	return ml.PreviewImageID(msg)
 }
 
-// videoOverlayLabel returns the play affordance shown under a video thumbnail,
-// or "" for non-video media.
+// videoOverlayLabel returns the affordance shown under a thumbnail: the play +
+// duration for video, a "GIF" badge for animated GIFs (so they read differently
+// from a still photo), or "" for other media.
 func videoOverlayLabel(m *store.MediaRef) string {
-	if m != nil && m.Kind.IsVideo() {
+	if m == nil {
+		return ""
+	}
+	if m.Kind.IsVideo() {
 		return "▶ " + formatDuration(m.Duration)
+	}
+	if m.Kind == store.MediaGIF {
+		return "GIF"
 	}
 	return ""
 }

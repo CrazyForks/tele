@@ -149,6 +149,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 	case components.SpinnerTickMsg:
 		m.chatList.TickSpinner()
 		m.chat.TickSpinner()
+		m.updateGifLoadingSpinner()
 		if m.screen == ScreenMain {
 			return m, spinnerTickCmd()
 		}

@@ -322,8 +322,8 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 				}
 			}
 		}
-		// Video thumbnails reuse the inline-image cache, keyed by document id.
-		if msg.Media != nil && msg.Media.Kind.IsVideo() && msg.Document != nil && msg.Document.ThumbSize != "" {
+		// Video and GIF thumbnails reuse the inline-image cache, keyed by document id.
+		if msg.Media != nil && (msg.Media.Kind.IsVideo() || msg.Media.Kind == store.MediaGIF) && msg.Document != nil && msg.Document.ThumbSize != "" {
 			if _, ok := m.imageCache[msg.Document.ID]; !ok {
 				// Round video notes are cropped to a circle, but only in Kitty mode
 				// (PNG alpha); block-art has no transparency, so keep it square there.
@@ -339,4 +339,9 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 		}
 	}
 	return tea.Batch(cmds...)
+}
+
+// PendingDownloadCmdsForTest exposes pendingDownloadCmds for tests.
+func (m RootModel) PendingDownloadCmdsForTest(msgs []store.Message) tea.Cmd {
+	return m.pendingDownloadCmds(msgs)
 }

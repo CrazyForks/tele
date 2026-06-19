@@ -3,6 +3,7 @@ package components
 import (
 	"image"
 
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
@@ -29,6 +30,11 @@ type MessageList struct {
 	voiceProgress  float64
 	voicePosition  int
 
+	// GIF loading state: the document being downloaded/decoded and the current
+	// spinner glyph shown in its "GIF" badge. gifLoadingID == 0 means none.
+	gifLoadingID      int64
+	gifLoadingSpinner string
+
 	// selRect is the rectangle of the selected bubble from the most recent
 	// View(), in coordinates local to View()'s output. selRectOK is false when
 	// no message is selected or no render has happened yet.
@@ -47,6 +53,24 @@ func (ml *MessageList) SetVoicePlayback(docID int64, progress float64, posSecs i
 	ml.playingVoiceID = docID
 	ml.voiceProgress = progress
 	ml.voicePosition = posSecs
+}
+
+// SetGifLoading marks a GIF (by document id) as downloading/decoding so its badge
+// shows the given spinner glyph. Pass docID 0 to clear.
+func (ml *MessageList) SetGifLoading(docID int64, spinner string) {
+	ml.gifLoadingID = docID
+	ml.gifLoadingSpinner = spinner
+}
+
+// overlayLabelFor returns the thumbnail overlay for a message, adding the loading
+// spinner to a GIF badge while that GIF is being fetched.
+func (ml *MessageList) overlayLabelFor(msg store.Message) string {
+	base := videoOverlayLabel(msg.Media)
+	if base == "GIF" && ml.gifLoadingID != 0 && ml.gifLoadingSpinner != "" &&
+		msg.Document != nil && msg.Document.ID == ml.gifLoadingID {
+		return ml.gifLoadingSpinner + " GIF"
+	}
+	return base
 }
 
 func NewMessageList(height, width int) *MessageList {

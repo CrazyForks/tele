@@ -40,6 +40,11 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			return result.(RootModel), cmd
 		}
 		m.currentChatID = msg.Chat.ID
+		m.stopGifAnim()
+		// Drop decoded GIF frames from the previous chat; they are large (up to
+		// gifMaxFrames RGBA images each) and otherwise accumulate for the whole
+		// session. They re-decode on demand if a GIF is selected again.
+		clear(m.gifFrames)
 		m.chatList.SetActiveByID(msg.Chat.ID)
 		if m.onChatOpen != nil {
 			m.onChatOpen(msg.Chat.ID)
@@ -89,7 +94,11 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 				}
 			}
 		}
-		return m, tea.Batch(m.markReadCmd(), m.pendingDownloadCmds(msg.Messages))
+		// A chat may open with a GIF already selected (newest message) and its
+		// thumbnail already cached from a prior visit; start its animation here
+		// since no key event will.
+		nm, gifCmd := m.ensureGifAnimForSelection()
+		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(msg.Messages), gifCmd)
 
 	case markReadDoneMsg:
 		if m.st != nil {
@@ -151,8 +160,10 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.imageCache[msg.PhotoID] = msg.Image
 		m.chat.SetImage(msg.PhotoID, msg.Image)
 		// Transmit is left to reconcile (after this update): the image is only
-		// placed on the terminal if it is currently visible.
-		return m, nil
+		// placed on the terminal if it is currently visible. If this thumbnail
+		// belongs to the selected GIF, start its animation now (the default
+		// newest-message selection fires no key event to trigger it).
+		return m.ensureGifAnimForSelection()
 
 	case kittyTransmittedMsg:
 		// Placement is now on the terminal; advertise it so the next render emits

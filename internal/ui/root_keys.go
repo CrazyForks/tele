@@ -221,9 +221,14 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if action != keys.ActionNone {
+		before := m.chat.SelectedMessageID()
 		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
 		m.chat = newPane.(*screens.ChatModel)
-		return m, tea.Batch(cmd, m.markReadCmd())
+		var gifCmd tea.Cmd
+		if m.chat.SelectedMessageID() != before {
+			m, gifCmd = m.reconcileGifAnim()
+		}
+		return m, tea.Batch(cmd, m.markReadCmd(), gifCmd)
 	}
 
 	return m, nil

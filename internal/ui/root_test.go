@@ -201,6 +201,37 @@ func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {
 	require.NotNil(t, cmd) // download command batched
 }
 
+func TestPendingDownloadCmds_GIFThumb_FiresDownload(t *testing.T) {
+	mc := &mockTGClient{}
+	m, _ := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
+
+	gif := store.Message{
+		ID: 201, ChatID: 1,
+		Media:    &store.MediaRef{Kind: store.MediaGIF},
+		Document: &store.DocumentRef{ID: 77, ThumbSize: "m"},
+	}
+	require.NotNil(t, m.PendingDownloadCmdsForTest([]store.Message{gif}),
+		"GIF with a thumb must fire a download")
+
+	noThumb := store.Message{
+		ID: 202, ChatID: 1,
+		Media:    &store.MediaRef{Kind: store.MediaGIF},
+		Document: &store.DocumentRef{ID: 78}, // no ThumbSize
+	}
+	assert.Nil(t, m.PendingDownloadCmdsForTest([]store.Message{noThumb}),
+		"GIF without a thumb must not fire a download")
+}
+
+func TestDownloadGifFileCmd_EmitsPathOnSuccess(t *testing.T) {
+	mc := &mockTGClient{}
+	docID, path, ok := ui.GifFileReadyForTest(mc,
+		store.Peer{ID: 1, Type: store.PeerUser}, 10,
+		store.DocumentRef{ID: 77, FileName: "anim.mp4"}, t.TempDir())
+	require.True(t, ok, "command must produce a gif-file-ready result")
+	assert.Equal(t, int64(77), docID)
+	assert.NotEmpty(t, path, "downloaded temp path must be set")
+}
+
 func TestRoot_HistoryChunk_FiresPhotoDownload(t *testing.T) {
 	mc := &mockTGClient{}
 	m, _ := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat

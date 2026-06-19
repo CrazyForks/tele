@@ -115,6 +115,10 @@ func (m *ChatModel) SetImage(photoID int64, img image.Image) { m.msgList.SetImag
 func (m *ChatModel) SetVoicePlayback(docID int64, progress float64, posSecs int) {
 	m.msgList.SetVoicePlayback(docID, progress, posSecs)
 }
+
+func (m *ChatModel) SetGifLoading(docID int64, spinner string) {
+	m.msgList.SetGifLoading(docID, spinner)
+}
 func (m *ChatModel) SetKnownImages(cache map[int64]image.Image) { m.msgList.SetKnownImages(cache) }
 func (m *ChatModel) SetRenderer(r media.Renderer)               { m.msgList.SetRenderer(r) }
 func (m *ChatModel) VisiblePhotoIDs() []int64                   { return m.msgList.VisiblePhotoIDs() }
@@ -144,6 +148,10 @@ func (m *ChatModel) SelectedMessageVideo() (store.DocumentRef, bool) {
 }
 func (m *ChatModel) SelectedMessageVoice() (store.DocumentRef, bool) {
 	return m.msgList.SelectedMessageVoice()
+}
+
+func (m *ChatModel) SelectedMessageGIF() (store.DocumentRef, bool) {
+	return m.msgList.SelectedMessageGIF()
 }
 
 // SelectedBubbleRect returns the selected message bubble's rectangle from the

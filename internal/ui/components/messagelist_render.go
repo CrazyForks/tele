@@ -322,7 +322,7 @@ func (ml *MessageList) bubbleContentLines(msg store.Message, m bubbleMetrics) []
 				}
 				sideLines = append(sideLines, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
 			}
-			if overlay := videoOverlayLabel(msg.Media); overlay != "" {
+			if overlay := ml.overlayLabelFor(msg); overlay != "" {
 				sideLines = append(sideLines, labelLine(overlay, actualW, b, bs))
 			}
 		case hasBytes:
@@ -337,8 +337,8 @@ func (ml *MessageList) bubbleContentLines(msg store.Message, m bubbleMetrics) []
 					sideLines = append(sideLines, blankRow)
 				}
 			}
-			if videoOverlayLabel(msg.Media) != "" {
-				sideLines = append(sideLines, labelLine(videoOverlayLabel(msg.Media), actualW, b, bs))
+			if overlay := ml.overlayLabelFor(msg); overlay != "" {
+				sideLines = append(sideLines, labelLine(overlay, actualW, b, bs))
 			}
 		case msg.Media.Kind == store.MediaVoice && msg.Document != nil &&
 			msg.Document.ID == ml.playingVoiceID:
@@ -487,8 +487,8 @@ func (ml *MessageList) renderBareMedia(msg store.Message, selected bool) []strin
 			lines = append(lines, strings.Repeat(" ", blockW))
 		}
 	}
-	if overlay := videoOverlayLabel(msg.Media); overlay != "" {
-		lines = append(lines, pad(overlay)) // ▶ duration under a round video note
+	if overlay := ml.overlayLabelFor(msg); overlay != "" {
+		lines = append(lines, pad(overlay)) // ▶ duration / GIF badge under the thumbnail
 	}
 	fill := blockW - lipgloss.Width(reactStr) - lipgloss.Width(tsStr)
 	if fill < 0 {

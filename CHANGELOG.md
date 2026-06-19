@@ -13,6 +13,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Inline GIF playback: GIFs now render a static thumbnail with a `GIF` badge
+  (distinct from a still photo), and the selected GIF loops silently in place
+  while a spinner shows in the badge during its initial fetch. Kitty graphics
+  mode only; requires `ffmpeg` on `PATH` to decode frames (without it, GIFs stay
+  static). Decoded frames are dropped when switching chats so memory is released
+  (#105)
 - Send photos from the composer: press `f` in a chat to open a file browser
   (navigate, type-to-filter, or paste a path), pick an image, optionally add a
   caption, and send. The outgoing bubble appears immediately with an upload

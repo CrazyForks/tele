@@ -80,7 +80,10 @@ Private chats, groups, channels, replies, reactions, edits.
 - **Photos** — rendered inline in high quality via the Kitty graphics protocol, with an ANSI block-art fallback; press `o` to open in an external viewer.
 - **Voice messages** — amplitude waveform with duration, and **in-app playback** (`p`) with an animated playhead. Fully cgo-free on every platform: Opus/Ogg is decoded in pure Go, and audio goes out via `oto` (macOS/Windows) or the PulseAudio/PipeWire protocol (Linux). On Linux this needs a running PulseAudio or PipeWire server (the desktop default).
 - **Video & round video (кружки)** — inline thumbnail preview with a `▶` / duration overlay (round notes shown as a circle); press `o` to play in the system player.
+- **GIFs** — inline static thumbnail with a `GIF` badge; the selected GIF loops silently in place (Kitty graphics mode). Requires `ffmpeg` — see below.
 - **Audio (music)** — performer / title / duration; other media types show a labelled placeholder.
+
+> **Optional dependency — `ffmpeg`:** install `ffmpeg` (with `ffprobe`) on your `PATH` to enable inline GIF playback (decoding frames) and to attach duration/dimensions/thumbnail metadata when sending videos. It is entirely optional: without it, GIFs stay static and videos still send (Telegram generates the preview server-side).
 
 ### 🧠 Terminal-native design
 

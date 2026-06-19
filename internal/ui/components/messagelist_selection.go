@@ -52,6 +52,16 @@ func (ml *MessageList) SelectedMessageVoice() (store.DocumentRef, bool) {
 	return store.DocumentRef{}, false
 }
 
+// SelectedMessageGIF returns the document ref of the selected message when it is
+// an animated GIF, for inline looping playback (#105 Phase 2b).
+func (ml *MessageList) SelectedMessageGIF() (store.DocumentRef, bool) {
+	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
+		msg.Media.Kind == store.MediaGIF && msg.Document != nil {
+		return *msg.Document, true
+	}
+	return store.DocumentRef{}, false
+}
+
 func (ml *MessageList) computeSelectedMsgID() int {
 	if msg := ml.computeSelectedMsg(); msg != nil {
 		return msg.ID

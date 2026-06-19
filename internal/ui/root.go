@@ -62,11 +62,17 @@ type RootModel struct {
 	cfg              *config.Config
 	imageCache       map[int64]image.Image
 	fullImageCache   map[int64]image.Image
-	imageMode        media.Mode
-	kittyStore       *media.KittyStore
-	lastPhotoCols    int
-	lastPaneHeight   int
-	retransmitGen    int
+	// gifFrames caches decoded frames per document id for inline GIF looping.
+	gifFrames      map[int64][]image.Image
+	gifActiveID    int64 // document id currently animating (0 = none)
+	gifIdx         int   // current frame index of the active animation
+	gifGen         int   // bumped on every (re)start/stop to invalidate stale ticks
+	gifSpinnerIdx  int   // loading-spinner glyph index for a GIF being fetched
+	imageMode      media.Mode
+	kittyStore     *media.KittyStore
+	lastPhotoCols  int
+	lastPaneHeight int
+	retransmitGen  int
 	// Kitty placements are a bounded terminal resource: transmitting every chat
 	// image at once overruns the terminal and corrupts some. kittyLive tracks the
 	// photo ids currently transmitted (or in flight); kittyLRU orders them by last
@@ -120,6 +126,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		verbose:           verbose,
 		imageCache:        make(map[int64]image.Image),
 		fullImageCache:    make(map[int64]image.Image),
+		gifFrames:         make(map[int64][]image.Image),
 		kittyStore:        media.NewKittyStore(),
 		kittyLive:         make(map[int64]bool),
 		logo:              components.NewLogoLoader(80),
@@ -267,6 +274,12 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSentMediaConfirmed(msg)
 	case sentMediaRefreshedMsg:
 		return m.handleSentMediaRefreshed(msg)
+	case gifFileReadyMsg:
+		return m.handleGifFileReady(msg)
+	case gifFramesReadyMsg:
+		return m.handleGifFramesReady(msg)
+	case gifTickMsg:
+		return m.handleGifTick(msg)
 	case sentMsgConfirmedMsg:
 		return m.handleSentMsgConfirmed(msg)
 	case reactionFailedMsg:
