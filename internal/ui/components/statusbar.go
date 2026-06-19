@@ -168,12 +168,14 @@ func (sb *StatusBar) hints() string {
 		curUp := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCursorUp)
 		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
 		attach := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionAttach)
+		open := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionOpenInViewer)
 		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
 		return joinHints(
 			hintNav(down, up, "scroll", a),
 			hintNav(curDown, curUp, "select", a),
 			hintKey(write, "write", a),
 			hintKey(attach, "attach", a),
+			hintKey(open, "open", a),
 			hintKey(quit, "quit", a),
 		)
 	case sb.activePane == "chatlist":
@@ -190,6 +192,18 @@ func (sb *StatusBar) hints() string {
 		)
 	}
 	return ""
+}
+
+// HintBar renders key/desc pairs in the status-bar hint style (accented key,
+// " · "-separated) so overlays show hints consistently with the status bar. It
+// uses the NORMAL-mode accent.
+func HintBar(pairs [][2]string) string {
+	a := lipgloss.NewStyle().Background(barBg).Foreground(lipgloss.Color("39"))
+	parts := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		parts = append(parts, hintKey(p[0], p[1], a))
+	}
+	return joinHints(parts...)
 }
 
 func hintKey(key, desc string, accent lipgloss.Style) string {

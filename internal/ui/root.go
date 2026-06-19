@@ -96,6 +96,7 @@ type RootModel struct {
 	tmpDir            string
 	voicePlayer       *audio.Player
 	filePicker        *screens.FilePickerModel
+	videoPlayer       *videoPlayer
 	pendingAttachment *pendingAttachment
 	lastPickerDir     string
 	uploadCancels     map[int]context.CancelFunc
@@ -280,6 +281,12 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGifFramesReady(msg)
 	case gifTickMsg:
 		return m.handleGifTick(msg)
+	case videoFileReadyMsg:
+		return m.handleVideoFileReady(msg)
+	case videoProbedMsg:
+		return m.handleVideoProbed(msg)
+	case videoTickMsg:
+		return m.handleVideoTick(msg)
 	case sentMsgConfirmedMsg:
 		return m.handleSentMsgConfirmed(msg)
 	case reactionFailedMsg:
@@ -314,6 +321,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		FullPhotoReadyMsg,
 		kittyTransmittedMsg,
 		components.OpenInViewerRequest,
+		components.OpenExternalRequest,
 		components.PlayVoiceRequest,
 		voicePlayReadyMsg,
 		voiceTickMsg:

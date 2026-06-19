@@ -87,6 +87,7 @@ func DefaultKeyMap() KeyMap {
 			"r":      ActionReply,
 			"e":      ActionEdit,
 			"o":      ActionOpenInViewer,
+			"O":      ActionOpenExternal,
 			"p":      ActionPlayVoice,
 			"f":      ActionAttach,
 			"x":      ActionCancelUpload,
@@ -110,6 +111,7 @@ func DefaultKeyMap() KeyMap {
 			"d":     ActionDelete,
 			"g":     ActionJumpToOriginal,
 			"o":     ActionOpenInViewer,
+			"O":     ActionOpenExternal,
 			"p":     ActionPlayVoice,
 		},
 		ContextDeleteSubMenu: {

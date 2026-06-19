@@ -27,6 +27,7 @@ const (
 	ActionConfirm         Action = "confirm"
 	ActionSearch          Action = "search"
 	ActionOpenInViewer    Action = "open_in_viewer"
+	ActionOpenExternal    Action = "open_external"
 	ActionOpenContextMenu Action = "open_context_menu"
 	ActionCancel          Action = "cancel"
 	ActionReply           Action = "reply"

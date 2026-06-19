@@ -37,6 +37,27 @@ type gifTickMsg struct {
 	gen int
 }
 
+// videoFileReadyMsg carries the temp-file path of a downloaded video, ready for
+// the in-app player to decode and display.
+type videoFileReadyMsg struct {
+	docID   int64
+	msgID   int
+	path    string
+	durSecs int
+	sender  string
+}
+
+// videoProbedMsg carries a video's real pixel dimensions (from ffprobe) so the
+// modal box can be sized to the true aspect before decoding.
+type videoProbedMsg struct {
+	docID int64
+	path  string
+	w, h  int
+}
+
+// videoTickMsg advances the modal video by one frame. gen drops stale ticks.
+type videoTickMsg struct{ gen int }
+
 type FullPhotoReadyMsg struct {
 	PhotoID int64
 	Image   image.Image

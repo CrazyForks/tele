@@ -122,6 +122,11 @@ func (m RootModel) View() tea.View {
 		if m.filePicker != nil {
 			content = overlayCenter(content, m.filePicker.View(), m.width, m.height)
 		}
+		if m.videoPlayer != nil {
+			// Overlay the modal over the chat using integer geometry (the chat's
+			// Kitty placeholders defeat lipgloss-based stamping).
+			content = m.videoPlayerView(content)
+		}
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true

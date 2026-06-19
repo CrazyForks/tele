@@ -202,6 +202,13 @@ func (r *KittyRenderer) Reset() {
 	clear(r.cache)
 }
 
+// PlaceholderLines exposes the Kitty Unicode-placeholder grid for a transmitted
+// image id, for callers (e.g. a fullscreen video overlay) that compose their own
+// layout rather than going through KittyRenderer.
+func PlaceholderLines(id uint32, cols, rows int) []string {
+	return placeholderLines(id, cols, rows)
+}
+
 // placeholderLines builds the rows×cols grid of Kitty Unicode placeholder cells.
 // Each cell is the placeholder rune followed by its row and column diacritics;
 // the image id is carried in the 24-bit foreground color. Every cell carries

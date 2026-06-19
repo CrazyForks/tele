@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	vmedia "github.com/sorokin-vladimir/tele/internal/media"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -188,7 +189,18 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// No photo on the request → a video message; open the full file in a player.
+		// No photo on the request → a video message. Route exactly like the vim
+		// open key: in-app modal when Kitty + ffmpeg, else the external player.
+		if ref, ok := m.chat.SelectedMessageVideo(); ok {
+			if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
+				dur, sender := m.selectedVideoInfo()
+				return m, m.openVideoPlayerCmd(ref, m.chat.SelectedMessageID(), dur, sender)
+			}
+			return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
+		}
+		return m, nil
+
+	case components.OpenExternalRequest:
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
 			return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
 		}

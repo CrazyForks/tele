@@ -43,6 +43,10 @@ type OpenInViewerRequest struct {
 	PhotoID int64
 }
 
+// OpenExternalRequest is emitted when the user selects "Open externally" for a
+// video message.
+type OpenExternalRequest struct{}
+
 // PlayVoiceRequest is emitted when the user selects "Play" for a voice message.
 type PlayVoiceRequest struct{}
 
@@ -119,7 +123,8 @@ func mainItems(isOut bool, isReply bool, hasPhoto bool, hasVideo bool, hasVoice 
 	case hasPhoto:
 		items = append(items, menuItem{label: "Open in viewer", action: keys.ActionOpenInViewer})
 	case hasVideo:
-		items = append(items, menuItem{label: "Open in player", action: keys.ActionOpenInViewer})
+		items = append(items, menuItem{label: "Play in app", action: keys.ActionOpenInViewer})
+		items = append(items, menuItem{label: "Open externally", action: keys.ActionOpenExternal})
 	case hasVoice:
 		items = append(items, menuItem{label: "Play", action: keys.ActionPlayVoice})
 	}
@@ -237,6 +242,8 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 	case keys.ActionOpenInViewer:
 		photoID := cm.photoID
 		return nil, func() tea.Msg { return OpenInViewerRequest{PhotoID: photoID} }
+	case keys.ActionOpenExternal:
+		return nil, func() tea.Msg { return OpenExternalRequest{} }
 	case keys.ActionPlayVoice:
 		return nil, func() tea.Msg { return PlayVoiceRequest{} }
 	}

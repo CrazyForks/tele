@@ -475,10 +475,20 @@ func TestNewContextMenu_NoPhoto_HidesOpenInViewer(t *testing.T) {
 	assert.NotContains(t, view, "Open in viewer")
 }
 
-func TestNewContextMenu_VideoMessage_ShowsOpenInPlayer(t *testing.T) {
+func TestNewContextMenu_VideoMessage_ShowsBothOpenItems(t *testing.T) {
 	cm := components.NewContextMenu(1, false, 0, 0, true, false, defaultKM())
 	view := cm.View()
-	assert.Contains(t, view, "Open in player")
+	assert.Contains(t, view, "Play in app")
+	assert.Contains(t, view, "Open externally")
+}
+
+func TestContextMenu_OpenExternal_EmitsOpenExternalRequest(t *testing.T) {
+	cm := components.NewContextMenu(1, false, 0, 0, true, false, defaultKM())
+	newCM, cmd := cm.Update(keyMsg('O'))
+	assert.Nil(t, newCM)
+	require.NotNil(t, cmd)
+	_, ok := cmd().(components.OpenExternalRequest)
+	require.True(t, ok, "shift-O must emit OpenExternalRequest")
 }
 
 func TestNewContextMenu_VoiceMessage_ShowsPlay(t *testing.T) {

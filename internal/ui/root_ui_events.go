@@ -150,6 +150,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.chatList.TickSpinner()
 		m.chat.TickSpinner()
 		m.updateGifLoadingSpinner()
+		m.updateVideoSpinner()
 		if m.screen == ScreenMain {
 			return m, spinnerTickCmd()
 		}

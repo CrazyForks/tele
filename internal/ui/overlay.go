@@ -30,6 +30,34 @@ func stampOverlay(baseLines, overlayLines []string, top, left int) {
 	}
 }
 
+// stampBoxOverlay overlays boxLines onto base at (top,left), treating the box as
+// exactly boxW display cells wide. Unlike stampOverlay it does not measure the box
+// lines with lipgloss (they contain Kitty placeholders whose width lipgloss cannot
+// compute); the right edge is the integer left+boxW.
+func stampBoxOverlay(base string, boxLines []string, top, left, boxW, h int) string {
+	baseLines := strings.Split(base, "\n")
+	for len(baseLines) < h {
+		baseLines = append(baseLines, "")
+	}
+	for i, bl := range boxLines {
+		row := top + i
+		if row < 0 || row >= len(baseLines) {
+			continue
+		}
+		b := baseLines[row]
+		prefix := xansi.Truncate(b, left, "")
+		if w := lipgloss.Width(prefix); w < left {
+			prefix += strings.Repeat(" ", left-w)
+		}
+		suffix := ""
+		if lipgloss.Width(b) > left+boxW {
+			suffix = xansi.TruncateLeft(b, left+boxW, "")
+		}
+		baseLines[row] = prefix + bl + suffix
+	}
+	return strings.Join(baseLines, "\n")
+}
+
 // overlayCenter stamps overlay string centered over base string (w×h terminal).
 func overlayCenter(base, overlay string, w, h int) string {
 	baseLines := strings.Split(base, "\n")

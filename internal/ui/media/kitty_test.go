@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPlaceholderLines_Shape(t *testing.T) {
+	lines := media.PlaceholderLines(7, 5, 3)
+	if len(lines) != 3 {
+		t.Fatalf("want 3 rows, got %d", len(lines))
+	}
+}
+
 func TestKittyStore_IDForStableAndMonotonic(t *testing.T) {
 	s := media.NewKittyStore()
 	a := s.IDFor(100)

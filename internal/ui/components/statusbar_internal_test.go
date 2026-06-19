@@ -1,12 +1,20 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestHintBar_JoinsPairs(t *testing.T) {
+	out := HintBar([][2]string{{"space", "pause"}, {"q", "close"}})
+	if !strings.Contains(out, "pause") || !strings.Contains(out, "close") {
+		t.Fatalf("hint bar missing entries: %q", out)
+	}
+}
 
 func TestHintLayout_LetterInWord_HighlightsInPlace(t *testing.T) {
 	text, spans := hintLayout("q", "quit")

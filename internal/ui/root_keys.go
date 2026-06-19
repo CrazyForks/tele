@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	vmedia "github.com/sorokin-vladimir/tele/internal/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -30,6 +31,11 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 	if m.verbose {
 		m.statusBar.SetLastKey(keyStr)
+	}
+
+	// While the video modal is open it owns all keys.
+	if m.videoPlayer != nil {
+		return m.handleVideoPlayerKey(keyStr)
 	}
 
 	if m.searchModel != nil {
@@ -173,6 +179,17 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if ref, ok := m.chat.SelectedMessageVideo(); ok {
+			if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
+				dur, sender := m.selectedVideoInfo()
+				return m, m.openVideoPlayerCmd(ref, m.chat.SelectedMessageID(), dur, sender)
+			}
+			return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
+		}
+		return m, nil
+	}
+
+	if action == keys.ActionOpenExternal && m.focus == FocusChat {
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
 			return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
 		}
