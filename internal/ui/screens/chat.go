@@ -60,6 +60,10 @@ type ChatModel struct {
 	typingBase      string
 	typingDots      components.TypingDots
 	lastTypingAt    time.Time
+	// drafts holds the unsent composer text for chats that are not currently
+	// open, keyed by peer ID. The open chat's draft lives in the composer
+	// itself; it is flushed here on switch-away and restored on switch-to (#62).
+	drafts map[int64]string
 }
 
 func NewChatModel(width, height int) *ChatModel {
@@ -77,6 +81,7 @@ func NewChatModel(width, height int) *ChatModel {
 		width:    width,
 		height:   height,
 		logo:     logo,
+		drafts:   make(map[int64]string),
 	}
 }
 
@@ -94,6 +99,22 @@ func (m *ChatModel) TickSpinner() { m.spinner.Tick() }
 func (m *ChatModel) TickLogo() { m.logo.Tick() }
 
 func (m *ChatModel) SetChat(chat *store.Chat) {
+	var oldID, newID int64
+	if m.chat != nil {
+		oldID = m.chat.Peer.ID
+	}
+	if chat != nil {
+		newID = chat.Peer.ID
+	}
+	// A switch to a different peer (including close → newID==0) flushes the
+	// outgoing draft and restores the incoming one. Re-setting the same chat
+	// (a data refresh, e.g. presence) must leave the composer untouched so it
+	// does not clobber text the user is currently typing (#62).
+	peerChanged := newID != oldID
+	if peerChanged {
+		m.saveDraft(oldID, m.composer.Value())
+	}
+
 	m.typingBase = ""
 	m.lastTypingAt = time.Time{}
 	m.chat = chat
@@ -104,6 +125,25 @@ func (m *ChatModel) SetChat(chat *store.Chat) {
 		m.msgList.SetIsGroup(false)
 		m.msgList.SetOutboxReadMaxID(0)
 	}
+
+	if peerChanged {
+		m.composer.SetValue(m.drafts[newID])
+		m.syncMsgListHeight()
+	}
+}
+
+// saveDraft stores unsent composer text for a chat, keyed by peer ID. Empty
+// text removes the entry so the map does not accumulate stale keys. id==0
+// (no chat) is never persisted.
+func (m *ChatModel) saveDraft(id int64, text string) {
+	if id == 0 {
+		return
+	}
+	if text == "" {
+		delete(m.drafts, id)
+		return
+	}
+	m.drafts[id] = text
 }
 func (m *ChatModel) SetMessages(msgs []store.Message) { m.msgList.SetMessages(msgs) }
 func (m *ChatModel) SetMessagesKeepScroll(msgs []store.Message) {

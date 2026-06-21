@@ -531,6 +531,57 @@ func TestChatModel_Typing_CancelOnEscape(t *testing.T) {
 	assert.Equal(t, store.TypingActionCancel, req.Action)
 }
 
+func TestChatModel_Draft_IsolatedPerChat(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chatA := &store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	chatB := &store.Chat{ID: 2, Peer: store.Peer{ID: 2, Type: store.PeerUser}}
+
+	m.SetChat(chatA)
+	m.SetComposerValue("draft for A")
+
+	// Switching to B must present an empty composer (B has no draft yet).
+	m.SetChat(chatB)
+	assert.Equal(t, "", m.ComposerValue())
+	m.SetComposerValue("draft for B")
+
+	// Switching back to A must restore A's draft.
+	m.SetChat(chatA)
+	assert.Equal(t, "draft for A", m.ComposerValue())
+
+	// And B's draft survives too.
+	m.SetChat(chatB)
+	assert.Equal(t, "draft for B", m.ComposerValue())
+}
+
+func TestChatModel_Draft_SurvivesChatClose(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}}
+
+	m.SetChat(chat)
+	m.SetComposerValue("unsent text")
+
+	// Closing the chat (Esc to chatlist) calls SetChat(nil).
+	m.SetChat(nil)
+	assert.Equal(t, "", m.ComposerValue())
+
+	// Reopening restores the draft.
+	m.SetChat(chat)
+	assert.Equal(t, "unsent text", m.ComposerValue())
+}
+
+func TestChatModel_Draft_RefreshSameChatKeepsComposer(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 3, Peer: store.Peer{ID: 3, Type: store.PeerUser}}
+	m.SetChat(chat)
+	m.SetComposerValue("typing in progress")
+
+	// A refresh of the same chat (e.g. presence update) re-calls SetChat with the
+	// same peer. The composer must be left untouched — no clobbering mid-typing.
+	refreshed := &store.Chat{ID: 3, Peer: store.Peer{ID: 3, Type: store.PeerUser}}
+	m.SetChat(refreshed)
+	assert.Equal(t, "typing in progress", m.ComposerValue())
+}
+
 func TestChatModel_ScrollInfo_DelegatesToMessageList(t *testing.T) {
 	m := screens.NewChatModel(40, 12)
 	msgs := make([]store.Message, 0, 40)
