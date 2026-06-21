@@ -1,9 +1,8 @@
 package components
 
 import (
-	"image"
-
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
@@ -17,7 +16,7 @@ type MessageList struct {
 	isGroup           bool
 	outboxReadMaxID   int
 	inboxReadMaxID    int
-	images            map[int64]image.Image
+	imageCache        *imagecache.Cache
 	showIndicator     bool
 	hasDarkBackground bool
 	renderer          media.Renderer
@@ -73,11 +72,15 @@ func (ml *MessageList) overlayLabelFor(msg store.Message) string {
 	return base
 }
 
+// defaultImageCacheCap bounds the message list's own image cache before the
+// shared root cache is injected via SetKnownImages (which replaces it).
+const defaultImageCacheCap = 256
+
 func NewMessageList(height, width int) *MessageList {
 	return &MessageList{
 		viewHeight: height,
 		viewWidth:  width,
-		images:     make(map[int64]image.Image),
+		imageCache: imagecache.New(defaultImageCacheCap),
 		renderer:   media.NewBlockRenderer(),
 	}
 }

@@ -236,7 +236,7 @@ func (m RootModel) handleVideoTick(msg videoTickMsg) (RootModel, tea.Cmd) {
 	}
 	vp.frame = frame
 	vp.posFrames++
-	m.imageCache[videoPlayerKey] = frame
+	m.imageCache.Add(videoPlayerKey, frame)
 	id := m.kittyStore.IDFor(videoPlayerKey)
 	return m, tea.Batch(transmitFrameToID(id, frame, vp.cols, vp.rows), videoTickCmd(vp.gen))
 }
@@ -270,7 +270,7 @@ func (m RootModel) closeVideoPlayer() RootModel {
 			_ = m.videoPlayer.source.Close()
 		}
 		m.videoPlayer.gen++
-		delete(m.imageCache, videoPlayerKey)
+		m.imageCache.Remove(videoPlayerKey)
 		m.videoPlayer = nil
 	}
 	return m

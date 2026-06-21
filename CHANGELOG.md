@@ -36,6 +36,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the modal stands out. Kitty images are left untouched, and the small
   contextual menus are unaffected.
 
+### Changed
+
+- Decoded images are now held in a fixed-size LRU cache instead of unbounded
+  maps, so memory no longer grows monotonically over a long session that browses
+  many photos. Thumbnails and full-resolution viewer images have separate caps;
+  evicted images are re-fetched transparently on demand, so only memory is
+  bounded — nothing visible changes (#113)
+
 ## [1.5.0] - 2026-06-20 — Send media & inline video/GIF playback
 
 ### Added

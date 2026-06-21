@@ -45,7 +45,7 @@ func (ml *MessageList) isBareMedia(msg store.Message) bool {
 	if !ok {
 		return false
 	}
-	_, has := ml.images[id]
+	_, has := ml.cachedImage(id)
 	return has
 }
 
@@ -53,7 +53,8 @@ func (ml *MessageList) isBareMedia(msg store.Message) bool {
 // meta, or sender-name lines). Caller must have verified isBareMedia.
 func (ml *MessageList) bareMediaRows(msg store.Message) int {
 	id, _ := ml.PreviewImageID(msg)
-	bb := ml.images[id].Bounds()
+	img, _ := ml.cachedImage(id)
+	bb := img.Bounds()
 	_, rows := ml.mediaBox(msg, bb.Dx(), bb.Dy())
 	return rows
 }
@@ -112,7 +113,7 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 		// so the rendered height always equals this reserved height: no hidden
 		// tail (issue #115) and no scroll jump when the placement lands.
 		if id, ok := ml.PreviewImageID(msg); ok {
-			if img, has := ml.images[id]; has {
+			if img, has := ml.cachedImage(id); has {
 				b := img.Bounds()
 				_, rows := ml.mediaBox(msg, b.Dx(), b.Dy())
 				h += rows

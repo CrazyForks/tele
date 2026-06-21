@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -174,11 +175,11 @@ func (m *ChatModel) SetVoicePlayback(docID int64, progress float64, posSecs int)
 func (m *ChatModel) SetGifLoading(docID int64, spinner string) {
 	m.msgList.SetGifLoading(docID, spinner)
 }
-func (m *ChatModel) SetKnownImages(cache map[int64]image.Image) { m.msgList.SetKnownImages(cache) }
-func (m *ChatModel) SetRenderer(r media.Renderer)               { m.msgList.SetRenderer(r) }
-func (m *ChatModel) VisiblePhotoIDs() []int64                   { return m.msgList.VisiblePhotoIDs() }
-func (m *ChatModel) PhotoContentCols() int                      { return m.msgList.PhotoContentCols() }
-func (m *ChatModel) PhotoBox(imgW, imgH int) (int, int)         { return m.msgList.PhotoBox(imgW, imgH) }
+func (m *ChatModel) SetKnownImages(cache *imagecache.Cache) { m.msgList.SetKnownImages(cache) }
+func (m *ChatModel) SetRenderer(r media.Renderer)           { m.msgList.SetRenderer(r) }
+func (m *ChatModel) VisiblePhotoIDs() []int64               { return m.msgList.VisiblePhotoIDs() }
+func (m *ChatModel) PhotoContentCols() int                  { return m.msgList.PhotoContentCols() }
+func (m *ChatModel) PhotoBox(imgW, imgH int) (int, int)     { return m.msgList.PhotoBox(imgW, imgH) }
 func (m *ChatModel) MediaBoxForID(id int64, imgW, imgH int) (int, int) {
 	return m.msgList.MediaBoxForID(id, imgW, imgH)
 }

@@ -431,18 +431,18 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 			}
 		}
 		if msg.Photo != nil {
-			if _, ok := m.imageCache[msg.Photo.ID]; !ok {
+			if !m.imageCache.Contains(msg.Photo.ID) {
 				cmds = append(cmds, downloadPhotoCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Photo))
 			}
 			if m.cfg != nil && m.cfg.Photos.EagerFullQuality && msg.Photo.FullThumbSize != "" {
-				if _, ok := m.fullImageCache[msg.Photo.ID]; !ok {
+				if !m.fullImageCache.Contains(msg.Photo.ID) {
 					cmds = append(cmds, downloadFullPhotoCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Photo))
 				}
 			}
 		}
 		// Video and GIF thumbnails reuse the inline-image cache, keyed by document id.
 		if msg.Media != nil && (msg.Media.Kind.IsVideo() || msg.Media.Kind == store.MediaGIF) && msg.Document != nil && msg.Document.ThumbSize != "" {
-			if _, ok := m.imageCache[msg.Document.ID]; !ok {
+			if !m.imageCache.Contains(msg.Document.ID) {
 				// Round video notes are cropped to a circle, but only in Kitty mode
 				// (PNG alpha); block-art has no transparency, so keep it square there.
 				crop := msg.Media.Kind == store.MediaVideoNote && m.imageMode == media.ModeKitty
@@ -451,7 +451,7 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 		}
 		// Static WEBP stickers render inline (Kitty only); decode the full document.
 		if m.imageMode == media.ModeKitty && store.IsStaticSticker(msg.Media, msg.Document) {
-			if _, ok := m.imageCache[msg.Document.ID]; !ok {
+			if !m.imageCache.Contains(msg.Document.ID) {
 				cmds = append(cmds, downloadStickerCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Document))
 			}
 		}

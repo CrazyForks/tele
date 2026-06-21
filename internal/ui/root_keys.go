@@ -173,9 +173,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if action == keys.ActionOpenInViewer && m.focus == FocusChat {
 		photoID := m.chat.SelectedMessagePhotoID()
 		if photoID != 0 {
-			img := m.fullImageCache[photoID]
-			if img == nil {
-				img = m.imageCache[photoID]
+			img, ok := m.fullImageCache.Get(photoID)
+			if !ok {
+				img, _ = m.imageCache.Get(photoID)
 			}
 			if img != nil {
 				go openInViewer(img, m.tmpDir)

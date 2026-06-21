@@ -75,12 +75,11 @@ func TestReconcileKitty_TransmitsOnlyVisible(t *testing.T) {
 			Photo: &store.PhotoRef{ID: pid},
 			Date:  time.Now(),
 		})
-		m.imageCache[pid] = image.NewRGBA(image.Rect(0, 0, 320, 320))
+		m.imageCache.Add(pid, image.NewRGBA(image.Rect(0, 0, 320, 320)))
 	}
 	m.chat.SetMessages(msgs)
-	for pid, img := range m.imageCache {
-		m.chat.SetImage(pid, img)
-	}
+	// Inject the shared cache so the chat's message list reads the same images.
+	m.chat.SetKnownImages(m.imageCache)
 
 	visible := m.chat.VisiblePhotoIDs()
 	(&m).reconcileKittyCmd()

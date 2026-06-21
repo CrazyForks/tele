@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -652,7 +653,9 @@ func TestMessageList_SetKnownImages_AtBottom_ReanchorsToBottom(t *testing.T) {
 	ml.SetMessages(msgs)
 
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-	ml.SetKnownImages(map[int64]image.Image{42: img})
+	cache := imagecache.New(8)
+	cache.Add(42, img)
+	ml.SetKnownImages(cache)
 
 	assert.Contains(t, stripANSI(ml.View()), "msg 3", "newest message must remain visible after bulk image load")
 }

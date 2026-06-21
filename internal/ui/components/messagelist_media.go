@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
@@ -130,23 +131,33 @@ func (ml *MessageList) PhotoBox(imgW, imgH int) (int, int) {
 func (ml *MessageList) SetImage(photoID int64, img image.Image) {
 	botIdx, botOff := ml.positionAtBottom()
 	wasAtBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
-	ml.images[photoID] = img
+	if ml.imageCache != nil {
+		ml.imageCache.Add(photoID, img)
+	}
 	if wasAtBottom {
 		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	}
 }
 
-// SetKnownImages bulk-loads images from an external cache.
-// Re-anchors to the natural bottom if the viewport was there before the load.
-func (ml *MessageList) SetKnownImages(cache map[int64]image.Image) {
+// SetKnownImages injects the shared image cache. It stores the pointer (no
+// copy): root writes and render reads then hit one bounded store, so eviction
+// frees pixels. Re-anchors to the natural bottom if the viewport was there.
+func (ml *MessageList) SetKnownImages(cache *imagecache.Cache) {
 	botIdx, botOff := ml.positionAtBottom()
 	wasAtBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
-	for id, img := range cache {
-		ml.images[id] = img
-	}
+	ml.imageCache = cache
 	if wasAtBottom {
 		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	}
+}
+
+// cachedImage returns the cached image for id, marking it most-recently-used so
+// visible images stay hot. Returns (nil, false) before the cache is injected.
+func (ml *MessageList) cachedImage(id int64) (image.Image, bool) {
+	if ml.imageCache == nil {
+		return nil, false
+	}
+	return ml.imageCache.Get(id)
 }
 
 // placeholderFor returns the text label shown for a media message until (and

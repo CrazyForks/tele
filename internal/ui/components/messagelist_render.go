@@ -97,7 +97,7 @@ func (ml *MessageList) measureBubble(msg store.Message) bubbleMetrics {
 	widenToPhotoCols := msg.Photo != nil
 	if !widenToPhotoCols {
 		if id, ok := ml.PreviewImageID(msg); ok {
-			if _, has := ml.images[id]; has {
+			if _, has := ml.cachedImage(id); has {
 				widenToPhotoCols = true
 			}
 		}
@@ -107,7 +107,7 @@ func (ml *MessageList) measureBubble(msg store.Message) bubbleMetrics {
 		// Once bytes are known, the rendered width may be narrower than the full
 		// budget (480px / viewport caps), so size the bubble to the actual image.
 		if id, ok := ml.PreviewImageID(msg); ok {
-			if img, has := ml.images[id]; has {
+			if img, has := ml.cachedImage(id); has {
 				bb := img.Bounds()
 				photoCols, _ = ml.mediaBox(msg, bb.Dx(), bb.Dy())
 			}
@@ -304,7 +304,7 @@ func (ml *MessageList) bubbleContentLines(msg store.Message, m bubbleMetrics) []
 		var artLines []string
 		hasBytes, footprint := false, 0
 		if id, ok := ml.PreviewImageID(msg); ok {
-			if img, has := ml.images[id]; has {
+			if img, has := ml.cachedImage(id); has {
 				hasBytes = true
 				bb := img.Bounds()
 				cols, rows := ml.mediaBox(msg, bb.Dx(), bb.Dy())
@@ -423,7 +423,7 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 // isBareMedia.
 func (ml *MessageList) renderBareMedia(msg store.Message, selected bool) []string {
 	id, _ := ml.PreviewImageID(msg)
-	img := ml.images[id]
+	img, _ := ml.cachedImage(id)
 	bb := img.Bounds()
 	cols, rows := ml.mediaBox(msg, bb.Dx(), bb.Dy())
 	artLines := ml.renderer.Render(id, img, cols)

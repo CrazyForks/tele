@@ -109,7 +109,7 @@ func gifTickCmd(gen int) tea.Cmd {
 func (m *RootModel) stopGifAnim() {
 	if m.gifActiveID != 0 {
 		if frames := m.gifFrames[m.gifActiveID]; len(frames) > 0 {
-			m.imageCache[m.gifActiveID] = frames[0]
+			m.imageCache.Add(m.gifActiveID, frames[0])
 		}
 	}
 	m.gifActiveID = 0
@@ -132,7 +132,7 @@ func (m RootModel) reconcileGifAnim() (RootModel, tea.Cmd) {
 	}
 	// Need the static thumbnail cached to size the decode (and it confirms the
 	// placement exists). If it isn't loaded yet, leave the gif static for now.
-	if _, ok := m.imageCache[ref.ID]; !ok {
+	if !m.imageCache.Contains(ref.ID) {
 		return m, nil
 	}
 
@@ -173,7 +173,7 @@ func (m RootModel) handleGifFileReady(msg gifFileReadyMsg) (RootModel, tea.Cmd) 
 		_ = os.Remove(msg.path) // selection moved on; drop the temp file
 		return m, nil
 	}
-	thumb, ok := m.imageCache[msg.docID]
+	thumb, ok := m.imageCache.Get(msg.docID)
 	if !ok {
 		_ = os.Remove(msg.path)
 		return m, nil
@@ -206,7 +206,7 @@ func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 	}
 	m.gifIdx = (m.gifIdx + 1) % len(frames)
 	frame := frames[m.gifIdx]
-	m.imageCache[m.gifActiveID] = frame
+	m.imageCache.Add(m.gifActiveID, frame)
 	transmit := m.transmitPhotoCmd(m.gifActiveID, frame)
 	return m, tea.Batch(transmit, gifTickCmd(m.gifGen))
 }

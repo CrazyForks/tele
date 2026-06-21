@@ -112,7 +112,7 @@ func (m *RootModel) reconcileKittyCmd() tea.Cmd {
 			m.kittyLRU = touchID(m.kittyLRU, id)
 			continue
 		}
-		if img, ok := m.imageCache[id]; ok {
+		if img, ok := m.imageCache.Get(id); ok {
 			if c := m.transmitPhotoCmd(id, img); c != nil {
 				cmds = append(cmds, c)
 				m.kittyLive[id] = true

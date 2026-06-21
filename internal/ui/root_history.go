@@ -169,7 +169,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, nil
 
 	case PhotoReadyMsg:
-		m.imageCache[msg.PhotoID] = msg.Image
+		m.imageCache.Add(msg.PhotoID, msg.Image)
 		m.chat.SetImage(msg.PhotoID, msg.Image)
 		// Transmit is left to reconcile (after this update): the image is only
 		// placed on the terminal if it is currently visible. If this thumbnail
@@ -186,14 +186,14 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, nil
 
 	case FullPhotoReadyMsg:
-		m.fullImageCache[msg.PhotoID] = msg.Image
+		m.fullImageCache.Add(msg.PhotoID, msg.Image)
 		return m, nil
 
 	case components.OpenInViewerRequest:
 		if msg.PhotoID != 0 {
-			img := m.fullImageCache[msg.PhotoID]
-			if img == nil {
-				img = m.imageCache[msg.PhotoID]
+			img, ok := m.fullImageCache.Get(msg.PhotoID)
+			if !ok {
+				img, _ = m.imageCache.Get(msg.PhotoID)
 			}
 			if img != nil {
 				go openInViewer(img, m.tmpDir)

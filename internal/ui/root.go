@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -60,8 +61,8 @@ type RootModel struct {
 	historyLimit     int
 	verbose          bool
 	cfg              *config.Config
-	imageCache       map[int64]image.Image
-	fullImageCache   map[int64]image.Image
+	imageCache       *imagecache.Cache
+	fullImageCache   *imagecache.Cache
 	// gifFrames caches decoded frames per document id for inline GIF looping.
 	gifFrames      map[int64][]image.Image
 	gifActiveID    int64 // document id currently animating (0 = none)
@@ -103,6 +104,13 @@ type RootModel struct {
 	uploadProgress    map[int]chan uploadProgressMsg
 }
 
+// Image-cache capacities (entry counts). Thumbnails churn fast and are small;
+// full-resolution viewer images are larger, so they get a smaller cap.
+const (
+	thumbCacheCap = 256
+	fullCacheCap  = 32
+)
+
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(80)
@@ -125,8 +133,8 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		st:                st,
 		historyLimit:      historyLimit,
 		verbose:           verbose,
-		imageCache:        make(map[int64]image.Image),
-		fullImageCache:    make(map[int64]image.Image),
+		imageCache:        imagecache.New(thumbCacheCap),
+		fullImageCache:    imagecache.New(fullCacheCap),
 		gifFrames:         make(map[int64][]image.Image),
 		kittyStore:        media.NewKittyStore(),
 		kittyLive:         make(map[int64]bool),
