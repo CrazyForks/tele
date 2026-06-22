@@ -9,6 +9,9 @@ type Store interface {
 	Messages(chatID int64) []Message
 	SetMessages(chatID int64, msgs []Message)
 	AppendMessage(msg Message)
+	// BumpChatLastMessage updates a chat's last-message preview and ordering
+	// without appending to its message slice (e.g. a forward target).
+	BumpChatLastMessage(chatID int64, msg Message)
 	UpdateMessageID(chatID int64, oldID, newID int)
 	UpdateMessageText(chatID int64, msgID int, text string, editDate time.Time)
 	UpdateMessageReactions(chatID int64, msgID int, reactions []Reaction)

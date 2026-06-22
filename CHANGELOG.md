@@ -30,6 +30,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 - Keybinding: `f` now forwards the focused message; staging a file attachment
   moved to `u` (the status-bar hint reads "upload")
+- Overlay hints now use the status-bar hint style everywhere (search, file
+  picker, context menus, reaction picker, video modal): the key is accented in
+  place, `enter` shows as a trailing `↵`, descriptions are dim, and entries are
+  ` · `-separated — consistent with the main status bar instead of the previous
+  per-overlay `key -> label` / literal formats
 - Composer `esc`/`x` behavior unified: `esc` now only unfocuses the composer,
   keeping any active reply, edit, or staged attachment (so you can scroll and
   refocus without losing it). Removing the extra is the explicit job of the
@@ -39,6 +44,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- Forwarding a message now bubbles the target chat to the top of the chat list
+  (with its preview updated), matching how sending in the open chat behaves.
+  Previously a forward (sent from the picker, not the open chat) left the target
+  chat in place until the next dialog refresh (#1)
 - Chat pickers (search `/` and the forward picker) now scroll to keep the
   selected row visible when the cursor moves past the visible window, instead of
   letting the highlight run off-view. Cursor and scroll behavior is now shared by

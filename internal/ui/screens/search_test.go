@@ -196,9 +196,12 @@ func TestSearch_HintInBottomBorder(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24, km)
 	view := m.View()
-	assert.Contains(t, view, "esc -> close")
-	assert.Contains(t, view, "enter -> open")
-	assert.Contains(t, view, "↑/↓ -> move")
+	// status-bar hint style: accented key in place, dim descriptions, " · ".
+	// Keys and descriptions sit in separate styled runs, so assert tokens.
+	assert.Contains(t, view, "↑/↓")
+	assert.Contains(t, view, "move")
+	assert.Contains(t, view, "open")
+	assert.Contains(t, view, "close")
 }
 
 func TestSearch_PasteMsg_UpdatesQuery(t *testing.T) {

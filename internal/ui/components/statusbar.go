@@ -221,24 +221,12 @@ func (sb *StatusBar) hints() string {
 	return ""
 }
 
-// HintBar renders key/desc pairs in the status-bar hint style (accented key,
-// " · "-separated) so overlays show hints consistently with the status bar. It
-// uses the NORMAL-mode accent.
-func HintBar(pairs [][2]string) string {
-	a := lipgloss.NewStyle().Background(barBg).Foreground(lipgloss.Color("39"))
-	parts := make([]string, 0, len(pairs))
-	for _, p := range pairs {
-		parts = append(parts, hintKey(p[0], p[1], a))
-	}
-	return joinHints(parts...)
-}
-
 func hintKey(key, desc string, accent lipgloss.Style) string {
 	if key == "" {
 		return ""
 	}
 	text, spans := hintLayout(key, desc)
-	return applyAccent(text, spans, accent)
+	return applyAccent(text, spans, barStyle, accent)
 }
 
 func hintNav(downKey, upKey, desc string, accent lipgloss.Style) string {
@@ -246,13 +234,13 @@ func hintNav(downKey, upKey, desc string, accent lipgloss.Style) string {
 	if text == "" {
 		return ""
 	}
-	return applyAccent(text, spans, accent)
+	return applyAccent(text, spans, barStyle, accent)
 }
 
 // hintLiteral renders a non-key keyword (e.g. the picker's "type" filter hint)
 // as an accented indicator followed by the plain description.
 func hintLiteral(keyword, desc string, accent lipgloss.Style) string {
-	return applyAccent(keyword+" "+desc, []span{{0, utf8.RuneCountInString(keyword)}}, accent)
+	return applyAccent(keyword+" "+desc, []span{{0, utf8.RuneCountInString(keyword)}}, barStyle, accent)
 }
 
 func joinHints(parts ...string) string {
@@ -332,25 +320,24 @@ func navLayout(downKey, upKey, desc string) (string, []span) {
 }
 
 // applyAccent renders each accent span of text in the accent style and every
-// other run in the base bar style. Every run sets its own background so the bar
-// background survives the reset sequences emitted between runs. Spans must be
-// sorted and non-overlapping.
-func applyAccent(text string, spans []span, accent lipgloss.Style) string {
+// other run in the base style. Each run sets its own colors so they survive the
+// reset sequences emitted between runs. Spans must be sorted and non-overlapping.
+func applyAccent(text string, spans []span, base, accent lipgloss.Style) string {
 	if len(spans) == 0 {
-		return barStyle.Render(text)
+		return base.Render(text)
 	}
 	rs := []rune(text)
 	var b strings.Builder
 	i := 0
 	for _, sp := range spans {
 		if sp.lo > i {
-			b.WriteString(barStyle.Render(string(rs[i:sp.lo])))
+			b.WriteString(base.Render(string(rs[i:sp.lo])))
 		}
 		b.WriteString(accent.Render(string(rs[sp.lo:sp.hi])))
 		i = sp.hi
 	}
 	if i < len(rs) {
-		b.WriteString(barStyle.Render(string(rs[i:])))
+		b.WriteString(base.Render(string(rs[i:])))
 	}
 	return b.String()
 }

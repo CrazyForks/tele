@@ -41,6 +41,9 @@ type forwardDoneMsg struct {
 	toTitle    string
 	restricted bool
 	failed     bool
+	// On success, bump the target chat in the list with this preview message.
+	bumpChatID int64
+	lastMsg    store.Message
 }
 
 func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd) {
@@ -429,6 +432,17 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 	if target, ok := m.st.GetChat(msg.ToPeer.ID); ok {
 		toTitle = target.Title
 	}
+	// Build the optimistic last-message preview for the target chat from the
+	// forwarded source message, so the target can bubble up the list on success
+	// (the real message arrives later via the update stream / on next open).
+	preview := store.Message{ChatID: msg.ToPeer.ID, IsOut: true, Date: time.Now()}
+	for _, sm := range m.st.Messages(m.currentChatID) {
+		if sm.ID == msg.MsgID {
+			preview.Text = sm.Text
+			preview.Forward = sm.Forward
+			break
+		}
+	}
 	ctx := m.ctx
 	client := m.tgClient
 	from := chat.Peer
@@ -444,7 +458,7 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 		err := client.ForwardMessages(ctx, from, to, ids)
 		switch {
 		case err == nil:
-			return forwardDoneMsg{toTitle: toTitle}
+			return forwardDoneMsg{toTitle: toTitle, bumpChatID: to.ID, lastMsg: preview}
 		case errors.Is(err, internaltg.ErrForwardRestricted):
 			return forwardDoneMsg{toTitle: toTitle, restricted: true}
 		default:
@@ -465,6 +479,10 @@ func (m RootModel) handleForwardDone(msg forwardDoneMsg) (RootModel, tea.Cmd) {
 			return StatusErrMsg{Text: "forward failed", Sev: components.SeverityWarning}
 		}
 	default:
+		if msg.bumpChatID != 0 && m.st != nil {
+			m.st.BumpChatLastMessage(msg.bumpChatID, msg.lastMsg)
+			m.chatList.SetChats(m.filteredChats())
+		}
 		m.statusBar.SetStatus("Forwarded to " + msg.toTitle)
 		return m, nil
 	}

@@ -1294,6 +1294,27 @@ func TestRoot_ForwardWithoutComment_DoesNotSend(t *testing.T) {
 	assert.Equal(t, []int{5}, mock.lastForwardIDs)
 }
 
+func TestRoot_Forward_BumpsTargetChatToTop(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock) // chat 1 is open/current
+	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
+	// Source message lives in the open chat; chat 1 has an older last message.
+	st.AppendMessage(store.Message{ID: 7, ChatID: 1, Text: "src", Date: time.Now().Add(-time.Hour)})
+
+	target := store.Peer{ID: 2, Type: store.PeerUser}
+	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 7})
+	require.NotNil(t, cmd)
+	done := cmd()           // run the RPC cmd -> forwardDoneMsg
+	m2, _ := m.Update(done) // handleForwardDone bumps the target chat
+	_ = m2.(ui.RootModel)
+
+	got, ok := st.GetChat(2)
+	require.True(t, ok)
+	require.NotNil(t, got.LastMessage, "target chat should have a last message after forward")
+	assert.True(t, got.LastMessage.IsOut)
+	assert.Equal(t, int64(2), st.Chats()[0].ID, "forward target bubbles to the top of the list")
+}
+
 func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {
 	mock := &mockTGClient{forwardErr: internaltg.ErrForwardRestricted}
 	m, _ := newRootWithOpenChat(t, mock)

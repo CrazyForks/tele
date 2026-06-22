@@ -280,12 +280,12 @@ func (cm *ContextMenu) View() string {
 		rows[i] = "  " + label
 	}
 
-	// build bottom nav hint
+	// build bottom nav hint (status-bar style)
 	down := cm.keyMap.KeyFor(ctx, keys.ActionDown)
 	up := cm.keyMap.KeyFor(ctx, keys.ActionUp)
 	confirm := cm.keyMap.KeyFor(ctx, keys.ActionConfirm)
 	cancel := cm.keyMap.KeyFor(ctx, keys.ActionCancel)
-	hint := strings.Join([]string{down + "/" + up, confirm, cancel}, " | ")
+	hint := OverlayHint([][2]string{{down + "/" + up, "move"}, {confirm, "select"}, {cancel, "close"}}, OverlayMenuBg)
 
 	// compute inner width: max of content width+padding and hint minimum
 	innerW := 0

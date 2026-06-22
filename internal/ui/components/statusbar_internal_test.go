@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHintBar_JoinsPairs(t *testing.T) {
-	out := HintBar([][2]string{{"space", "pause"}, {"q", "close"}})
+func TestOverlayHint_JoinsPairs(t *testing.T) {
+	out := OverlayHint([][2]string{{"space", "pause"}, {"q", "close"}}, nil)
 	if !strings.Contains(out, "pause") || !strings.Contains(out, "close") {
-		t.Fatalf("hint bar missing entries: %q", out)
+		t.Fatalf("overlay hint missing entries: %q", out)
 	}
 }
 
@@ -100,22 +100,22 @@ func TestNavLayout_EmptyPair_Empty(t *testing.T) {
 
 func TestApplyAccent_WrapsOnlySpans(t *testing.T) {
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	out := applyAccent("quit", []span{{0, 1}}, accent)
+	out := applyAccent("quit", []span{{0, 1}}, barStyle, accent)
 	// The rune "q" is styled, "uit" is left as-is.
 	assert.Contains(t, out, "uit")
 	assert.NotEqual(t, "quit", out) // styling was applied
 }
 
-func TestApplyAccent_NoSpans_KeepsBarBackground(t *testing.T) {
+func TestApplyAccent_NoSpans_UsesBaseStyle(t *testing.T) {
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	// With no accent, the whole text must still carry the bar background.
-	assert.Equal(t, barStyle.Render("plain"), applyAccent("plain", nil, accent))
+	// With no accent, the whole text is rendered with the base style.
+	assert.Equal(t, barStyle.Render("plain"), applyAccent("plain", nil, barStyle, accent))
 }
 
-func TestApplyAccent_NonAccentRunKeepsBarBackground(t *testing.T) {
+func TestApplyAccent_NonAccentRunUsesBaseStyle(t *testing.T) {
 	accent := lipgloss.NewStyle().Background(barBg).Foreground(lipgloss.Color("39"))
-	out := applyAccent("quit", []span{{0, 1}}, accent)
-	// The non-accent remainder must be styled with the bar background, not
+	out := applyAccent("quit", []span{{0, 1}}, barStyle, accent)
+	// The non-accent remainder must be styled with the base (bar) style, not
 	// left plain (which would lose the background after the accent's reset).
 	assert.Contains(t, out, barStyle.Render("uit"))
 }

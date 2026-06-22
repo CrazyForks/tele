@@ -7,13 +7,11 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-var hintStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-
 // RenderBox renders a bordered box with an optional top title, top suffix (right of title),
 // and bottom hint. w and h are outer dimensions (including 1-char border on each side).
 // topSuffix is a pre-styled string placed after the title in the top border, separated
 // by one border character and spaces on each side. Pass "" to omit.
-// bottomHint is rendered in a dim color.
+// bottomHint is rendered verbatim (callers pre-style it, e.g. via OverlayHint).
 // borderFg sets the border foreground color; nil means no color.
 func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Border, borderFg color.Color, w, h int, scrollbar ...*Scrollbar) string {
 	innerW := w - 2
@@ -64,7 +62,7 @@ func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Borde
 		hintW := lipgloss.Width(hintStr)
 		fillW := innerW - hintW
 		if fillW >= 2 {
-			bot = cb(b.BottomLeft+b.Bottom) + hintStyle.Render(hintStr) + cb(strings.Repeat(b.Bottom, fillW-1)+b.BottomRight)
+			bot = cb(b.BottomLeft+b.Bottom) + hintStr + cb(strings.Repeat(b.Bottom, fillW-1)+b.BottomRight)
 		} else {
 			bot = cb(b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight)
 		}

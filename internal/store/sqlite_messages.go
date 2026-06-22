@@ -50,6 +50,25 @@ func (s *SQLiteStore) capMessagesLocked(chatID int64) {
 	s.messages[chatID] = msgs[drop:]
 }
 
+// BumpChatLastMessage updates a chat's last-message preview and moves it up in
+// the list, WITHOUT appending to the chat's message slice. It optimistically
+// surfaces a chat that just received an outgoing message sent from elsewhere
+// (e.g. a forward target), whose full message arrives later via the update
+// stream (or on next open). No-op if the chat is unknown.
+func (s *SQLiteStore) BumpChatLastMessage(chatID int64, msg Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	chat, ok := s.chats[chatID]
+	if !ok {
+		return
+	}
+	m := msg
+	chat.LastMessage = &m
+	s.chats[chatID] = chat
+	s.orderDirty = true // newer last-message moves the chat in the list
+	s.markDirtyLocked(chatID)
+}
+
 func (s *SQLiteStore) AppendMessage(msg Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

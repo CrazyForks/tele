@@ -126,8 +126,8 @@ func (p *ReactionPicker) View() string {
 		rows[r] = pickerBgStyle.Render(" ") + strings.Join(cells, pickerBgStyle.Render(""))
 	}
 
-	hint := " hjkl/↑↓←→ · enter · esc "
-	hintW := lipgloss.Width(hint)
+	hint := OverlayHint([][2]string{{"hjkl", "move"}, {"enter", "react"}, {"esc", "close"}}, OverlayMenuBg)
+	hintW := lipgloss.Width(" " + hint + " ")
 	if innerW < hintW {
 		innerW = hintW
 	}

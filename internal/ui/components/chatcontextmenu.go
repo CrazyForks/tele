@@ -222,7 +222,7 @@ func (cm *ChatContextMenu) View() string {
 	up := cm.keyMap.KeyFor(ctx, keys.ActionUp)
 	confirm := cm.keyMap.KeyFor(ctx, keys.ActionConfirm)
 	cancel := cm.keyMap.KeyFor(ctx, keys.ActionCancel)
-	hint := strings.Join([]string{down + "/" + up, confirm, cancel}, " | ")
+	hint := OverlayHint([][2]string{{down + "/" + up, "move"}, {confirm, "select"}, {cancel, "close"}}, OverlayMenuBg)
 
 	innerW := 0
 	for _, r := range rows {

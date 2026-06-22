@@ -71,36 +71,21 @@ func (m *SearchModel) hint() string {
 	up := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionUp)
 
 	if m.forwardMsgID != 0 && m.phase == forwardComment {
-		parts := []string{}
-		if confirm != "" {
-			parts = append(parts, confirm+" -> send")
-		}
-		if cancel != "" {
-			parts = append(parts, cancel+" -> back")
-		}
-		return strings.Join(parts, " | ")
+		return components.OverlayHint([][2]string{{confirm, "send"}, {cancel, "back"}}, nil)
 	}
 
-	downSym := arrowSym(down)
-	upSym := arrowSym(up)
-	parts := []string{}
-	if downSym != "" || upSym != "" {
-		parts = append(parts, upSym+"/"+downSym+" -> move")
-	}
-	if confirm != "" {
-		verb := "open"
-		if m.forwardMsgID != 0 {
-			verb = "forward"
-		}
-		parts = append(parts, confirm+" -> "+verb)
-	}
+	navKey := arrowSym(up) + "/" + arrowSym(down)
+	pairs := [][2]string{{navKey, "move"}}
+	verb := "open"
 	if m.forwardMsgID != 0 {
-		parts = append(parts, "tab -> comment")
+		verb = "forward"
 	}
-	if cancel != "" {
-		parts = append(parts, cancel+" -> close")
+	pairs = append(pairs, [2]string{confirm, verb})
+	if m.forwardMsgID != 0 {
+		pairs = append(pairs, [2]string{"tab", "comment"})
 	}
-	return strings.Join(parts, " | ")
+	pairs = append(pairs, [2]string{cancel, "close"})
+	return components.OverlayHint(pairs, nil)
 }
 
 func arrowSym(key string) string {

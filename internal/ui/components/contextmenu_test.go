@@ -75,8 +75,9 @@ func TestNewContextMenu_ShowsKeyBindings(t *testing.T) {
 func TestNewContextMenu_ShowsNavHintInBottomBorder(t *testing.T) {
 	cm := components.NewContextMenu(1, false, 0, 0, false, false, false, defaultKM())
 	view := cm.View()
+	// status-bar hint style: "j/k move · select ↵ · esc close"
 	assert.Contains(t, view, "j/k")
-	assert.Contains(t, view, "enter")
+	assert.Contains(t, view, "select")
 	assert.Contains(t, view, "esc")
 }
 

@@ -305,7 +305,7 @@ func videoFooterHints(playing bool) string {
 	if playing {
 		space = "pause"
 	}
-	return components.HintBar([][2]string{{"space", space}, {"o", "external"}, {"esc", "close"}})
+	return components.OverlayHint([][2]string{{"space", space}, {"o", "external"}, {"esc", "close"}}, nil)
 }
 
 // videoProgressRow renders a full-width filled bar for posFrames/totalFrames.

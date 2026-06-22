@@ -229,7 +229,9 @@ func (m *FilePickerModel) View() string {
 		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Width(inner).Render("empty"))
 	}
 
-	hint := " type: filter · enter · esc · backspace: up "
+	hint := components.OverlayHint([][2]string{
+		{"type", "filter"}, {"enter", "open"}, {"esc", "close"}, {"backspace", "up"},
+	}, nil)
 	content := strings.Join(lines, "\n")
 	h := len(lines) + 2
 	title := truncatePath(m.dir, inner)
