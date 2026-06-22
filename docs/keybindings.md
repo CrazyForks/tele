@@ -35,17 +35,34 @@
 | `t`       | React to message               |
 | `e`       | Edit own message               |
 | `d`       | Delete own message             |
+| `f`       | Forward message to another chat|
+| `u`       | Attach a file to send          |
+| `x`       | Cancel staged upload / clear reply or edit |
+| `s`       | Download the selected file     |
 | `g`       | Jump to original (for replies) |
-| `o`       | Open photo/video in external app |
+| `o`       | Open / view media — photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
+| `O`       | Open the selected video in the external player |
 | `p`       | Play voice message (in-app)    |
 | `Space`   | Context menu                   |
 
 ## Compose (insert mode)
 
-| Key     | Action              |
-| ------- | ------------------- |
-| `Enter` | Send message        |
-| `Esc`   | Back to normal mode |
+| Key      | Action                                            |
+| -------- | ------------------------------------------------- |
+| `Enter`  | Send message                                      |
+| `Ctrl+T` | Toggle send-as type for a staged attachment       |
+| `Esc`    | Unfocus the composer (keeps reply / edit / attachment) |
+
+## Chat menu (on a chat-list row, `Space`)
+
+| Key     | Action                  |
+| ------- | ----------------------- |
+| `r`     | Mark read               |
+| `u`     | Mark unread             |
+| `m`     | Mute / unmute           |
+| `f`     | Add to folder           |
+| `a`     | Archive / unarchive     |
+| `Esc`   | Close menu              |
 
 ## Configurable actions
 
@@ -87,10 +104,16 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `normal`            | Leave insert mode / close the chat       |
 | `search`            | Open chat search                         |
 | `open_context_menu` | Open the message context menu            |
-| `open_in_viewer`    | Open the selected photo/video in an external app |
+| `open_in_viewer`    | Open / view the selected media — photo in the OS viewer, video inline or in the system player |
+| `open_external`     | Open the selected video in the external player |
 | `play_voice`        | Play the selected voice message in-app    |
 | `reply`             | Reply to the selected message            |
+| `react`             | React to the selected message            |
 | `edit`              | Edit the selected (own) message          |
+| `forward`           | Forward the selected message to another chat |
+| `attach`            | Stage a file from disk to send           |
+| `cancel_upload`     | Cancel a staged upload / clear an active reply or edit |
+| `download_file`     | Download the selected file to the Downloads folder |
 
 ### Context menu — contexts `context_menu`, `delete_submenu`
 
@@ -104,6 +127,35 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `delete_revoke`    | Delete for everyone                   |
 | `delete_me`        | Delete only for me                    |
 | `jump_to_original` | Jump to the original (replied-to) message |
+
+### Composer — context `composer`
+
+| Action           | Description                                  |
+| ---------------- | -------------------------------------------- |
+| `confirm`        | Send the message                             |
+| `normal`         | Unfocus the composer (keeps reply/edit/attachment) |
+| `toggle_send_as` | Toggle the send-as type for a staged attachment |
+
+### Chat-list menu — contexts `chat_menu`, `folder_submenu`
+
+| Action          | Description                          |
+| --------------- | ------------------------------------ |
+| `mark_read`     | Mark the selected chat as read       |
+| `mark_unread`   | Mark the selected chat as unread     |
+| `mute`          | Mute the selected chat               |
+| `unmute`        | Unmute the selected chat             |
+| `add_to_folder` | Add the chat to a folder             |
+| `archive`       | Archive the selected chat            |
+| `unarchive`     | Unarchive the selected chat          |
+
+### File picker — context `filepicker`
+
+| Action    | Description                       |
+| --------- | --------------------------------- |
+| `up`      | Move selection up                 |
+| `down`    | Move selection down               |
+| `confirm` | Pick the highlighted file         |
+| `cancel`  | Dismiss the file picker           |
 
 > Key tokens use the terminal names: letters/digits as-is (`r`, `G`, `2`),
 > modifiers like `ctrl+d`, and named keys `enter`, `esc`, `space`, `up`, `down`,
