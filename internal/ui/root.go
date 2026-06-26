@@ -107,6 +107,13 @@ type RootModel struct {
 	lastPickerDir       string
 	uploadCancels       map[int]context.CancelFunc
 	uploadProgress      map[int]chan uploadProgressMsg
+
+	// logoTicking / spinnerTicking track whether each animation loop is currently
+	// scheduled. The loops self-stop when nothing is visible/active and are
+	// re-armed by ensureAnimationTicks on the next event, so an idle app issues no
+	// periodic repaints (issue #147).
+	logoTicking    bool
+	spinnerTicking bool
 }
 
 // Image-cache capacities (entry counts). Thumbnails churn fast and are small;
@@ -223,7 +230,10 @@ func (m RootModel) TmpDir() string {
 func (m RootModel) Init() tea.Cmd {
 	m.statusBar.SetVerbose(m.verbose)
 	m.statusBar.SetActivePane("chatlist")
-	return tea.Batch(logoTickCmd(), requestBGColorCmd())
+	// The logo loop is started by ensureAnimationTicks on the first event (the
+	// login splash is visible at startup), so Init only kicks off the bg-color
+	// probe here.
+	return requestBGColorCmd()
 }
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -235,6 +245,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// images on heavy chats).
 	if rcmd := (&rm).reconcileKittyCmd(); rcmd != nil {
 		cmd = tea.Batch(cmd, rcmd)
+	}
+	// Re-arm the logo/spinner loops if this event made their content
+	// visible/active while the loop was asleep (issue #147).
+	if acmd := (&rm).ensureAnimationTicks(); acmd != nil {
+		cmd = tea.Batch(cmd, acmd)
 	}
 	return rm, cmd
 }

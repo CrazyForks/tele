@@ -89,6 +89,17 @@ func NewChatModel(width, height int) *ChatModel {
 // SetLoading shows or hides the loading spinner in the chat pane.
 func (m *ChatModel) SetLoading(v bool) { m.loading = v }
 
+// IsLoading reports whether the chat pane is currently showing its loading
+// spinner (drives the spinner tick loop, issue #147).
+func (m *ChatModel) IsLoading() bool { return m.loading }
+
+// ShowingLogo reports whether the chat pane is rendering the idle splash logo:
+// no chat open and no buffered messages, matching View's logo branch. Drives the
+// logo tick loop (issue #147).
+func (m *ChatModel) ShowingLogo() bool {
+	return !m.loading && m.loadErr == "" && m.chat == nil && m.msgList.Count() == 0
+}
+
 // SetLoadError shows an inline error in the chat pane (e.g. when history fails
 // to load). Empty string clears it.
 func (m *ChatModel) SetLoadError(s string) { m.loadErr = s }

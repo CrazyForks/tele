@@ -45,6 +45,10 @@ func TestRetransmitTick_StaleGenerationIsIgnored(t *testing.T) {
 	m.screen = ScreenMain
 	m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
 	m.chat.SetSize(80, 24)
+	// Settle the animation loops (chats loaded, a chat open) so the only command
+	// under test is the retransmit, not an animation re-arm (issue #147).
+	m.chatList.SetChats([]store.Chat{{ID: 1}})
+	m.chat.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	m.retransmitGen = 2
 
 	_, cmd := m.Update(retransmitTickMsg{gen: 1})

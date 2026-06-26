@@ -90,6 +90,11 @@ func NewChatListModel() *ChatListModel {
 // TickSpinner advances the spinner frame. Called by root on SpinnerTickMsg.
 func (m *ChatListModel) TickSpinner() { m.spinner.Tick() }
 
+// IsLoadingChats reports whether the chat list is still showing its
+// "Loading chats..." spinner (no chats received yet), matching View. Drives the
+// spinner tick loop (issue #147).
+func (m *ChatListModel) IsLoadingChats() bool { return len(m.chats) == 0 }
+
 func (m *ChatListModel) SetChats(chats []store.Chat) {
 	var cursorID int64
 	if m.cursor < len(m.chats) {

@@ -91,6 +91,10 @@ func (sb *StatusBar) StartDownload(label string) int {
 	return sb.dlSerial
 }
 
+// DownloadActive reports whether a download indicator (animated spinner) is
+// currently shown. Drives the spinner tick loop (issue #147).
+func (sb *StatusBar) DownloadActive() bool { return sb.dlText != "" }
+
 // ClearDownload clears the indicator only when serial matches the current one,
 // so a stale or superseded completion cannot wipe a newer download's indicator.
 func (sb *StatusBar) ClearDownload(serial int) {

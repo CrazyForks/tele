@@ -826,6 +826,10 @@ func TestRoot_TransitionToMain(t *testing.T) {
 func TestRoot_CtrlC_Quits(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
+	// Settle the animation loops so the returned command is the quit alone, not
+	// batched with an animation re-arm (issue #147).
+	m.ChatList().SetChats([]store.Chat{{ID: 1}})
+	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	assert.NotNil(t, cmd)
 	msg := cmd()
@@ -1715,6 +1719,9 @@ func TestRoot_EventUserPresence_NoopWhenOnlineUnchanged(t *testing.T) {
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
+	// Open a chat so the idle logo is hidden; otherwise its tick loop re-arms and
+	// the no-op event would appear to return a command (issue #147).
+	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 
 	newM, cmd := m.Update(store.Event{
 		Kind:   store.EventUserPresence,
@@ -1754,6 +1761,9 @@ func TestRoot_EventMuteUpdate_NoopWhenUnchanged(t *testing.T) {
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
+	// Open a chat so the idle logo is hidden; otherwise its tick loop re-arms and
+	// the no-op event would appear to return a command (issue #147).
+	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 
 	newM, cmd := m.Update(store.Event{
 		Kind:   store.EventMuteUpdate,

@@ -84,7 +84,9 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		if m.folderBar != nil {
 			m.syncFolderBar()
 		}
-		return m, spinnerTickCmd()
+		// The spinner loop is (re)started by ensureAnimationTicks when an actual
+		// spinner is active (e.g. chats still loading); no unconditional start.
+		return m, nil
 
 	case screens.CloseSearchMsg:
 		m.searchModel = nil
@@ -152,7 +154,11 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 	case components.LogoTickMsg:
 		m.logo.Tick()
 		m.chat.TickLogo()
-		return m, logoTickCmd()
+		if m.logoShouldTick() {
+			return m, logoTickCmd()
+		}
+		m.logoTicking = false
+		return m, nil
 
 	case components.SpinnerTickMsg:
 		m.chatList.TickSpinner()
@@ -160,9 +166,10 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.statusBar.TickDownloadSpinner()
 		m.updateGifLoadingSpinner()
 		m.updateVideoSpinner()
-		if m.screen == ScreenMain {
+		if m.spinnerShouldTick() {
 			return m, spinnerTickCmd()
 		}
+		m.spinnerTicking = false
 		return m, nil
 
 	case components.TypingDotsTickMsg:
