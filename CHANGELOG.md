@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-30
+
 ### Added
 
 - Forward messages: select a focused message and forward it to another chat via
