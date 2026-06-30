@@ -4,15 +4,18 @@ import (
 	"regexp"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
 )
 
-// stripANSI removes ANSI escape sequences so we can assert plain text content.
+// stripANSI removes ANSI escape sequences (SGR and OSC 8 hyperlinks) so we can
+// assert plain text content.
 func stripANSI(s string) string {
-	re := regexp.MustCompile(`\x1b\[[0-9;]*[mKJH]`)
-	return re.ReplaceAllString(s, "")
+	sgr := regexp.MustCompile(`\x1b\[[0-9;]*[mKJH]`)
+	osc8 := regexp.MustCompile(`\x1b\]8;[^\x1b]*\x1b\\`)
+	return sgr.ReplaceAllString(osc8.ReplaceAllString(s, ""), "")
 }
 
 func TestRenderEntities_NoEntities_ReturnsInput(t *testing.T) {
@@ -78,4 +81,75 @@ func TestRenderEntities_OutOfBounds_NoCrashTextPreserved(t *testing.T) {
 	entities := []store.MessageEntity{{Type: "bold", Offset: 100, Length: 5}}
 	result := components.RenderEntities("short", entities)
 	assert.Contains(t, stripANSI(result), "short")
+}
+
+func TestRenderEntities_Strike(t *testing.T) {
+	entities := []store.MessageEntity{{Type: "strike", Offset: 0, Length: 3}}
+	result := components.RenderEntities("abc def", entities)
+	assert.Contains(t, stripANSI(result), "abc def")
+	assert.NotEqual(t, "abc def", result) // a style escape was emitted
+}
+
+func TestRenderEntities_Underline(t *testing.T) {
+	entities := []store.MessageEntity{{Type: "underline", Offset: 0, Length: 3}}
+	result := components.RenderEntities("abc def", entities)
+	assert.Contains(t, stripANSI(result), "abc def")
+	assert.NotEqual(t, "abc def", result)
+}
+
+func TestRenderEntities_LinkGroupColored(t *testing.T) {
+	for _, typ := range []string{"url", "email", "phone", "bank_card"} {
+		entities := []store.MessageEntity{{Type: typ, Offset: 0, Length: 3}}
+		result := components.RenderEntities("abc def", entities)
+		assert.Contains(t, stripANSI(result), "abc def", typ)
+		assert.NotEqual(t, "abc def", result, typ)
+	}
+}
+
+func TestRenderEntities_RefGroupColored(t *testing.T) {
+	for _, typ := range []string{"mention", "hashtag", "cashtag", "bot_command"} {
+		entities := []store.MessageEntity{{Type: typ, Offset: 0, Length: 3}}
+		result := components.RenderEntities("abc def", entities)
+		assert.Contains(t, stripANSI(result), "abc def", typ)
+		assert.NotEqual(t, "abc def", result, typ)
+	}
+}
+
+// Overlapping/nested entities must both survive: the visible text is intact and
+// the render differs from applying either entity alone.
+func TestRenderEntities_OverlapNested(t *testing.T) {
+	// "hello world": bold over [0,11), italic over [6,11) (nested)
+	entities := []store.MessageEntity{
+		{Type: "bold", Offset: 0, Length: 11},
+		{Type: "italic", Offset: 6, Length: 5},
+	}
+	result := components.RenderEntities("hello world", entities)
+	assert.Contains(t, stripANSI(result), "hello world")
+
+	boldOnly := components.RenderEntities("hello world", entities[:1])
+	assert.NotEqual(t, boldOnly, result) // italic also took effect inside the bold span
+}
+
+func TestRenderEntities_TextURL_StyledNoCrash(t *testing.T) {
+	entities := []store.MessageEntity{{Type: "text_url", Offset: 0, Length: 5, URL: "https://example.com"}}
+	result := components.RenderEntities("click here", entities)
+	assert.Contains(t, stripANSI(result), "click here")
+}
+
+func TestRenderEntities_TextURL_EmitsOSC8WithURL(t *testing.T) {
+	entities := []store.MessageEntity{{Type: "text_url", Offset: 0, Length: 5, URL: "https://example.com/x"}}
+	result := components.RenderEntities("click here", entities)
+	// OSC 8 open sequence with the target URL, and a closing sequence.
+	assert.Contains(t, result, "\x1b]8;id=1;https://example.com/x\x1b\\")
+	assert.Contains(t, result, "\x1b]8;;\x1b\\")
+}
+
+// Validation gate: OSC 8 escapes must be zero-width so word-wrap and the
+// height cache (wrappedLineCount, which calls RenderEntities) stay correct.
+func TestRenderEntities_OSC8_ZeroWidth(t *testing.T) {
+	plain := "click here"
+	entities := []store.MessageEntity{{Type: "text_url", Offset: 0, Length: 5, URL: "https://example.com/very/long/path"}}
+	result := components.RenderEntities(plain, entities)
+	assert.Equal(t, lipgloss.Width(plain), lipgloss.Width(result),
+		"OSC 8 + SGR escapes must not add display width")
 }

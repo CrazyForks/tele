@@ -131,10 +131,39 @@ func TestConvertEntities_AllSupportedTypes(t *testing.T) {
 	assert.Equal(t, store.MessageEntity{Type: "pre", Offset: 15, Length: 10}, got[3])
 }
 
+func TestConvertEntities_ExtendedTypes(t *testing.T) {
+	entities := []tg.MessageEntityClass{
+		&tg.MessageEntityStrike{Offset: 0, Length: 2},
+		&tg.MessageEntityUnderline{Offset: 2, Length: 2},
+		&tg.MessageEntityTextURL{Offset: 4, Length: 3, URL: "https://example.com"},
+		&tg.MessageEntityURL{Offset: 7, Length: 4},
+		&tg.MessageEntityEmail{Offset: 11, Length: 5},
+		&tg.MessageEntityPhone{Offset: 16, Length: 6},
+		&tg.MessageEntityBankCard{Offset: 22, Length: 7},
+		&tg.MessageEntityMention{Offset: 29, Length: 3},
+		&tg.MessageEntityHashtag{Offset: 32, Length: 4},
+		&tg.MessageEntityCashtag{Offset: 36, Length: 4},
+		&tg.MessageEntityBotCommand{Offset: 40, Length: 5},
+	}
+	got := convertEntities(entities)
+	require.Len(t, got, 11)
+	assert.Equal(t, store.MessageEntity{Type: "strike", Offset: 0, Length: 2}, got[0])
+	assert.Equal(t, store.MessageEntity{Type: "underline", Offset: 2, Length: 2}, got[1])
+	assert.Equal(t, store.MessageEntity{Type: "text_url", Offset: 4, Length: 3, URL: "https://example.com"}, got[2])
+	assert.Equal(t, store.MessageEntity{Type: "url", Offset: 7, Length: 4}, got[3])
+	assert.Equal(t, store.MessageEntity{Type: "email", Offset: 11, Length: 5}, got[4])
+	assert.Equal(t, store.MessageEntity{Type: "phone", Offset: 16, Length: 6}, got[5])
+	assert.Equal(t, store.MessageEntity{Type: "bank_card", Offset: 22, Length: 7}, got[6])
+	assert.Equal(t, store.MessageEntity{Type: "mention", Offset: 29, Length: 3}, got[7])
+	assert.Equal(t, store.MessageEntity{Type: "hashtag", Offset: 32, Length: 4}, got[8])
+	assert.Equal(t, store.MessageEntity{Type: "cashtag", Offset: 36, Length: 4}, got[9])
+	assert.Equal(t, store.MessageEntity{Type: "bot_command", Offset: 40, Length: 5}, got[10])
+}
+
 func TestConvertEntities_SkipsUnknownTypes(t *testing.T) {
 	entities := []tg.MessageEntityClass{
 		&tg.MessageEntityBold{Offset: 0, Length: 3},
-		&tg.MessageEntityURL{Offset: 4, Length: 10},
+		&tg.MessageEntitySpoiler{Offset: 4, Length: 10}, // out of scope, must be skipped
 	}
 	got := convertEntities(entities)
 	require.Len(t, got, 1)

@@ -352,6 +352,28 @@ func convertEntities(entities []tg.MessageEntityClass) []store.MessageEntity {
 			out = append(out, store.MessageEntity{Type: "code", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityPre:
 			out = append(out, store.MessageEntity{Type: "pre", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityStrike:
+			out = append(out, store.MessageEntity{Type: "strike", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityUnderline:
+			out = append(out, store.MessageEntity{Type: "underline", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityTextURL:
+			out = append(out, store.MessageEntity{Type: "text_url", Offset: v.Offset, Length: v.Length, URL: v.URL})
+		case *tg.MessageEntityURL:
+			out = append(out, store.MessageEntity{Type: "url", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityEmail:
+			out = append(out, store.MessageEntity{Type: "email", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityPhone:
+			out = append(out, store.MessageEntity{Type: "phone", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityBankCard:
+			out = append(out, store.MessageEntity{Type: "bank_card", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityMention:
+			out = append(out, store.MessageEntity{Type: "mention", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityHashtag:
+			out = append(out, store.MessageEntity{Type: "hashtag", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityCashtag:
+			out = append(out, store.MessageEntity{Type: "cashtag", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityBotCommand:
+			out = append(out, store.MessageEntity{Type: "bot_command", Offset: v.Offset, Length: v.Length})
 		}
 	}
 	return out

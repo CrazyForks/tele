@@ -1,16 +1,20 @@
 package components
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	lipcompat "charm.land/lipgloss/v2/compat"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
+// Adaptive entity colors, readable on dark and light backgrounds; resolved via
+// compat.HasDarkBackground, which the app updates on terminal background change.
 var (
-	boldStyle   = lipgloss.NewStyle().Bold(true)
-	italicStyle = lipgloss.NewStyle().Italic(true)
-	codeStyle   = lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("252"))
+	linkColor = lipcompat.AdaptiveColor{Light: lipgloss.Color("25"), Dark: lipgloss.Color("45")}  // url/email/phone/bank_card, text_url
+	refColor  = lipcompat.AdaptiveColor{Light: lipgloss.Color("90"), Dark: lipgloss.Color("213")} // mention/hashtag/cashtag/bot_command
 )
 
 // utf16ToRuneIndex converts a UTF-16 code unit offset to a rune index in s.
@@ -32,58 +36,123 @@ func utf16ToRuneIndex(s string, utf16Offset int) int {
 	return runeIdx
 }
 
-// RenderEntities applies lipgloss styles to text according to Telegram MessageEntity offsets.
-// Offsets and lengths are in UTF-16 code units. Entities are applied left-to-right;
-// unknown types are passed through as plain text.
+// isKnownEntity reports whether typ is a rendered inline entity. Unknown types
+// (spoiler, blockquote, custom_emoji, …) pass through as plain text.
+func isKnownEntity(typ string) bool {
+	switch typ {
+	case "bold", "italic", "code", "pre", "underline", "strike",
+		"text_url", "url", "email", "phone", "bank_card",
+		"mention", "hashtag", "cashtag", "bot_command":
+		return true
+	}
+	return false
+}
+
+// applyEntityStyle layers the attributes for typ onto s, so overlapping entities
+// accumulate into one combined style.
+func applyEntityStyle(s lipgloss.Style, typ string) lipgloss.Style {
+	switch typ {
+	case "bold":
+		return s.Bold(true)
+	case "italic":
+		return s.Italic(true)
+	case "code", "pre":
+		return s.Background(lipgloss.Color("236")).Foreground(lipgloss.Color("252"))
+	case "underline":
+		return s.Underline(true)
+	case "strike":
+		return s.Strikethrough(true)
+	case "text_url":
+		return s.Foreground(linkColor).Underline(true)
+	case "url", "email", "phone", "bank_card":
+		return s.Foreground(linkColor)
+	case "mention", "hashtag", "cashtag", "bot_command":
+		return s.Foreground(refColor)
+	}
+	return s
+}
+
+// RenderEntities applies lipgloss styles to text according to Telegram
+// MessageEntity offsets. Offsets and lengths are in UTF-16 code units. The text
+// is swept over rune boundaries: each run accumulates every active entity's
+// style into one combined lipgloss.Style, so overlapping/nested entities compose
+// correctly. text_url runs are additionally wrapped in an OSC 8 hyperlink.
+// Unknown types pass through as plain text.
 func RenderEntities(text string, entities []store.MessageEntity) string {
 	if len(entities) == 0 {
 		return text
 	}
 	runes := []rune(text)
+	n := len(runes)
 
-	type segment struct {
+	type span struct {
 		start, end int
-		style      *lipgloss.Style
+		typ        string
+		url        string
 	}
-	segs := make([]segment, 0, len(entities))
+	spans := make([]span, 0, len(entities))
+	boundarySet := map[int]struct{}{0: {}, n: {}}
 	for _, e := range entities {
-		var s lipgloss.Style
-		switch e.Type {
-		case "bold":
-			s = boldStyle
-		case "italic":
-			s = italicStyle
-		case "code", "pre":
-			s = codeStyle
-		default:
+		if !isKnownEntity(e.Type) {
 			continue
 		}
 		start := utf16ToRuneIndex(text, e.Offset)
 		end := utf16ToRuneIndex(text, e.Offset+e.Length)
-		if start >= len(runes) || start >= end {
+		if start >= n || start >= end {
 			continue
 		}
-		if end > len(runes) {
-			end = len(runes)
+		if end > n {
+			end = n
 		}
-		sCopy := s
-		segs = append(segs, segment{start, end, &sCopy})
+		spans = append(spans, span{start, end, e.Type, e.URL})
+		boundarySet[start] = struct{}{}
+		boundarySet[end] = struct{}{}
 	}
-	if len(segs) == 0 {
+	if len(spans) == 0 {
 		return text
 	}
 
-	var b strings.Builder
-	pos := 0
-	for _, seg := range segs {
-		if pos < seg.start {
-			b.WriteString(string(runes[pos:seg.start]))
-		}
-		b.WriteString(seg.style.Render(string(runes[seg.start:seg.end])))
-		pos = seg.end
+	bounds := make([]int, 0, len(boundarySet))
+	for b := range boundarySet {
+		bounds = append(bounds, b)
 	}
-	if pos < len(runes) {
-		b.WriteString(string(runes[pos:]))
+	sort.Ints(bounds)
+
+	var b strings.Builder
+	for i := 0; i+1 < len(bounds); i++ {
+		lo, hi := bounds[i], bounds[i+1]
+		if lo >= hi {
+			continue
+		}
+		style := lipgloss.NewStyle()
+		styled := false
+		linkURL := ""
+		linkID := 0
+		for idx, s := range spans {
+			if s.start <= lo && hi <= s.end {
+				style = applyEntityStyle(style, s.typ)
+				styled = true
+				if s.typ == "text_url" {
+					linkURL = s.url
+					linkID = idx + 1
+				}
+			}
+		}
+		segment := string(runes[lo:hi])
+		if styled {
+			segment = style.Render(segment)
+		}
+		if linkURL != "" {
+			segment = osc8(linkID, linkURL, segment)
+		}
+		b.WriteString(segment)
 	}
 	return b.String()
+}
+
+// osc8 wraps s in an OSC 8 hyperlink to url. Terminals without OSC 8 support
+// ignore the escapes and show s unchanged. The id keeps a link unified when it
+// spans multiple styled runs.
+func osc8(id int, url, s string) string {
+	return fmt.Sprintf("\x1b]8;id=%d;%s\x1b\\%s\x1b]8;;\x1b\\", id, url, s)
 }

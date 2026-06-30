@@ -29,9 +29,10 @@ type Reaction struct {
 }
 
 type MessageEntity struct {
-	Type   string // "bold", "italic", "code", "pre" — UTF-16 offsets (Telegram encoding)
+	Type   string // "bold", "italic", "code", "pre", "strike", "underline", "text_url", "url", "email", "phone", "bank_card", "mention", "hashtag", "cashtag", "bot_command" — UTF-16 offsets (Telegram encoding)
 	Offset int
 	Length int
+	URL    string // for "text_url": the hidden target URL; empty otherwise
 }
 
 type PhotoRef struct {
