@@ -23,10 +23,11 @@ var (
 	buildAPIID   = "0"
 	buildAPIHash = ""
 	version      = "dev"
+	appName      = "tele" // injected via -ldflags for the beta channel
 )
 
 func main() {
-	cfgPath := flag.String("config", "~/.config/tele/config.yml", "path to config file")
+	cfgPath := flag.String("config", defaultConfigPath(appName), "path to config file")
 	verbose := flag.Bool("e", false, "debug logging")
 	trace := flag.Bool("trace", false, "log sensitive metadata (peer IDs, message lengths) — never use in shared environments")
 	versionFlag := flag.Bool("version", false, "print version and exit")
@@ -65,7 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sd, err := stateDir()
+	sd, err := stateDir(appName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "state dir: %v\n", err)
 		os.Exit(1)
@@ -130,8 +131,15 @@ func expandTilde(path string) string {
 	return path
 }
 
-// stateDir returns ~/.local/state/tele (or $XDG_STATE_HOME/tele) and ensures it exists.
-func stateDir() (string, error) {
+// defaultConfigPath returns the default config file location for the given app
+// name, e.g. ~/.config/tele/config.yml (or ~/.config/tele-beta/config.yml for
+// the beta channel). The tilde is expanded later by expandTilde.
+func defaultConfigPath(app string) string {
+	return filepath.Join("~", ".config", app, "config.yml")
+}
+
+// stateDir returns ~/.local/state/<app> (or $XDG_STATE_HOME/<app>) and ensures it exists.
+func stateDir(app string) (string, error) {
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
 		home, err := os.UserHomeDir()
@@ -140,7 +148,7 @@ func stateDir() (string, error) {
 		}
 		base = filepath.Join(home, ".local", "state")
 	}
-	dir := filepath.Join(base, "tele")
+	dir := filepath.Join(base, app)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}

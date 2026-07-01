@@ -124,6 +124,23 @@ brew tap sorokin-vladimir/tap
 brew install tele
 ```
 
+### macOS / Linux — Homebrew (beta channel)
+
+Want the latest merged changes ahead of the weekly stable release? Install the
+beta package from the same tap. It ships as a separate `tele-beta` binary with
+its own config and state (`~/.config/tele-beta`), so it lives alongside a stable
+install:
+
+```sh
+brew tap sorokin-vladimir/tap
+brew install tele-beta
+brew upgrade tele-beta   # pull newer betas as they are cut
+```
+
+Beta builds come from prerelease tags (`vX.Y.Z-beta.N`) and are published as
+GitHub prereleases, so they never show up as the "latest" release. Run it with
+`tele-beta`.
+
 ### Linux — binary
 
 ```sh
