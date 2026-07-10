@@ -284,6 +284,7 @@ telegram:
 
 ui:
   history_limit: 50 # messages fetched per chat on open
+  notification_preview: true # set false to omit message text from desktop notifications
 
 photos:
   mode: auto # auto | kitty | blocks — inline image renderer

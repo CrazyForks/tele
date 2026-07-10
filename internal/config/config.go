@@ -16,6 +16,9 @@ type UIConfig struct {
 	Theme        string `mapstructure:"theme"`
 	DateFormat   string `mapstructure:"date_format"`
 	HistoryLimit int    `mapstructure:"history_limit"`
+	// NotificationPreview controls whether the message text is included in
+	// desktop notifications. Set false to send only the sender name (#80).
+	NotificationPreview bool `mapstructure:"notification_preview"`
 }
 
 type PhotosConfig struct {

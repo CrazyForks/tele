@@ -6,6 +6,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ui.date_format", "15:04")
 	v.SetDefault("ui.history_limit", 50)
 	v.SetDefault("ui.theme", "default")
+	v.SetDefault("ui.notification_preview", true)
 	v.SetDefault("photos.eager_full_quality", true)
 	v.SetDefault("photos.mode", "auto")
 	v.SetDefault("photos.kitty_placement_cap", 16)

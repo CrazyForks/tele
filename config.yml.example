@@ -7,6 +7,7 @@ ui:
   date_format: "15:04"
   history_limit: 50
   theme: default
+  notification_preview: true  # set false to omit message text from desktop notifications
 
 photos:
   eager_full_quality: true  # download full resolution in background on chat open

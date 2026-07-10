@@ -100,14 +100,20 @@ func notifiable(st store.Store, chatID, currentChatID int64, eventTime, now time
 	return true
 }
 
-func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChatID int64) {
+func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChatID int64, preview bool) {
 	if !shouldNotify(st, evt, currentChatID, time.Now()) {
 		return
 	}
 	switch evt.Kind {
 	case store.EventNewMessage:
 		chat, _ := st.GetChat(evt.Message.ChatID) // shouldNotify guarantees the chat exists.
-		_ = notifier.Notify(chat.Title, truncate(evt.Message.Text, 100))
+		body := truncate(evt.Message.Text, 100)
+		if !preview {
+			// Privacy: some platforms persist notification bodies (macOS
+			// Notification Center, systemd journal), so omit the text (#80).
+			body = "New message"
+		}
+		_ = notifier.Notify(chat.Title, body)
 	case store.EventReactionsUpdate:
 		chat, _ := st.GetChat(evt.ChatID)
 		_ = notifier.Notify(chat.Title, reactionBody(evt.ReactionEmoji))
@@ -267,7 +273,7 @@ func (a *App) Run() error {
 			case evt := <-a.client.Updates():
 				a.log.Debug("incoming update", zap.Int("kind", int(evt.Kind)))
 				prog.Send(evt)
-				maybeNotify(a.notifier, a.st, evt, atomic.LoadInt64(&a.currentChatID))
+				maybeNotify(a.notifier, a.st, evt, atomic.LoadInt64(&a.currentChatID), a.cfg.UI.NotificationPreview)
 			}
 		}
 	}()

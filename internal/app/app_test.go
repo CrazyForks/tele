@@ -26,7 +26,7 @@ func TestMaybeNotify_SendsForOtherChat(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "hello there", Date: time.Now()},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	require.Len(t, n.calls, 1)
 	assert.Equal(t, "Bob", n.calls[0].title)
 	assert.Equal(t, "hello there", n.calls[0].body)
@@ -40,8 +40,22 @@ func TestMaybeNotify_SilentForOpenChat(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 1, Text: "hey"},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
+}
+
+func TestMaybeNotify_PreviewDisabled_HidesText(t *testing.T) {
+	n := &mockNotifier{}
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 2, Title: "Bob"})
+	evt := store.Event{
+		Kind:    store.EventNewMessage,
+		Message: store.Message{ChatID: 2, Text: "secret text", Date: time.Now()},
+	}
+	maybeNotify(n, st, evt, 1, false)
+	require.Len(t, n.calls, 1)
+	assert.Equal(t, "Bob", n.calls[0].title)
+	assert.Equal(t, "New message", n.calls[0].body)
 }
 
 func TestMaybeNotify_TruncatesLongText(t *testing.T) {
@@ -56,7 +70,7 @@ func TestMaybeNotify_TruncatesLongText(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: string(b), Date: time.Now()},
 	}
-	maybeNotify(n, st, evt, 0)
+	maybeNotify(n, st, evt, 0, true)
 	require.Len(t, n.calls, 1)
 	body := n.calls[0].body
 	runes := []rune(body)
@@ -68,7 +82,7 @@ func TestMaybeNotify_IgnoresNonMessageEvents(t *testing.T) {
 	n := &mockNotifier{}
 	st := store.NewMemory()
 	evt := store.Event{Kind: store.EventKind(99)}
-	maybeNotify(n, st, evt, 0)
+	maybeNotify(n, st, evt, 0, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -80,7 +94,7 @@ func TestMaybeNotify_SilentForOutgoingMessage(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "sent from phone", IsOut: true},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -92,7 +106,7 @@ func TestMaybeNotify_SilentForMutedChat(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "hello there"},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -106,7 +120,7 @@ func TestMaybeNotify_SilentForStaleCatchUp(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "missed while idle", Date: time.Now().Add(-time.Minute)},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -118,7 +132,7 @@ func TestMaybeNotify_SendsForFreshMessage(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "live now", Date: time.Now()},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	require.Len(t, n.calls, 1)
 	assert.Equal(t, "Bob", n.calls[0].title)
 }
@@ -135,7 +149,7 @@ func TestMaybeNotify_SendsForFreshReaction_Group(t *testing.T) {
 		ReactionEmoji:   "❤",
 		ReactionDate:    time.Now(),
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	require.Len(t, n.calls, 1)
 	assert.Equal(t, "Bob", n.calls[0].title)
 	assert.Contains(t, n.calls[0].body, "❤")
@@ -155,7 +169,7 @@ func TestMaybeNotify_SendsForFreshReaction_DM(t *testing.T) {
 		ReactionEmoji: "👍",
 		ReactionDate:  time.Now(),
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	require.Len(t, n.calls, 1)
 	assert.Equal(t, "Bob", n.calls[0].title)
 	assert.Contains(t, n.calls[0].body, "👍")
@@ -169,7 +183,7 @@ func TestMaybeNotify_SilentForReactionInOpenChat(t *testing.T) {
 		Kind: store.EventReactionsUpdate, ChatID: 1, ReactionsUnread: true,
 		ReactionEmoji: "❤", ReactionDate: time.Now(),
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -181,7 +195,7 @@ func TestMaybeNotify_SilentForReactionInMutedChat(t *testing.T) {
 		Kind: store.EventReactionsUpdate, ChatID: 2, ReactionsUnread: true,
 		ReactionEmoji: "❤", ReactionDate: time.Now(),
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -194,7 +208,7 @@ func TestMaybeNotify_SilentForStaleReaction(t *testing.T) {
 		Kind: store.EventReactionsUpdate, ChatID: 2, ReactionsUnread: true,
 		ReactionEmoji: "❤", ReactionDate: time.Now().Add(-time.Minute),
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -210,7 +224,7 @@ func TestMaybeNotify_SilentForRealEdit(t *testing.T) {
 			ChatID: 2, ID: 10, Text: "edited text", EditDate: &edited,
 		},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
 
@@ -222,6 +236,6 @@ func TestMaybeNotify_SilentForArchivedChat(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "hello there"},
 	}
-	maybeNotify(n, st, evt, 1)
+	maybeNotify(n, st, evt, 1, true)
 	assert.Empty(t, n.calls)
 }
