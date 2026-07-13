@@ -33,13 +33,121 @@ archives:
     name_template: "tele_{{ .Os }}_{{ .Arch }}"
     files:
       - config.yml.example
+      - LICENSE
   - id: binaries
     # Raw downloadable binary per OS/arch; Windows gets tele-windows-amd64.exe.
     formats: [binary]
     name_template: "tele-{{ .Os }}-{{ .Arch }}"
 
+nfpms:
+  - id: packages
+    package_name: tele
+    vendor: sorokin-vladimir
+    homepage: https://github.com/sorokin-vladimir/tele
+    maintainer: "Vladimir Sorokin <v.sorokin@hey.com>"
+    description: TUI Telegram client for the terminal.
+    license: MIT
+    formats: [deb, rpm, apk]
+    file_name_template: "{{ .ConventionalFileName }}"
+    contents:
+      - src: ./config.yml.example
+        dst: /usr/share/doc/tele/config.yml.example
+      - src: ./LICENSE
+        dst: /usr/share/licenses/tele/LICENSE
+
 checksum:
   name_template: "checksums.txt"
+
+# Keyless cosign signature over the checksums file (GitHub OIDC in CI).
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+sboms:
+  - artifacts: archive
+
+# Arch User Repository: prebuilt -bin package. Stable tags only.
+aurs:
+  - name: tele-bin
+    ids: [tarballs]
+    homepage: https://github.com/sorokin-vladimir/tele
+    description: TUI Telegram client for the terminal.
+    maintainers: ["Vladimir Sorokin <v.sorokin@hey.com>"]
+    license: MIT
+    private_key: "{{ .Env.AUR_KEY }}"
+    git_url: ssh://aur@aur.archlinux.org/tele-bin.git
+    # Publish only on stable tags AND once AUR_KEY is configured.
+    skip_upload: '{{ if .Prerelease }}true{{ else if eq (index .Env "AUR_KEY") "" }}true{{ else }}false{{ end }}'
+    package: |-
+      # bin
+      install -Dm755 "./tele" "${pkgdir}/usr/bin/tele"
+      # license
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/tele/LICENSE"
+      # docs
+      install -Dm644 "./config.yml.example" "${pkgdir}/usr/share/doc/tele/config.yml.example"
+
+# Windows Scoop bucket. Stable tags only.
+scoops:
+  - ids: [tarballs]
+    repository:
+      owner: sorokin-vladimir
+      name: scoop-tele
+      token: "{{ .Env.SCOOP_WINGET_TOKEN }}"
+    homepage: https://github.com/sorokin-vladimir/tele
+    description: TUI Telegram client for the terminal.
+    license: MIT
+    # Publish only on stable tags AND once SCOOP_WINGET_TOKEN is configured.
+    skip_upload: '{{ if .Prerelease }}true{{ else if eq (index .Env "SCOOP_WINGET_TOKEN") "" }}true{{ else }}false{{ end }}'
+
+# Windows winget: PR to microsoft/winget-pkgs from our fork. Stable tags only.
+winget:
+  - ids: [tarballs]
+    publisher: sorokin-vladimir
+    name: tele
+    package_identifier: sorokin-vladimir.tele
+    license: MIT
+    homepage: https://github.com/sorokin-vladimir/tele
+    short_description: TUI Telegram client for the terminal.
+    repository:
+      owner: sorokin-vladimir
+      name: winget-pkgs
+      branch: "tele-{{ .Version }}"
+      token: "{{ .Env.SCOOP_WINGET_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+    # Publish only on stable tags AND once SCOOP_WINGET_TOKEN is configured.
+    skip_upload: '{{ if .Prerelease }}true{{ else if eq (index .Env "SCOOP_WINGET_TOKEN") "" }}true{{ else }}false{{ end }}'
+
+# Universal Linux Snap, strict confinement. Stable tags only.
+snapcrafts:
+  - name: tele
+    publish: true
+    summary: TUI Telegram client for the terminal.
+    description: |
+      tele is a terminal user-interface client for Telegram. Browse chats, read
+      and send messages, and view media without leaving the terminal.
+    grade: stable
+    confinement: strict
+    license: MIT
+    base: core22
+    # Build+publish only on stable tags AND once SNAPCRAFT_STORE_CREDENTIALS is set.
+    disable: '{{ if .Prerelease }}true{{ else if eq (index .Env "SNAPCRAFT_STORE_CREDENTIALS") "" }}true{{ else }}false{{ end }}'
+    apps:
+      tele:
+        command: tele
+        plugs: [home, network, network-bind, removable-media]
 
 # Homebrew formulae are published by scripts/update-formula.sh in the release
 # workflow (the `brews` publisher is deprecated and Casks would drop Linux).

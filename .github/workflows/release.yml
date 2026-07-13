@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   # Full checks gate the release: a broken tag is never shipped.
@@ -14,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -46,7 +47,7 @@ jobs:
     env:
       CGO_ENABLED: 0
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -64,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -72,6 +73,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Install syft (SBOM)
+        uses: anchore/sbom-action/download-syft@v0.24.0
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
 
       - name: Prepare release notes
         run: bash scripts/changelog-notes.sh "${GITHUB_REF_NAME}"
@@ -84,9 +94,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          AUR_KEY: ${{ secrets.AUR_KEY }}
+          SCOOP_WINGET_TOKEN: ${{ secrets.SCOOP_WINGET_TOKEN }}
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
 
       # Publish the Homebrew formula to both taps from dist/checksums.txt.
       - name: Update Homebrew formula
         run: bash scripts/update-formula.sh "${GITHUB_REF_NAME}"
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      # Upload deb/rpm to Gemfury (stable tags only; the script self-skips betas).
+      - name: Publish to Gemfury
+        run: bash scripts/update-fury.sh "${GITHUB_REF_NAME}"
+        env:
+          FURY_TOKEN: ${{ secrets.FURY_TOKEN }}

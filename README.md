@@ -159,6 +159,49 @@ curl -sL https://github.com/sorokin-vladimir/tele/releases/latest/download/tele-
 
 For arm64: replace `amd64` with `arm64`.
 
+### Debian / Ubuntu / Mint — apt
+
+```sh
+echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
+  | sudo tee /etc/apt/sources.list.d/tele.list
+sudo apt update && sudo apt install tele
+```
+
+### Fedora / RHEL / openSUSE — dnf / zypper
+
+```sh
+sudo tee /etc/yum.repos.d/tele.repo <<'EOF'
+[tele]
+name=tele
+baseurl=https://yum.fury.io/sorokin-vladimir/
+enabled=1
+gpgcheck=0
+EOF
+sudo dnf install tele   # or: sudo zypper install tele
+```
+
+### Alpine — apk
+
+```sh
+echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
+sudo apk add --allow-untrusted tele
+```
+
+### Arch / Manjaro — AUR
+
+```sh
+yay -S tele-bin      # or: paru -S tele-bin
+```
+
+### Any Linux — Snap
+
+```sh
+sudo snap install tele
+```
+
+> Prefer a raw package? Signed `.deb` and `.rpm` files are also attached to
+> every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
+
 ### Windows — binary
 
 Download the executable with PowerShell (run as your normal user):
@@ -178,6 +221,16 @@ A plain console (cmd.exe / classic conhost) falls back to ANSI block-art photos.
 
 > Prefer a packaged install? A `.zip` containing `tele.exe`
 > (`tele_windows_amd64.zip`) is attached to every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
+
+> Prefer a package manager? Install with
+> [Scoop](https://scoop.sh) or [winget](https://learn.microsoft.com/windows/package-manager/):
+>
+> ```powershell
+> scoop bucket add tele https://github.com/sorokin-vladimir/scoop-tele
+> scoop install tele
+> # or
+> winget install sorokin-vladimir.tele
+> ```
 
 ### Nix / NixOS
 
