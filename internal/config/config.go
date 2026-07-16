@@ -18,7 +18,17 @@ type UIConfig struct {
 	HistoryLimit int    `mapstructure:"history_limit"`
 	// NotificationPreview controls whether the message text is included in
 	// desktop notifications. Set false to send only the sender name (#80).
-	NotificationPreview bool `mapstructure:"notification_preview"`
+	NotificationPreview bool         `mapstructure:"notification_preview"`
+	Toasts              ToastsConfig `mapstructure:"toasts"`
+}
+
+// ToastsConfig controls the floating toast component (#87). Zone strings are
+// "bottom-right", "top-right", or "bottom-left"; unknown values fall back to
+// the default at the UI layer.
+type ToastsConfig struct {
+	ErrorZone  string `mapstructure:"error_zone"`
+	NotifyZone string `mapstructure:"notify_zone"`
+	MaxVisible int    `mapstructure:"max_visible"`
 }
 
 type PhotosConfig struct {

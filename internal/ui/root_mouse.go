@@ -109,6 +109,11 @@ func (m RootModel) handleMouseClick(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	if mo.Button != tea.MouseLeft {
 		return m, nil
 	}
+	// Toasts float above everything, so a click on a toast action wins over
+	// focus-follows-click.
+	if msg, ok := m.toasts.HitTest(mo.X, mo.Y); ok {
+		return m, func() tea.Msg { return msg }
+	}
 	r, _, localY := m.hitTest(mo.X, mo.Y)
 
 	// Any click outside the composer blurs it.

@@ -136,6 +136,10 @@ func (m RootModel) View() tea.View {
 		if m.photoViewer != nil {
 			content = m.photoViewerView(dimBackground(content, m.hasDarkBackground))
 		}
+		// Toasts are stamped last so they float above every other overlay.
+		for _, z := range m.toasts.Zones() {
+			content = overlayAt(content, z.Block, m.width, m.height, z.Top, z.Left)
+		}
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true

@@ -22,15 +22,6 @@ var (
 	insertMode = modeBase.Background(lipgloss.Color("35")) // green
 )
 
-// Severity classifies a transient status-bar message.
-type Severity int
-
-const (
-	SeverityInfo Severity = iota
-	SeverityWarning
-	SeverityError
-)
-
 type StatusBar struct {
 	width      int
 	mode       keys.VimMode
@@ -39,9 +30,6 @@ type StatusBar struct {
 	lastKey    string
 	activePane string
 	keyMap     keys.KeyMap
-	errText    string
-	errSev     Severity
-	errSerial  int
 	dlText     string  // active download indicator label, "" when idle
 	dlSerial   int     // identifies the active download, for matched clears
 	dlSpinner  Spinner // ping-pong spinner animated by TickDownloadSpinner
@@ -64,23 +52,6 @@ func (sb *StatusBar) SetActivePane(p string)   { sb.activePane = p }
 func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
 func (sb *StatusBar) SetAttachStaged(v bool)   { sb.attachStaged = v }
 func (sb *StatusBar) SetPickerOpen(v bool)     { sb.pickerOpen = v }
-
-// SetError shows a transient, severity-tagged message and returns the serial
-// identifying it, so a later ClearError only clears this exact message.
-func (sb *StatusBar) SetError(text string, sev Severity) int {
-	sb.errSerial++
-	sb.errText = text
-	sb.errSev = sev
-	return sb.errSerial
-}
-
-// ClearError clears the error only when serial matches the current one, so a
-// stale auto-clear timer cannot wipe a newer error.
-func (sb *StatusBar) ClearError(serial int) {
-	if serial == sb.errSerial {
-		sb.errText = ""
-	}
-}
 
 // StartDownload shows a transient, animated download indicator with label and
 // returns the serial identifying it, so a later ClearDownload only clears this
@@ -118,9 +89,7 @@ func (sb *StatusBar) View() string {
 
 	segs := []string{modeStyle.Render(label)}
 
-	if sb.errText != "" {
-		segs = append(segs, errStyle(sb.errSev).Render(sb.errText))
-	} else if sb.dlText != "" {
+	if sb.dlText != "" {
 		segs = append(segs, barStyle.Render(sb.dlSpinner.View()+" "+sb.dlText))
 	} else if sb.status != "" {
 		segs = append(segs, barStyle.Render(sb.status))
@@ -134,18 +103,6 @@ func (sb *StatusBar) View() string {
 
 	sep := barSepStyle.Render(" │ ")
 	return barStyle.Width(sb.width).Render(strings.Join(segs, sep))
-}
-
-func errStyle(sev Severity) lipgloss.Style {
-	base := lipgloss.NewStyle().Background(barBg).Bold(true)
-	switch sev {
-	case SeverityError:
-		return base.Foreground(lipgloss.Color("203")) // red
-	case SeverityWarning:
-		return base.Foreground(lipgloss.Color("214")) // amber
-	default:
-		return base.Foreground(lipgloss.Color("75")) // blue/info
-	}
 }
 
 func (sb *StatusBar) hints() string {

@@ -52,6 +52,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.height = msg.Height
 		m.logo.SetWidth(msg.Width)
 		m.statusBar.SetWidth(msg.Width)
+		m.toasts.SetSize(msg.Width, msg.Height)
 		lay := computeLayout(msg.Width, msg.Height, m.chat.ComposerHeight(),
 			m.folderBar != nil && m.folderBar.HasFolders())
 		if lay.hasFolders {

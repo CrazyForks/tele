@@ -122,6 +122,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keys.ActionQuit:
 			return m, tea.Quit
+		case keys.ActionDismissToast:
+			m.toasts.DismissTop()
+			return m, nil
 		}
 	}
 

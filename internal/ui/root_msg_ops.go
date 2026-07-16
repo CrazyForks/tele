@@ -341,7 +341,7 @@ func durationFor(sev components.Severity) time.Duration {
 }
 
 func (m RootModel) handleStatusErr(msg StatusErrMsg) (RootModel, tea.Cmd) {
-	serial := m.statusBar.SetError(msg.Text, msg.Sev)
+	serial := m.toasts.Add(components.ToastKindOf(msg.Sev), msg.Text)
 	d := durationFor(msg.Sev)
 	return m, tea.Tick(d, func(time.Time) tea.Msg { return ClearStatusErrMsg{Serial: serial} })
 }
@@ -355,7 +355,7 @@ func (m RootModel) handleDocumentOpenDone(msg documentOpenDoneMsg) (RootModel, t
 		m.st.UpdateMessageMedia(msg.chatID, msg.msgID, nil, msg.doc)
 	}
 	if msg.errText != "" {
-		serial := m.statusBar.SetError(msg.errText, msg.sev)
+		serial := m.toasts.Add(components.ToastKindOf(msg.sev), msg.errText)
 		d := durationFor(msg.sev)
 		return m, tea.Tick(d, func(time.Time) tea.Msg { return ClearStatusErrMsg{Serial: serial} })
 	}
@@ -370,20 +370,48 @@ func (m RootModel) handleFileDownloadDone(msg fileDownloadDoneMsg) (RootModel, t
 	if (msg.doc != nil || msg.photo != nil) && m.st != nil {
 		m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)
 	}
-	serial := m.statusBar.SetError(msg.text, msg.sev)
+	serial := m.toasts.Add(components.ToastKindOf(msg.sev), msg.text)
 	d := durationFor(msg.sev)
 	return m, tea.Tick(d, func(time.Time) tea.Msg { return ClearStatusErrMsg{Serial: serial} })
 }
+
+// retryChatLoadMsg re-triggers loading a chat's history after a load failure,
+// emitted by a toast retry action (#87).
+type retryChatLoadMsg struct{ chatID int64 }
 
 func (m RootModel) handleChatLoadErr(msg chatLoadErrMsg) (RootModel, tea.Cmd) {
 	if msg.chatID == m.currentChatID {
 		m.chat.SetLoading(false)
 		m.chat.SetLoadError(msg.text)
 	}
-	serial := m.statusBar.SetError(msg.text, components.SeverityError)
+	serial := m.toasts.Add(components.ToastError, msg.text,
+		components.ToastAction{Label: "retry", Key: "r", Msg: retryChatLoadMsg{chatID: msg.chatID}})
 	return m, tea.Tick(durationFor(components.SeverityError), func(time.Time) tea.Msg {
 		return ClearStatusErrMsg{Serial: serial}
 	})
+}
+
+// retryChatLoadCmd re-issues the history fetch for chatID, looking the peer up
+// from the store. Returns nil when the store/client or chat is unavailable.
+func (m RootModel) retryChatLoadCmd(chatID int64) tea.Cmd {
+	if m.st == nil || m.tgClient == nil {
+		return nil
+	}
+	chat, ok := m.st.GetChat(chatID)
+	if !ok {
+		return nil
+	}
+	ctx := m.ctx
+	client := m.tgClient
+	peer := chat.Peer
+	limit := m.historyLimit
+	return func() tea.Msg {
+		msgs, err := client.GetHistory(ctx, peer, 0, limit)
+		if err != nil {
+			return chatLoadErrMsg{chatID: chatID, text: "load history failed: " + err.Error()}
+		}
+		return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
+	}
 }
 
 // openReactionPicker opens the reaction picker for msgID, pre-selecting the

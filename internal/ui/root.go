@@ -48,6 +48,7 @@ type RootModel struct {
 	chat              *screens.ChatModel
 	login             screens.LoginModel
 	statusBar         *components.StatusBar
+	toasts            *components.ToastStack
 	vimState          *keys.VimState
 	keyMap            keys.KeyMap
 	matcher           *keys.Matcher
@@ -132,6 +133,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(80)
 	sb.SetKeyMap(km)
+	ts := components.NewToastStack(80, 24, 3, components.ZoneBottomRight, components.ZoneTopRight)
 	cl := screens.NewChatListModel()
 	cl.SetFocused(true)
 	chat := screens.NewChatModel(80, 24)
@@ -145,6 +147,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		chat:              chat,
 		folderBar:         screens.NewFoldersModel(),
 		statusBar:         sb,
+		toasts:            ts,
 		vimState:          keys.NewVimState(),
 		keyMap:            km,
 		matcher:           keys.NewMatcher(km),
@@ -199,7 +202,26 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	m.kittyCap = cfg.Photos.KittyPlacementCap
 	m.chat.SetMaxMediaPx(cfg.Photos.MaxLongSidePx)
 	m.chat.SetImageMode(m.imageMode)
+	w, h := m.width, m.height
+	if w == 0 {
+		w, h = 80, 24
+	}
+	m.toasts = components.NewToastStack(w, h, cfg.UI.Toasts.MaxVisible,
+		parseToastZone(cfg.UI.Toasts.ErrorZone), parseToastZone(cfg.UI.Toasts.NotifyZone))
 	return m
+}
+
+// parseToastZone maps a config zone string to a ToastZone, defaulting unknown
+// values to the bottom-right corner.
+func parseToastZone(s string) components.ToastZone {
+	switch s {
+	case "top-right":
+		return components.ZoneTopRight
+	case "bottom-left":
+		return components.ZoneBottomLeft
+	default:
+		return components.ZoneBottomRight
+	}
 }
 
 // WithKeyMap replaces the keymap and rebuilds the matcher and status-bar hints.
@@ -374,10 +396,14 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.openPicker = nil
 		return m, nil
 	case ClearStatusErrMsg:
-		m.statusBar.ClearError(msg.Serial)
+		m.toasts.Dismiss(msg.Serial)
 		return m, nil
 	case chatLoadErrMsg:
 		return m.handleChatLoadErr(msg)
+	case retryChatLoadMsg:
+		m.chat.SetLoading(true)
+		m.chat.SetLoadError("")
+		return m, m.retryChatLoadCmd(msg.chatID)
 	case mediaRefRefreshedMsg:
 		if m.st != nil {
 			m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)

@@ -32,6 +32,11 @@ func TestKeyMap_Resolve_GlobalFallback(t *testing.T) {
 	assert.Equal(t, keys.ActionFocusNext, km.Resolve(keys.ContextChatList, "right"))
 }
 
+func TestDefaultKeyMap_DismissToastBinding(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	assert.Equal(t, keys.ActionDismissToast, km.Resolve(keys.ContextGlobal, "ctrl+x"))
+}
+
 func TestKeyMap_Resolve_Unknown(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	assert.Equal(t, keys.ActionNone, km.Resolve(keys.ContextChatList, "F9"))

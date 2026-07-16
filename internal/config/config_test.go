@@ -54,6 +54,18 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "default", cfg.UI.Theme)
 }
 
+func TestDefaults_Toasts(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(f, []byte("telegram:\n  api_id: 1\n  api_hash: x\n"), 0600))
+
+	cfg, err := config.Load(f)
+	require.NoError(t, err)
+	assert.Equal(t, "bottom-right", cfg.UI.Toasts.ErrorZone)
+	assert.Equal(t, "top-right", cfg.UI.Toasts.NotifyZone)
+	assert.Equal(t, 3, cfg.UI.Toasts.MaxVisible)
+}
+
 func TestLoad_MissingFile(t *testing.T) {
 	_, err := config.Load("/nonexistent/config.yml")
 	assert.Error(t, err)
