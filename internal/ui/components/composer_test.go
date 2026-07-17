@@ -736,7 +736,7 @@ func TestComposer_WarningReArmsAfterGoingUnderLimit(t *testing.T) {
 
 	c, _ = c.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})  // 4095: back under, re-arms
 	c, _ = c.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})    // 4096: accepted, at the limit
-	c, cmd := c.Update(tea.KeyPressMsg{Code: 'x', Text: "x"}) // rejected
+	_, cmd := c.Update(tea.KeyPressMsg{Code: 'x', Text: "x"}) // rejected
 
 	assert.Len(t, limitMsgs(collectMsgs(cmd)), 1, "a new episode must warn again")
 }
