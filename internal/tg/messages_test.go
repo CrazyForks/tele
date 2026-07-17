@@ -696,7 +696,7 @@ func TestBuildInputMediaUploadedPhoto(t *testing.T) {
 func TestBuildSendMediaRequest_WithReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10, AccessHash: 20}
 	media := &tg.InputMediaUploadedPhoto{}
-	req := buildSendMediaRequest(peer, media, "cap", 123, 42)
+	req := buildSendMediaRequest(peer, media, "cap", 123, 42, nil)
 	assert.Equal(t, "cap", req.Message)
 	assert.Equal(t, int64(123), req.RandomID)
 	assert.Equal(t, media, req.Media)
@@ -708,7 +708,7 @@ func TestBuildSendMediaRequest_WithReply(t *testing.T) {
 
 func TestBuildSendMediaRequest_WithoutReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10}
-	req := buildSendMediaRequest(peer, &tg.InputMediaUploadedPhoto{}, "", 123, 0)
+	req := buildSendMediaRequest(peer, &tg.InputMediaUploadedPhoto{}, "", 123, 0, nil)
 	assert.Nil(t, req.ReplyTo)
 	assert.Equal(t, "", req.Message)
 }

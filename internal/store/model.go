@@ -33,6 +33,10 @@ type MessageEntity struct {
 	Offset int
 	Length int
 	URL    string // for "text_url": the hidden target URL; empty otherwise
+	// Language is the info string of a fenced code block ("```go"). Set only for
+	// Type=="pre", and only on the send side for now (#152); the receive side
+	// does not populate it yet.
+	Language string
 	// UserID/AccessHash are set only for Type=="mention_name" (name-based
 	// mention of a user without a public username).
 	UserID     int64

@@ -104,7 +104,7 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 			return m, nil
 		}
 		editDate := *msg.Message.EditDate
-		m.st.UpdateMessageText(msg.Message.ChatID, msg.Message.ID, msg.Message.Text, editDate)
+		m.st.UpdateMessageText(msg.Message.ChatID, msg.Message.ID, msg.Message.Text, msg.Message.Entities, editDate)
 		if msg.Message.ChatID == m.currentChatID {
 			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
 		}

@@ -792,3 +792,83 @@ func TestComposer_CounterColourIsThemeAware(t *testing.T) {
 	assert.NotEqual(t, render(true), render(false),
 		"the counter must not use the same colour on both themes")
 }
+
+func TestResolveEntitiesParsesMarkup(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("привет **важно**")
+	text, ents := c.ResolveEntities()
+	assert.Equal(t, "привет важно", text)
+	require.Len(t, ents, 1)
+	assert.Equal(t, "bold", ents[0].Type)
+	assert.Equal(t, 7, ents[0].Offset)
+	assert.Equal(t, 5, ents[0].Length)
+}
+
+func TestResolveEntitiesPlainTextStaysEntityFree(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("обычный текст")
+	text, ents := c.ResolveEntities()
+	assert.Equal(t, "обычный текст", text)
+	assert.Empty(t, ents)
+}
+
+func TestResolveEntitiesMentionOffsetsSurviveMarkerStripping(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("@")
+	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
+	c.SetValue("**жирно** " + c.Value())
+	text, ents := c.ResolveEntities()
+	assert.Equal(t, "жирно @Ivan P", text)
+
+	var mention store.MessageEntity
+	for _, e := range ents {
+		if e.Type == "mention_name" {
+			mention = e
+		}
+	}
+	// Offset must index the stripped text ("жирно @Ivan P"), not the source.
+	assert.Equal(t, 6, mention.Offset)
+	assert.Equal(t, 7, mention.Length)
+	assert.Equal(t, int64(7), mention.UserID)
+}
+
+func TestResolveEntitiesMentionInsideBold(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("@")
+	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
+	c.SetValue("**" + strings.TrimSpace(c.Value()) + "**")
+	_, ents := c.ResolveEntities()
+	require.Len(t, ents, 2)
+	assert.Equal(t, "bold", ents[0].Type)
+	assert.Equal(t, "mention_name", ents[1].Type)
+	assert.Equal(t, 0, ents[1].Offset)
+}
+
+func TestSetSourceShowsMarkers(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetSource("привет важно", []store.MessageEntity{{Type: "bold", Offset: 7, Length: 5}})
+	assert.Equal(t, "привет **важно**", c.Value())
+}
+
+func TestSetSourceRoundTripsThroughResolve(t *testing.T) {
+	c := components.NewComposer(40)
+	ents := []store.MessageEntity{{Type: "bold", Offset: 7, Length: 5}}
+	c.SetSource("привет важно", ents)
+	text, got := c.ResolveEntities()
+	assert.Equal(t, "привет важно", text)
+	require.Len(t, got, 1)
+	assert.Equal(t, ents[0], got[0])
+}
+
+func TestSetSourceSeedsMentionsSoTheySurviveEditing(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetSource("@Ivan P привет", []store.MessageEntity{
+		{Type: "mention_name", Offset: 0, Length: 7, UserID: 7, AccessHash: 8},
+	})
+	assert.Equal(t, "@Ivan P привет", c.Value())
+	_, ents := c.ResolveEntities()
+	require.Len(t, ents, 1)
+	assert.Equal(t, "mention_name", ents[0].Type)
+	assert.Equal(t, int64(7), ents[0].UserID)
+	assert.Equal(t, int64(8), ents[0].AccessHash)
+}

@@ -165,7 +165,7 @@ func (m *mockTGClient) DownloadDocumentImage(_ context.Context, _ store.Document
 	}
 	return nil, nil
 }
-func (m *mockTGClient) EditMessage(_ context.Context, _ store.Peer, _ int, _ string) error {
+func (m *mockTGClient) EditMessage(_ context.Context, _ store.Peer, _ int, _ string, _ []store.MessageEntity) error {
 	return nil
 }
 func (m *mockTGClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, _ bool) error {

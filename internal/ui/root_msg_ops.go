@@ -107,15 +107,16 @@ func (m RootModel) handleEditSend(msg screens.EditSendRequest) (RootModel, tea.C
 	}
 	chatID := m.currentChatID
 	origMessages := m.st.Messages(chatID)
-	m.st.UpdateMessageText(chatID, msg.MsgID, msg.Text, time.Now())
+	m.st.UpdateMessageText(chatID, msg.MsgID, msg.Text, msg.Entities, time.Now())
 	m.chat.SetMessages(m.st.Messages(chatID))
 	ctx := m.ctx
 	client := m.tgClient
 	peer := msg.Peer
 	msgID := msg.MsgID
 	text := msg.Text
+	entities := msg.Entities
 	return m, func() tea.Msg {
-		if err := client.EditMessage(ctx, peer, msgID, text); err != nil {
+		if err := client.EditMessage(ctx, peer, msgID, text, entities); err != nil {
 			return editMsgFailedMsg{chatID: chatID, messages: origMessages}
 		}
 		return nil
@@ -557,7 +558,7 @@ func (m *RootModel) activateEdit(msgID int) tea.Cmd {
 		if storeMsg.ID == msgID {
 			preview := components.BuildEditPreview(storeMsg)
 			m.chat.SetEdit(msgID, preview)
-			m.chat.SetComposerValue(storeMsg.Text)
+			m.chat.SetComposerSource(storeMsg.Text, storeMsg.Entities)
 			m.vimState.Mode = keys.ModeInsert
 			m.statusBar.SetMode(keys.ModeInsert)
 			return m.chat.FocusComposer()

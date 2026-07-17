@@ -154,18 +154,43 @@ func TestMemory_UpdateMessageText(t *testing.T) {
 	s := store.NewMemory()
 	now := time.Now()
 	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "original"})
-	s.UpdateMessageText(5, 1, "edited", now)
+	s.UpdateMessageText(5, 1, "edited", nil, now)
 	msgs := s.Messages(5)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "edited", msgs[0].Text)
 	require.NotNil(t, msgs[0].EditDate)
 }
 
+func TestMemory_UpdateMessageText_ReplacesEntities(t *testing.T) {
+	s := store.NewMemory()
+	s.AppendMessage(store.Message{
+		ID: 1, ChatID: 5, Text: "смотри https://example.com",
+		Entities: []store.MessageEntity{{Type: "url", Offset: 7, Length: 19}},
+	})
+	s.UpdateMessageText(5, 1, "привет", nil, time.Now())
+	msgs := s.Messages(5)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "привет", msgs[0].Text)
+	// Stale entities must not survive a text change: their offsets addressed the
+	// old text.
+	assert.Empty(t, msgs[0].Entities)
+}
+
+func TestMemory_UpdateMessageText_SetsNewEntities(t *testing.T) {
+	s := store.NewMemory()
+	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "old"})
+	ents := []store.MessageEntity{{Type: "bold", Offset: 0, Length: 5}}
+	s.UpdateMessageText(5, 1, "новый", ents, time.Now())
+	msgs := s.Messages(5)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, ents, msgs[0].Entities)
+}
+
 func TestMemory_UpdateMessageText_NoopWhenMissing(t *testing.T) {
 	s := store.NewMemory()
 	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "msg"})
 	assert.NotPanics(t, func() {
-		s.UpdateMessageText(5, 999, "x", time.Now())
+		s.UpdateMessageText(5, 999, "x", nil, time.Now())
 	})
 	msgs := s.Messages(5)
 	assert.Equal(t, "msg", msgs[0].Text)

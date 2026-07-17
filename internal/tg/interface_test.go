@@ -103,7 +103,7 @@ func (m *mockClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, _ 
 	return nil
 }
 
-func (m *mockClient) EditMessage(_ context.Context, _ store.Peer, _ int, _ string) error {
+func (m *mockClient) EditMessage(_ context.Context, _ store.Peer, _ int, _ string, _ []store.MessageEntity) error {
 	return nil
 }
 

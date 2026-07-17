@@ -1,6 +1,9 @@
 package components
 
-import "github.com/sorokin-vladimir/tele/internal/store"
+import (
+	"github.com/sorokin-vladimir/tele/internal/markup"
+	"github.com/sorokin-vladimir/tele/internal/store"
+)
 
 // OpenTargetKind classifies something in a message that the "open" action can act
 // on: a photo or video (in-app viewer) or a link (default browser).
@@ -53,8 +56,8 @@ func linkTargets(text string, entities []store.MessageEntity) []OpenTarget {
 		default:
 			continue
 		}
-		start := utf16ToRuneIndex(text, e.Offset)
-		end := utf16ToRuneIndex(text, e.Offset+e.Length)
+		start := markup.UTF16ToRuneIndex(text, e.Offset)
+		end := markup.UTF16ToRuneIndex(text, e.Offset+e.Length)
 		if start >= n || start >= end {
 			continue
 		}

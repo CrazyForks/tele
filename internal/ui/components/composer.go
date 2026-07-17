@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/sorokin-vladimir/tele/internal/markup"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -110,6 +111,32 @@ func (c *Composer) SetValue(v string) {
 	c.ta.SetValue(v)
 }
 
+// SetSource fills the draft with an existing message rendered back into source
+// form, so an edit shows the markers that produced its formatting. Name-based
+// mentions are seeded into the pending list rather than rendered as markup:
+// they carry an identity no marker can express, and the normal resolve path
+// re-finds them by text at send time.
+func (c *Composer) SetSource(text string, entities []store.MessageEntity) {
+	c.pending = nil
+	runes := []rune(text)
+	for _, e := range entities {
+		if e.Type != "mention_name" {
+			continue
+		}
+		start := markup.UTF16ToRuneIndex(text, e.Offset)
+		end := markup.UTF16ToRuneIndex(text, e.Offset+e.Length)
+		if start >= end || end > len(runes) {
+			continue
+		}
+		c.pending = append(c.pending, pendingMention{
+			display: string(runes[start:end]),
+			member:  store.ChatMember{UserID: e.UserID, AccessHash: e.AccessHash},
+			named:   true,
+		})
+	}
+	c.ta.SetValue(markup.Render(text, entities))
+}
+
 // SetPlaceholder sets the dim placeholder text shown while the composer is empty.
 // The caller (chat screen) owns the wording; the composer only renders it.
 func (c *Composer) SetPlaceholder(s string) { c.ta.Placeholder = s }
@@ -137,7 +164,7 @@ func (c *Composer) limit() int {
 // cannot cross the limit; the state is reached by pasting past it or by
 // attaching a file to a draft longer than a caption may be.
 func (c *Composer) OverLimit() bool {
-	return utf16Len(c.ta.Value()) > c.limit()
+	return markup.UTF16Len(c.ta.Value()) > c.limit()
 }
 
 // Line and Column expose the cursor position (test accessors).
@@ -243,19 +270,6 @@ func (c *Composer) ApplyMention(m store.ChatMember) {
 	c.pending = append(c.pending, pendingMention{display: display, member: m, named: named})
 }
 
-// utf16Len returns the number of UTF-16 code units in s (Telegram entity unit).
-func utf16Len(s string) int {
-	n := 0
-	for _, r := range s {
-		if r >= 0x10000 {
-			n += 2
-		} else {
-			n++
-		}
-	}
-	return n
-}
-
 // indexRunes returns the rune index of sub within runes at/after from, or -1.
 func indexRunes(runes, sub []rune, from int) int {
 	if len(sub) == 0 {
@@ -302,17 +316,17 @@ func findMention(runes, sub []rune, from int) int {
 	}
 }
 
-// ResolveEntities trims the draft and produces mention_name entities for each
-// pending name-mention still present in the text, matched in insertion order so
-// duplicate display names map to successive occurrences. Username mentions and
-// edited-away mentions produce no entity.
+// ResolveEntities trims the draft, parses its markup into plain text plus
+// entities, then resolves pending name-mentions against that stripped text.
+// The order matters: stripping markers shifts every offset, so the mention scan
+// must see the final text. Username mentions and edited-away mentions produce
+// no entity.
 func (c *Composer) ResolveEntities() (string, []store.MessageEntity) {
-	text := strings.TrimSpace(c.ta.Value())
+	text, entities := markup.Parse(strings.TrimSpace(c.ta.Value()))
 	if len(c.pending) == 0 {
-		return text, nil
+		return text, entities
 	}
 	runes := []rune(text)
-	var entities []store.MessageEntity
 	searchFrom := 0
 	for _, p := range c.pending {
 		if !p.named {
@@ -325,8 +339,8 @@ func (c *Composer) ResolveEntities() (string, []store.MessageEntity) {
 		}
 		entities = append(entities, store.MessageEntity{
 			Type:       "mention_name",
-			Offset:     utf16Len(string(runes[:idx])),
-			Length:     utf16Len(p.display),
+			Offset:     markup.UTF16Len(string(runes[:idx])),
+			Length:     markup.UTF16Len(p.display),
 			UserID:     p.member.UserID,
 			AccessHash: p.member.AccessHash,
 		})
@@ -455,10 +469,10 @@ func (c *Composer) View() string {
 // sendAffordance renders the bottom-border send indicator: a dim glyph when the
 // composer is empty, a blue glyph (Telegram send-button association) once there
 // is text, plus a remaining-character counter when near the limit. The counter
-// measures with utf16Len — the same function Update enforces with — so it cannot
+// measures with markup.UTF16Len — the same function Update enforces with — so it cannot
 // disagree with the point at which input actually stops (#126).
 func (c *Composer) sendAffordance() string {
-	used := utf16Len(c.ta.Value())
+	used := markup.UTF16Len(c.ta.Value())
 	remaining := c.limit() - used
 
 	glyphColor := lipgloss.Color("240") // dim: nothing to send
@@ -495,14 +509,14 @@ func (c *Composer) Update(msg tea.Msg) (*Composer, tea.Cmd) {
 		return c, nil
 	}
 
-	before := utf16Len(c.ta.Value())
+	before := markup.UTF16Len(c.ta.Value())
 	prev, row, col := c.ta.Value(), c.ta.Line(), c.ta.Column()
 
 	var cmd tea.Cmd
 	c.ta, cmd = c.ta.Update(msg)
 
 	_, isPaste := msg.(tea.PasteMsg)
-	after := utf16Len(c.ta.Value())
+	after := markup.UTF16Len(c.ta.Value())
 	grewPastLimit := after > c.limit() && after > before
 
 	switch {

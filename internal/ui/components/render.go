@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	lipcompat "charm.land/lipgloss/v2/compat"
+	"github.com/sorokin-vladimir/tele/internal/markup"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -44,25 +45,6 @@ func isSelfMention(typ string, userID int64, visible string) bool {
 		return selfMentionUser != "" && strings.EqualFold(strings.TrimPrefix(visible, "@"), selfMentionUser)
 	}
 	return false
-}
-
-// utf16ToRuneIndex converts a UTF-16 code unit offset to a rune index in s.
-// Telegram entity offsets are in UTF-16 code units; Go strings are UTF-8.
-func utf16ToRuneIndex(s string, utf16Offset int) int {
-	runeIdx := 0
-	u16Pos := 0
-	for _, r := range s {
-		if u16Pos >= utf16Offset {
-			break
-		}
-		if r >= 0x10000 {
-			u16Pos += 2
-		} else {
-			u16Pos++
-		}
-		runeIdx++
-	}
-	return runeIdx
 }
 
 // isKnownEntity reports whether typ is a rendered inline entity. Unknown types
@@ -126,8 +108,8 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 		if !isKnownEntity(e.Type) {
 			continue
 		}
-		start := utf16ToRuneIndex(text, e.Offset)
-		end := utf16ToRuneIndex(text, e.Offset+e.Length)
+		start := markup.UTF16ToRuneIndex(text, e.Offset)
+		end := markup.UTF16ToRuneIndex(text, e.Offset+e.Length)
 		if start >= n || start >= end {
 			continue
 		}

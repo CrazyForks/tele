@@ -13,7 +13,7 @@ type Store interface {
 	// without appending to its message slice (e.g. a forward target).
 	BumpChatLastMessage(chatID int64, msg Message)
 	UpdateMessageID(chatID int64, oldID, newID int)
-	UpdateMessageText(chatID int64, msgID int, text string, editDate time.Time)
+	UpdateMessageText(chatID int64, msgID int, text string, entities []MessageEntity, editDate time.Time)
 	UpdateMessageReactions(chatID int64, msgID int, reactions []Reaction)
 	UpdateMessageMedia(chatID int64, msgID int, photo *PhotoRef, document *DocumentRef)
 	// UpdateLocalMediaProgress sets the upload fraction (0..1) on an optimistic

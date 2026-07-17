@@ -158,12 +158,18 @@ func (s *SQLiteStore) AdoptServerMedia(chatID int64, msgID int, photo *PhotoRef,
 	}
 }
 
-func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, editDate time.Time) {
+// UpdateMessageText replaces a message's text and its entities together. They
+// must move as a unit: entity offsets address the text they were parsed from,
+// so keeping the old ones would leave them pointing at characters that changed.
+func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, entities []MessageEntity, editDate time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.messages[chatID] {
 		if s.messages[chatID][i].ID == msgID {
 			s.messages[chatID][i].Text = text
+			cp := make([]MessageEntity, len(entities))
+			copy(cp, entities)
+			s.messages[chatID][i].Entities = cp
 			t := editDate
 			s.messages[chatID][i].EditDate = &t
 			return

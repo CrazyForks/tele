@@ -319,6 +319,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			size:         att.size,
 			kind:         att.sendAs,
 			caption:      msg.Caption,
+			entities:     msg.Entities,
 			replyToMsgID: msg.ReplyToMsgID,
 		}
 		if att.sendAs == store.MediaVideo {

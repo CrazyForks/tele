@@ -70,7 +70,7 @@ type Client interface {
 	// image (used for static WEBP stickers; streams the main file, not a thumb).
 	DownloadDocumentImage(ctx context.Context, ref store.DocumentRef) (image.Image, error)
 	DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error
-	EditMessage(ctx context.Context, peer store.Peer, msgID int, text string) error
+	EditMessage(ctx context.Context, peer store.Peer, msgID int, text string, entities []store.MessageEntity) error
 	// ForwardMessages forwards messages by ID from one peer to another via
 	// messages.forwardMessages. Returns ErrForwardRestricted when the source
 	// chat forbids forwarding (content protection).

@@ -2,7 +2,6 @@ package screens
 
 import (
 	"image"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -28,12 +27,14 @@ type SendMediaRequest struct {
 	Peer         store.Peer
 	Caption      string
 	ReplyToMsgID int
+	Entities     []store.MessageEntity
 }
 
 type EditSendRequest struct {
-	Peer  store.Peer
-	MsgID int
-	Text  string
+	Peer     store.Peer
+	MsgID    int
+	Text     string
+	Entities []store.MessageEntity
 }
 
 type SetTypingRequest struct {
@@ -435,6 +436,12 @@ func (m *ChatModel) SetComposerValue(v string) {
 	m.syncMsgListHeight()
 }
 
+// SetComposerSource prefills the composer for an edit, markers included.
+func (m *ChatModel) SetComposerSource(text string, entities []store.MessageEntity) {
+	m.composer.SetSource(text, entities)
+	m.syncMsgListHeight()
+}
+
 func (m *ChatModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
@@ -561,9 +568,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				return m, m.composer.SignalLimit(components.ComposerLimitOver)
 			}
 			if msg.Code == tea.KeyEnter && msg.Mod == 0 && m.composer.HasAttachment() {
-				// Trim surrounding whitespace/blank lines from the caption
-				// before sending; internal blank lines are preserved (#154).
-				caption := strings.TrimSpace(m.composer.Value())
+				// ResolveEntities trims surrounding whitespace/blank lines (#154)
+				// and parses the caption's markup, exactly as the text path does.
+				caption, entities := m.composer.ResolveEntities()
 				replyID := m.replyToMsgID
 				m.clearPendingAction()
 				m.composer.Reset()
@@ -575,7 +582,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				}
 				peer := m.chat.Peer
 				return m, func() tea.Msg {
-					return SendMediaRequest{Peer: peer, Caption: caption, ReplyToMsgID: replyID}
+					return SendMediaRequest{Peer: peer, Caption: caption, ReplyToMsgID: replyID, Entities: entities}
 				}
 			}
 			if msg.Code == tea.KeyEnter && msg.Mod == 0 {
@@ -596,7 +603,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 					var sendCmd tea.Cmd
 					if editID != 0 {
 						sendCmd = func() tea.Msg {
-							return EditSendRequest{Peer: peer, MsgID: editID, Text: text}
+							return EditSendRequest{Peer: peer, MsgID: editID, Text: text, Entities: entities}
 						}
 					} else {
 						sendCmd = func() tea.Msg {

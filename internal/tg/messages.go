@@ -122,6 +122,7 @@ type SendMediaParams struct {
 	Media        tg.InputMediaClass
 	Caption      string
 	ReplyToMsgID int
+	Entities     []store.MessageEntity
 }
 
 func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, error) {
@@ -140,7 +141,7 @@ func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, err
 		}
 		randomID := int64(binary.LittleEndian.Uint64(buf[:]))
 
-		updates, err := api.MessagesSendMedia(ctx, buildSendMediaRequest(inputPeer, p.Media, p.Caption, randomID, p.ReplyToMsgID))
+		updates, err := api.MessagesSendMedia(ctx, buildSendMediaRequest(inputPeer, p.Media, p.Caption, randomID, p.ReplyToMsgID, p.Entities))
 		if err != nil {
 			c.log.Error("MessagesSendMedia failed", zap.Error(err))
 			return err
@@ -219,28 +220,43 @@ func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, 
 	return req
 }
 
-// convertToTGEntities maps store entities to Telegram send-side entities. Only
-// name-based mentions need an explicit entity (they carry an InputUser); plain
-// @username mentions are detected server-side and are skipped here.
+// convertToTGEntities maps store entities to Telegram send-side entities.
+// Name-based mentions carry an InputUser and need InputMessageEntityMentionName;
+// auto-detected types (url, email, hashtag, …) are found server-side and are
+// skipped, as are types we cannot produce.
 func convertToTGEntities(es []store.MessageEntity) []tg.MessageEntityClass {
 	if len(es) == 0 {
 		return nil
 	}
 	var out []tg.MessageEntityClass
 	for _, e := range es {
-		if e.Type != "mention_name" {
-			continue
+		switch e.Type {
+		case "bold":
+			out = append(out, &tg.MessageEntityBold{Offset: e.Offset, Length: e.Length})
+		case "italic":
+			out = append(out, &tg.MessageEntityItalic{Offset: e.Offset, Length: e.Length})
+		case "strike":
+			out = append(out, &tg.MessageEntityStrike{Offset: e.Offset, Length: e.Length})
+		case "underline":
+			out = append(out, &tg.MessageEntityUnderline{Offset: e.Offset, Length: e.Length})
+		case "code":
+			out = append(out, &tg.MessageEntityCode{Offset: e.Offset, Length: e.Length})
+		case "pre":
+			out = append(out, &tg.MessageEntityPre{Offset: e.Offset, Length: e.Length, Language: e.Language})
+		case "text_url":
+			out = append(out, &tg.MessageEntityTextURL{Offset: e.Offset, Length: e.Length, URL: e.URL})
+		case "mention_name":
+			out = append(out, &tg.InputMessageEntityMentionName{
+				Offset: e.Offset,
+				Length: e.Length,
+				UserID: &tg.InputUser{UserID: e.UserID, AccessHash: e.AccessHash},
+			})
 		}
-		out = append(out, &tg.InputMessageEntityMentionName{
-			Offset: e.Offset,
-			Length: e.Length,
-			UserID: &tg.InputUser{UserID: e.UserID, AccessHash: e.AccessHash},
-		})
 	}
 	return out
 }
 
-func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass, caption string, randomID int64, replyToMsgID int) *tg.MessagesSendMediaRequest {
+func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass, caption string, randomID int64, replyToMsgID int, entities []store.MessageEntity) *tg.MessagesSendMediaRequest {
 	req := &tg.MessagesSendMediaRequest{
 		Peer:     inputPeer,
 		Media:    media,
@@ -249,6 +265,9 @@ func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass
 	}
 	if replyToMsgID != 0 {
 		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID}
+	}
+	if ent := convertToTGEntities(entities); len(ent) > 0 {
+		req.Entities = ent
 	}
 	return req
 }
@@ -379,18 +398,26 @@ func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []
 	})
 }
 
-func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int, text string) error {
+func buildEditRequest(inputPeer tg.InputPeerClass, msgID int, text string, entities []store.MessageEntity) *tg.MessagesEditMessageRequest {
+	req := &tg.MessagesEditMessageRequest{
+		Peer:    inputPeer,
+		ID:      msgID,
+		Message: text,
+	}
+	if ent := convertToTGEntities(entities); len(ent) > 0 {
+		req.Entities = ent
+	}
+	return req
+}
+
+func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int, text string, entities []store.MessageEntity) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
 	}
 	c.traceLog.Debug("EditMessage", zap.Int64("peer_id", peer.ID), zap.Int("msg_id", msgID))
 	return WithRetry(ctx, func() error {
-		_, err := api.MessagesEditMessage(ctx, &tg.MessagesEditMessageRequest{
-			Peer:    peerToInput(peer),
-			ID:      msgID,
-			Message: text,
-		})
+		_, err := api.MessagesEditMessage(ctx, buildEditRequest(peerToInput(peer), msgID, text, entities))
 		if err != nil {
 			c.log.Error("MessagesEditMessage failed", zap.Error(err))
 		}

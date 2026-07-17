@@ -45,6 +45,7 @@ type mediaSendJob struct {
 	size         int64
 	kind         store.MediaKind
 	caption      string
+	entities     []store.MessageEntity
 	replyToMsgID int
 	buildMedia   func(tg.InputFileClass) tg.InputMediaClass
 	// buildMediaCtx, when set, takes precedence over buildMedia. It runs inside the
@@ -82,6 +83,7 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 		ID:           sentinelID,
 		ChatID:       chatID,
 		Text:         job.caption,
+		Entities:     job.entities,
 		Date:         time.Now(),
 		IsOut:        true,
 		ReplyToMsgID: job.replyToMsgID,
@@ -102,6 +104,7 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 	client := m.tgClient
 	peer := job.peer
 	caption := job.caption
+	entities := job.entities
 	replyTo := job.replyToMsgID
 	path := job.path
 	buildMedia := job.buildMedia
@@ -135,7 +138,7 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 			media = buildMedia(f)
 		}
 		realID, err := client.SendMedia(uploadCtx, internaltg.SendMediaParams{
-			Peer: peer, Media: media, Caption: caption, ReplyToMsgID: replyTo,
+			Peer: peer, Media: media, Caption: caption, ReplyToMsgID: replyTo, Entities: entities,
 		})
 		if err != nil {
 			return sentMediaConfirmedMsg{chatID: chatID, sentinelID: sentinelID, failed: true}
