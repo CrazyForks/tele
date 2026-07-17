@@ -9,7 +9,9 @@ A human title for a release is written as an em-dash suffix on its heading,
 e.g. `## [1.2.0] - 2026-06-11 — Archived folders & image layout fixes`.
 Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
-## [Unreleased] — Reliable package publishing
+## [Unreleased]
+
+## [1.8.2] - 2026-07-18 — Reliable package publishing
 
 ### Fixed
 
