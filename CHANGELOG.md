@@ -9,7 +9,15 @@ A human title for a release is written as an em-dash suffix on its heading,
 e.g. `## [1.2.0] - 2026-06-11 — Archived folders & image layout fixes`.
 Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
-## [Unreleased]
+## [Unreleased] — Reliable package publishing
+
+### Fixed
+
+- Release pipeline: a failure in a late package publisher (winget or snap) no
+  longer aborts the Homebrew formula and Gemfury (deb/rpm) updates. Those
+  channels are independent and now publish whenever the release itself builds,
+  so an unrelated publisher error can no longer leave Homebrew and the deb/rpm
+  repo a version behind
 
 ## [1.8.1] - 2026-07-17
 
