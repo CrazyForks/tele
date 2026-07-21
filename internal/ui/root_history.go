@@ -62,6 +62,10 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.chat.ClearPendingAction()
 		m.chat.SetChat(&msg.Chat)
 		if m.st != nil {
+			// Populate the store's in-memory tail from disk on first open so the
+			// chat paints its cached history instantly; the network GetHistory
+			// below reconciles it moments later. See issue #139.
+			m.st.LoadMessages(msg.Chat.ID)
 			m.chat.SetMessages(m.st.Messages(msg.Chat.ID))
 		}
 		m.chat.SetKnownImages(m.imageCache)

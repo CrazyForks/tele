@@ -58,6 +58,14 @@ CREATE TABLE IF NOT EXISTS folder_filters (
 	key  TEXT PRIMARY KEY DEFAULT 'v1',
 	data TEXT NOT NULL DEFAULT '[]'
 );
+CREATE TABLE IF NOT EXISTS messages (
+	chat_id INTEGER NOT NULL,
+	msg_id  INTEGER NOT NULL,
+	date    INTEGER NOT NULL DEFAULT 0,
+	data    TEXT    NOT NULL,
+	PRIMARY KEY (chat_id, msg_id)
+);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_date ON messages(chat_id, date);
 `
 
 // MaxMessagesPerChat bounds how many recent messages are kept in memory per
@@ -109,6 +117,15 @@ type SQLiteStore struct {
 	flushStop    chan struct{}
 	flushDone    chan struct{}
 	closeOnce    sync.Once
+
+	// loaded marks chats whose persisted message tail has been read from disk
+	// into memory, so LoadMessages runs at most once per chat and distinguishes
+	// "empty in DB" from "not yet loaded". See issue #139.
+	loaded map[int64]bool
+	// dirtyMsgs / deletedMsgs queue per-chat message upserts and deletes for the
+	// next write-behind flush, mirroring dirtyPersist for chat rows. See #139.
+	dirtyMsgs   map[int64]map[int]struct{}
+	deletedMsgs map[int64]map[int]struct{}
 }
 
 // sharedPtsBox reports whether a peer's messages live in the account's common
@@ -160,6 +177,9 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		dirtyPersist:       make(map[int64]struct{}),
 		flushStop:          make(chan struct{}),
 		flushDone:          make(chan struct{}),
+		loaded:             make(map[int64]bool),
+		dirtyMsgs:          make(map[int64]map[int]struct{}),
+		deletedMsgs:        make(map[int64]map[int]struct{}),
 		db:                 db,
 		log:                log,
 		orderDirty:         true, // build the sorted view lazily on first Chats() call
@@ -192,10 +212,6 @@ func (s *SQLiteStore) runFlusher() {
 // are taken under the lock; the disk writes run without it.
 func (s *SQLiteStore) Flush() {
 	s.mu.Lock()
-	if len(s.dirtyPersist) == 0 {
-		s.mu.Unlock()
-		return
-	}
 	pending := make([]Chat, 0, len(s.dirtyPersist))
 	for id := range s.dirtyPersist {
 		if c, ok := s.chats[id]; ok {
@@ -203,11 +219,13 @@ func (s *SQLiteStore) Flush() {
 		}
 	}
 	s.dirtyPersist = make(map[int64]struct{})
+	upserts, deletes := s.snapshotMessageWritesLocked()
 	s.mu.Unlock()
 
 	for _, c := range pending {
 		s.persistChat(c)
 	}
+	s.flushMessageRows(upserts, deletes)
 }
 
 // markDirtyLocked queues a chat for the next write-behind flush. Caller holds the lock.

@@ -8,6 +8,9 @@ type Store interface {
 	Chats() []Chat
 	Messages(chatID int64) []Message
 	SetMessages(chatID int64, msgs []Message)
+	// LoadMessages loads a chat's persisted message tail into memory on first
+	// open (idempotent per chat). See issue #139.
+	LoadMessages(chatID int64)
 	AppendMessage(msg Message)
 	// BumpChatLastMessage updates a chat's last-message preview and ordering
 	// without appending to its message slice (e.g. a forward target).
