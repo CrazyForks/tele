@@ -52,6 +52,56 @@ func TestStatusBar_ChatHintsIncludeCopy(t *testing.T) {
 	assert.Contains(t, strip(sb.View()), "copy")
 }
 
+func TestStatusBar_ChatHints_WordingFromLabels(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(200)
+	sb.SetKeyMap(km)
+	sb.SetActivePane("chat")
+	sb.SetMode(keys.ModeNormal)
+	out := strip(sb.View())
+	// down in chat is labeled "scroll" (not "move") via context override.
+	assert.Contains(t, out, "scroll")
+	assert.Contains(t, out, "write")
+	assert.Contains(t, out, "upload")
+	assert.Contains(t, out, "copy")
+}
+
+func TestStatusBar_ChatListHints_MoveOpenSearchQuit(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(200)
+	sb.SetKeyMap(km)
+	sb.SetActivePane("chatlist")
+	sb.SetMode(keys.ModeNormal)
+	out := strip(sb.View())
+	assert.Contains(t, out, "move")
+	assert.Contains(t, out, "open")
+	assert.Contains(t, out, "search")
+	assert.Contains(t, out, "quit")
+}
+
+func TestStatusBar_ComposerHints_SendNormal(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(200)
+	sb.SetKeyMap(km)
+	sb.SetActivePane("chat")
+	sb.SetMode(keys.ModeInsert)
+	out := strip(sb.View())
+	assert.Contains(t, out, "send")
+	assert.Contains(t, out, "normal")
+}
+
+func TestStatusBar_AttachStagedNormal_CaptionDrop(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(200)
+	sb.SetKeyMap(km)
+	sb.SetActivePane("chat")
+	sb.SetMode(keys.ModeNormal)
+	sb.SetAttachStaged(true)
+	out := strip(sb.View())
+	assert.Contains(t, out, "caption")
+	assert.Contains(t, out, "drop file")
+}
+
 func TestStatusBar_PickerHints(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(160)

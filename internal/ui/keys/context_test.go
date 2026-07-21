@@ -37,6 +37,17 @@ func TestDefaultKeyMap_DismissToastBinding(t *testing.T) {
 	assert.Equal(t, keys.ActionDismissToast, km.Resolve(keys.ContextGlobal, "ctrl+x"))
 }
 
+func TestDefaultKeyMap_ShowHelpBinding(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	// '?' opens help from any context via the global fallback.
+	assert.Equal(t, keys.ActionShowHelp, km.Resolve(keys.ContextChat, "?"))
+	assert.Equal(t, keys.ActionShowHelp, km.Resolve(keys.ContextChatList, "?"))
+}
+
+func TestKnownActions_IncludesShowHelp(t *testing.T) {
+	assert.True(t, keys.KnownActions()[keys.ActionShowHelp])
+}
+
 func TestKeyMap_Resolve_Unknown(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	assert.Equal(t, keys.ActionNone, km.Resolve(keys.ContextChatList, "F9"))

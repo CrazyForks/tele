@@ -118,16 +118,16 @@ func (m *SearchModel) hint() string {
 	}
 
 	navKey := arrowSym(up) + "/" + arrowSym(down)
-	pairs := [][2]string{{navKey, "move"}}
-	verb := "open"
+	pairs := [][2]string{{navKey, components.DescribeShort(keys.ContextSearch, keys.ActionDown)}}
+	verb := components.DescribeShort(keys.ContextSearch, keys.ActionConfirm)
 	if m.forwardMsgID != 0 {
-		verb = "forward"
+		verb = "forward" // forward-mode wording is state-specific
 	}
 	pairs = append(pairs, [2]string{confirm, verb})
 	if m.forwardMsgID != 0 {
 		pairs = append(pairs, [2]string{"tab", "comment"})
 	}
-	pairs = append(pairs, [2]string{cancel, "close"})
+	pairs = append(pairs, [2]string{cancel, components.DescribeShort(keys.ContextSearch, keys.ActionCancel)})
 	return components.OverlayHint(pairs, nil)
 }
 

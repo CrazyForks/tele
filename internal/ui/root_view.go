@@ -136,6 +136,9 @@ func (m RootModel) View() tea.View {
 		if m.photoViewer != nil {
 			content = m.photoViewerView(dimBackground(content, m.hasDarkBackground))
 		}
+		if m.help != nil {
+			content = overlayCenter(dimBackground(content, m.hasDarkBackground), m.help.View(), m.width, m.height)
+		}
 		// Bottom-anchored toasts must clear the composer: a limit warning is
 		// useless on top of the field it is about (#126). The composer grows with
 		// the draft, so the inset is read per frame.

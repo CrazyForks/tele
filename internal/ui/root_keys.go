@@ -10,6 +10,16 @@ import (
 
 func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.statusBar.SetStatus("")
+	// While the help modal is open it owns all keys.
+	if m.help != nil {
+		newHelp, open := m.help.Update(msg)
+		if !open {
+			m.help = nil
+			return m, nil
+		}
+		m.help = newHelp
+		return m, nil
+	}
 	if m.reactionPicker != nil {
 		newPicker, cmd := m.reactionPicker.Update(msg)
 		m.reactionPicker = newPicker
@@ -124,6 +134,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case keys.ActionDismissToast:
 			m.toasts.DismissTop()
+			return m, nil
+		case keys.ActionShowHelp:
+			m.help = components.NewHelpModal(m.keyMap, m.width, m.height)
 			return m, nil
 		}
 	}

@@ -11,6 +11,20 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Press `?` from any navigation pane to open a keyboard-shortcuts help modal: a
+  scrollable, centered reference of every hotkey grouped by surface (Global,
+  Chat list, Chat, Composer, menus, and more). Dismiss with `Esc` or `?`. The
+  list is generated from the live keymap, so it always matches the actual
+  bindings — including any you have overridden in config (#46)
+
+### Changed
+
+- Status-bar and overlay hints now draw their wording from a single source, so
+  an action reads the same everywhere and hints stay in sync with the bindings
+  across every pane, mode, and menu
+
 ## [1.8.2] - 2026-07-18 — Reliable package publishing
 
 ### Fixed

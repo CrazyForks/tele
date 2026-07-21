@@ -94,7 +94,11 @@ func (p *OpenPicker) View() string {
 		}
 	}
 
-	hint := OverlayHint([][2]string{{"j/k", "move"}, {"enter", "open"}, {"esc", "close"}}, OverlayMenuBg)
+	hint := OverlayHint([][2]string{
+		{"j/k", DescribeShort(keys.ContextContextMenu, keys.ActionDown)},
+		{"enter", DescribeShort(keys.ContextContextMenu, keys.ActionOpenInViewer)},
+		{"esc", DescribeShort(keys.ContextContextMenu, keys.ActionCancel)},
+	}, OverlayMenuBg)
 
 	innerW := 0
 	for _, r := range rows {

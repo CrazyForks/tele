@@ -230,7 +230,10 @@ func (m *FilePickerModel) View() string {
 	}
 
 	hint := components.OverlayHint([][2]string{
-		{"type", "filter"}, {"enter", "open"}, {"esc", "close"}, {"backspace", "up"},
+		{"type", "filter"},
+		{"enter", components.DescribeShort(keys.ContextFilePicker, keys.ActionConfirm)},
+		{"esc", components.DescribeShort(keys.ContextFilePicker, keys.ActionCancel)},
+		{"backspace", "up"},
 	}, nil)
 	content := strings.Join(lines, "\n")
 	h := len(lines) + 2

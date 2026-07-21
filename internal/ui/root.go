@@ -91,6 +91,7 @@ type RootModel struct {
 	contextMenu       *components.ContextMenu
 	chatMenu          *components.ChatContextMenu
 	reactionPicker    *components.ReactionPicker
+	help              *components.HelpModal
 	openPicker        *components.OpenPicker
 	reactionTargetID  int
 	mentionPopup      *components.MentionPopup

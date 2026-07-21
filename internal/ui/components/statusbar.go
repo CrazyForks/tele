@@ -105,83 +105,118 @@ func (sb *StatusBar) View() string {
 	return barStyle.Width(sb.width).Render(strings.Join(segs, sep))
 }
 
+// footerKind classifies a footer hint item.
+type footerKind int
+
+const (
+	fiSingle footerKind = iota
+	fiNav
+	fiLiteral
+)
+
+// footerItem is one hint in a status-bar profile. For fiSingle/fiNav the label
+// comes from keys.Describe(ctx, action) unless labelOverride is set; keys come
+// from KeyFor. For fiLiteral, keyword is the accented word and text its
+// description.
+type footerItem struct {
+	kind          footerKind
+	ctx           keys.Context
+	action        keys.Action // fiSingle
+	down, up      keys.Action // fiNav
+	keyword, text string      // fiLiteral
+	labelOverride string      // optional wording override (state-specific)
+}
+
+// hints selects the profile for the current state and renders it. Wording is
+// sourced from keys.Describe so it never drifts from the bindings.
 func (sb *StatusBar) hints() string {
 	if sb.keyMap == nil {
 		return ""
 	}
 	a := sb.accentStyle()
+	items := sb.profile()
+	parts := make([]string, 0, len(items))
+	for _, it := range items {
+		parts = append(parts, sb.renderFooterItem(it, a))
+	}
+	return joinHints(parts...)
+}
+
+func (sb *StatusBar) profile() []footerItem {
 	switch {
 	case sb.pickerOpen:
-		confirm := sb.keyMap.KeyFor(keys.ContextFilePicker, keys.ActionConfirm)
-		cancel := sb.keyMap.KeyFor(keys.ContextFilePicker, keys.ActionCancel)
-		return joinHints(
-			hintLiteral("type", "filter", a),
-			hintKey(confirm, "open/select", a),
-			hintKey(cancel, "cancel", a),
-		)
+		return []footerItem{
+			{kind: fiLiteral, keyword: "type", text: "filter"},
+			{kind: fiSingle, ctx: keys.ContextFilePicker, action: keys.ActionConfirm},
+			{kind: fiSingle, ctx: keys.ContextFilePicker, action: keys.ActionCancel},
+		}
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert && sb.attachStaged:
-		send := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionConfirm)
-		toggle := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionToggleSendAs)
-		normal := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionNormal)
-		return joinHints(
-			hintKey(send, "send", a),
-			hintKey(toggle, "photo/file", a),
-			hintKey(normal, "normal", a),
-		)
+		return []footerItem{
+			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionConfirm},
+			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionToggleSendAs},
+			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionNormal},
+		}
 	case sb.activePane == "chat" && sb.attachStaged:
-		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
-		drop := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCancelUpload)
-		return joinHints(
-			hintKey(write, "caption", a),
-			hintKey(drop, "drop file", a),
-		)
+		return []footerItem{
+			{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionInsert, labelOverride: "caption"},
+			{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCancelUpload},
+		}
 	case sb.activePane == "folders":
-		down := sb.keyMap.KeyFor(keys.ContextFolders, keys.ActionDown)
-		up := sb.keyMap.KeyFor(keys.ContextFolders, keys.ActionUp)
-		sel := sb.keyMap.KeyFor(keys.ContextFolders, keys.ActionConfirm)
-		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
-		return joinHints(
-			hintNav(down, up, "move", a),
-			hintKey(sel, "select", a),
-			hintKey(quit, "quit", a),
-		)
+		return []footerItem{
+			{kind: fiNav, ctx: keys.ContextFolders, down: keys.ActionDown, up: keys.ActionUp},
+			{kind: fiSingle, ctx: keys.ContextFolders, action: keys.ActionConfirm},
+			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionQuit},
+		}
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert:
-		send := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionConfirm)
-		normal := sb.keyMap.KeyFor(keys.ContextComposer, keys.ActionNormal)
-		return joinHints(hintKey(send, "send", a), hintKey(normal, "normal", a))
+		return []footerItem{
+			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionConfirm},
+			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionNormal},
+		}
 	case sb.activePane == "chat":
-		down := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionDown)
-		up := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionUp)
-		curDown := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCursorDown)
-		curUp := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCursorUp)
-		write := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert)
-		attach := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionAttach)
-		open := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionOpenInViewer)
-		copyKey := sb.keyMap.KeyFor(keys.ContextChat, keys.ActionCopyMessage)
-		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
-		return joinHints(
-			hintNav(down, up, "scroll", a),
-			hintNav(curDown, curUp, "select", a),
-			hintKey(write, "write", a),
-			hintKey(attach, "upload", a),
-			hintKey(open, "open", a),
-			hintKey(copyKey, "copy", a),
-			hintKey(quit, "quit", a),
-		)
+		return []footerItem{
+			{kind: fiNav, ctx: keys.ContextChat, down: keys.ActionDown, up: keys.ActionUp},
+			{kind: fiNav, ctx: keys.ContextChat, down: keys.ActionCursorDown, up: keys.ActionCursorUp},
+			{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionInsert},
+			{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionAttach},
+			{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionOpenInViewer},
+			{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyMessage},
+			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionQuit},
+		}
 	case sb.activePane == "chatlist":
-		down := sb.keyMap.KeyFor(keys.ContextChatList, keys.ActionDown)
-		up := sb.keyMap.KeyFor(keys.ContextChatList, keys.ActionUp)
-		open := sb.keyMap.KeyFor(keys.ContextChatList, keys.ActionConfirm)
-		search := sb.keyMap.KeyFor(keys.ContextChatList, keys.ActionSearch)
-		quit := sb.keyMap.KeyFor(keys.ContextGlobal, keys.ActionQuit)
-		return joinHints(
-			hintNav(down, up, "move", a),
-			hintKey(open, "open", a),
-			hintKey(search, "search", a),
-			hintKey(quit, "quit", a),
-		)
+		return []footerItem{
+			{kind: fiNav, ctx: keys.ContextChatList, down: keys.ActionDown, up: keys.ActionUp},
+			{kind: fiSingle, ctx: keys.ContextChatList, action: keys.ActionConfirm},
+			{kind: fiSingle, ctx: keys.ContextChatList, action: keys.ActionSearch},
+			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionQuit},
+		}
 	}
-	return ""
+	return nil
+}
+
+func (sb *StatusBar) renderFooterItem(it footerItem, accent lipgloss.Style) string {
+	switch it.kind {
+	case fiLiteral:
+		return hintLiteral(it.keyword, it.text, accent)
+	case fiNav:
+		desc := it.labelOverride
+		if desc == "" {
+			if lbl, ok := keys.Describe(it.ctx, it.down); ok {
+				desc = lbl.Short
+			}
+		}
+		downKey := sb.keyMap.KeyFor(it.ctx, it.down)
+		upKey := sb.keyMap.KeyFor(it.ctx, it.up)
+		return hintNav(downKey, upKey, desc, accent)
+	default: // fiSingle
+		desc := it.labelOverride
+		if desc == "" {
+			if lbl, ok := keys.Describe(it.ctx, it.action); ok {
+				desc = lbl.Short
+			}
+		}
+		key := sb.keyMap.KeyFor(it.ctx, it.action)
+		return hintKey(key, desc, accent)
+	}
 }
 
 func hintKey(key, desc string, accent lipgloss.Style) string {

@@ -24,6 +24,7 @@ const (
 	ActionFocusNext     Action = "focus_next"
 	ActionQuit          Action = "quit"
 	ActionDismissToast  Action = "dismiss_toast"
+	ActionShowHelp      Action = "show_help"
 )
 
 // ActionMsg wraps an Action as a bubbletea message.
@@ -46,6 +47,7 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+q": ActionQuit,
 			"q":      ActionQuit,
 			"ctrl+x": ActionDismissToast,
+			"?":      ActionShowHelp,
 		},
 		ContextFolders: {
 			"j":     ActionDown,
