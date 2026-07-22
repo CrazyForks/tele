@@ -13,6 +13,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Chats now open instantly on restart and stay usable offline. Recent message
+  history is persisted to SQLite and rendered immediately on open, then
+  reconciled with the network; downloaded inline images are cached on disk
+  (bounded by `photos.disk_cache_size`, default 256 MB) so a reopened chat shows
+  its pictures without re-downloading (#139, #174)
 - Press `?` from any navigation pane to open a keyboard-shortcuts help modal: a
   scrollable, centered reference of every hotkey grouped by surface (Global,
   Chat list, Chat, Composer, menus, and more). Dismiss with `Esc` or `?`. The

@@ -1,6 +1,10 @@
 package ui_test
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"os"
 	"path/filepath"
@@ -9,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/gotd/td/tgerr"
+	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -321,4 +326,51 @@ func TestDownloadFileCmd_FailureLeavesNoFile(t *testing.T) {
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "partial download must be removed")
+}
+
+func makeJPEG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 200, G: 100, B: 50, A: 255})
+	var buf bytes.Buffer
+	require.NoError(t, jpeg.Encode(&buf, img, nil))
+	return buf.Bytes()
+}
+
+func TestDownloadPhotoCmd_CacheHitSkipsNetwork(t *testing.T) {
+	mc, err := mediacache.New(t.TempDir(), 1<<20)
+	require.NoError(t, err)
+	ref := store.PhotoRef{ID: 42, ThumbSize: "m"}
+	mc.Put(mediacache.PhotoKey(ref.ID, ref.ThumbSize), makeJPEG(t))
+
+	calls := 0
+	client := &mockTGClient{downloadPhotoFunc: func() (image.Image, error) {
+		calls++
+		return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
+	}}
+
+	msg := ui.DownloadPhotoCmdCachedForTest(client, mc, store.Peer{ID: 1}, 7, ref)()
+
+	ready, ok := msg.(ui.PhotoReadyMsg)
+	require.True(t, ok)
+	assert.Equal(t, int64(42), ready.PhotoID)
+	assert.NotNil(t, ready.Image)
+	assert.Equal(t, 0, calls, "a cache hit must not hit the network")
+}
+
+func TestDownloadPhotoCmd_CacheMissPopulatesCache(t *testing.T) {
+	mc, err := mediacache.New(t.TempDir(), 1<<20)
+	require.NoError(t, err)
+	ref := store.PhotoRef{ID: 99, ThumbSize: "m"}
+
+	client := &mockTGClient{downloadPhotoFunc: func() (image.Image, error) {
+		return image.NewRGBA(image.Rect(0, 0, 4, 4)), nil
+	}}
+
+	msg := ui.DownloadPhotoCmdCachedForTest(client, mc, store.Peer{ID: 1}, 7, ref)()
+
+	_, ok := msg.(ui.PhotoReadyMsg)
+	require.True(t, ok)
+	_, cached := mc.Get(mediacache.PhotoKey(ref.ID, ref.ThumbSize))
+	assert.True(t, cached, "a network download should populate the disk cache")
 }

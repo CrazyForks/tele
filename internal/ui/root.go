@@ -4,12 +4,14 @@ import (
 	"context"
 	"image"
 	"os"
+	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -65,6 +67,7 @@ type RootModel struct {
 	cfg              *config.Config
 	imageCache       *imagecache.Cache
 	fullImageCache   *imagecache.Cache
+	mediaCache       *mediacache.Cache
 	// gifFrames caches decoded frames per document id for inline GIF looping.
 	gifFrames      map[int64][]image.Image
 	gifActiveID    int64 // document id currently animating (0 = none)
@@ -198,6 +201,13 @@ func (m RootModel) WithContext(ctx context.Context) RootModel {
 
 func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	m.cfg = cfg
+	if cfg.Photos.DiskCacheSize > 0 {
+		if base, err := os.UserCacheDir(); err == nil {
+			if mc, err := mediacache.New(filepath.Join(base, "tele", "media"), cfg.Photos.DiskCacheSize); err == nil {
+				m.mediaCache = mc
+			}
+		}
+	}
 	m.imageMode = media.DetectMode(cfg.Photos.Mode, os.Getenv)
 	if m.imageMode == media.ModeKitty {
 		m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))

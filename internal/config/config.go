@@ -43,6 +43,10 @@ type PhotosConfig struct {
 	// the desktop client's fixed media ceiling). Height is additionally bounded
 	// to a fraction of the chat pane. Raise it for larger inline images.
 	MaxLongSidePx int `mapstructure:"max_long_side_px"`
+	// DiskCacheSize bounds the on-disk inline-image cache in bytes. Downloaded
+	// photos are cached under the user cache dir so a chat re-renders its images
+	// instantly on restart. 0 disables the disk cache. See issue #174.
+	DiskCacheSize int64 `mapstructure:"disk_cache_size"`
 }
 
 type Config struct {

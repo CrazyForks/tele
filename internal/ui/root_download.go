@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"image"
+	"image/jpeg"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/gabriel-vasile/mimetype"
 
+	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -51,8 +54,17 @@ func downloadWithRefresh[T any, R any](
 	return result, &msg, nil
 }
 
-func downloadPhotoCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+func downloadPhotoCmd(ctx context.Context, client internaltg.Client, mc *mediacache.Cache, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
 	return func() tea.Msg {
+		key := mediacache.PhotoKey(ref.ID, ref.ThumbSize)
+		if mc != nil {
+			if data, ok := mc.Get(key); ok {
+				if img, _, err := image.Decode(bytes.NewReader(data)); err == nil {
+					return PhotoReadyMsg{PhotoID: ref.ID, Image: img}
+				}
+				mc.Remove(key) // corrupt entry; fall through and refetch
+			}
+		}
 		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
 			func(r store.PhotoRef) (image.Image, error) {
 				return client.DownloadPhoto(ctx, r)
@@ -67,6 +79,11 @@ func downloadPhotoCmd(ctx context.Context, client internaltg.Client, peer store.
 		if err != nil {
 			return StatusErrMsg{Text: "photo download failed: " + err.Error(), Sev: components.SeverityWarning}
 		}
+		if mc != nil {
+			if data := encodeCacheJPEG(img); data != nil {
+				mc.Put(key, data)
+			}
+		}
 		ready := PhotoReadyMsg{PhotoID: ref.ID, Image: img}
 		if refreshed != nil {
 			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, photo: refreshed.Photo})
@@ -75,9 +92,26 @@ func downloadPhotoCmd(ctx context.Context, client internaltg.Client, peer store.
 	}
 }
 
-// DownloadPhotoCmdForTest exposes downloadPhotoCmd for tests.
+// encodeCacheJPEG re-encodes a decoded inline photo for the on-disk cache.
+// Inline thumbnails are downscaled and re-rendered to cells, so JPEG re-encode
+// is visually lossless here and keeps the cache compact. Returns nil on error
+// (the download still succeeds; only the caching is skipped).
+func encodeCacheJPEG(img image.Image) []byte {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
+		return nil
+	}
+	return buf.Bytes()
+}
+
+// DownloadPhotoCmdForTest exposes downloadPhotoCmd (no disk cache) for tests.
 func DownloadPhotoCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
-	return downloadPhotoCmd(context.Background(), c, peer, msgID, ref)
+	return downloadPhotoCmd(context.Background(), c, nil, peer, msgID, ref)
+}
+
+// DownloadPhotoCmdCachedForTest exposes downloadPhotoCmd with a disk cache.
+func DownloadPhotoCmdCachedForTest(c internaltg.Client, mc *mediacache.Cache, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+	return downloadPhotoCmd(context.Background(), c, mc, peer, msgID, ref)
 }
 
 // HistoryChunkMsgForTest builds a historyChunkMsg for tests.
@@ -564,7 +598,7 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 		}
 		if msg.Photo != nil {
 			if !m.imageCache.Contains(msg.Photo.ID) {
-				cmds = append(cmds, downloadPhotoCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Photo))
+				cmds = append(cmds, downloadPhotoCmd(m.ctx, m.tgClient, m.mediaCache, peer, msg.ID, *msg.Photo))
 			}
 			if m.cfg != nil && m.cfg.Photos.EagerFullQuality && msg.Photo.FullThumbSize != "" {
 				if !m.fullImageCache.Contains(msg.Photo.ID) {
