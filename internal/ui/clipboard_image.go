@@ -9,12 +9,6 @@ type clipboardImageReader interface {
 	ReadImage() (data []byte, ext string, err error)
 }
 
-// noopClipboardImageReader always reports "no image", so platforms without a
-// reader degrade silently to the text paste path.
-type noopClipboardImageReader struct{}
-
-func (noopClipboardImageReader) ReadImage() ([]byte, string, error) { return nil, "", nil }
-
 // clipboardImageReaderFunc adapts a func to the interface for tests.
 type clipboardImageReaderFunc func() ([]byte, string, error)
 
