@@ -47,6 +47,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- After the machine wakes from sleep, the chat list now catches up on its own.
+  Unread counters, ordering, and notifications for anything that arrived while
+  the machine was suspended are reconciled on reconnect, instead of staying
+  stale until you restarted the app or opened each chat by hand (#173)
 - Chat rows containing an inline image no longer stay full-color when a modal
   (search, context menu, help, etc.) dims the background. The image now fades
   out with the rest of the pane for the duration of the modal and reappears

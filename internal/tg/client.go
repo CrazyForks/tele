@@ -115,6 +115,25 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	// manager as usual.
 	hook := newOutboxHook(manager, c.mustDeliver, c.log)
 
+	// resync forces a full catch-up (getDifference) on every reconnect after the
+	// first, so state missed during OS sleep/suspend is reconciled immediately on
+	// wake instead of waiting for the manager's frozen 15-minute idle timer (#173).
+	// UpdatesTooLong is the manager's own "you are too far behind, fetch the
+	// difference" signal, so it drives the same common-state + channel catch-up
+	// the server would ask for. Run off the connection-lifecycle callback (which
+	// must not block) in a goroutine bounded by ctx: Handle can block on the
+	// manager's internal queue.
+	resync := &reconnectResync{
+		force: func() {
+			go func() {
+				c.log.Info("reconnected, forcing updates catch-up")
+				if err := manager.Handle(ctx, &tg.UpdatesTooLong{}); err != nil {
+					c.log.Warn("forced updates catch-up after reconnect failed", zap.Error(err))
+				}
+			}()
+		},
+	}
+
 	go func() {
 		for {
 			select {
@@ -160,6 +179,10 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		OnDead: func(err error) {
 			c.log.Warn("mtproto connection dead", zap.Error(err))
 		},
+		// OnConnectionState drives the post-reconnect catch-up (#173): gotd emits
+		// ConnectionStateReady on every (re)established primary connection, which
+		// is the reliable wake/reconnect signal the frozen idle timer is not.
+		OnConnectionState: resync.onConnectionState,
 	})
 
 	c.log.Debug("connecting to telegram")
