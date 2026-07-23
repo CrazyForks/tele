@@ -13,9 +13,16 @@ builds:
       - darwin
       - linux
       - windows
+      - freebsd
+      - openbsd
+      - netbsd
     goarch:
       - amd64
       - arm64
+    # netbsd/arm64 fails to build: modernc.org/libc excludes it upstream.
+    ignore:
+      - goos: netbsd
+        goarch: arm64
     ldflags:
       - -s -w
       - -X main.buildAPIID={{ .Env.TG_API_ID }}

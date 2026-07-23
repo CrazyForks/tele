@@ -125,6 +125,28 @@ YAML-based config with sensible defaults.
 
 ## Installation
 
+### Any Unix (macOS · Linux · FreeBSD · OpenBSD · NetBSD) — one-liner
+
+```sh
+curl -sL https://raw.githubusercontent.com/sorokin-vladimir/tele/main/scripts/install.sh | sh
+```
+
+The script detects your OS and architecture and installs the matching binary
+from the latest release. Options:
+
+```sh
+# Latest beta (prerelease), installed as `tele-beta` so it coexists with stable:
+curl -sL https://raw.githubusercontent.com/sorokin-vladimir/tele/main/scripts/install.sh | sh -s -- --beta
+
+# A specific version, or a custom install directory:
+curl -sL .../install.sh | sh -s -- --version v1.9.0
+curl -sL .../install.sh | PREFIX="$HOME/.local/bin" sh
+```
+
+**BSD note:** desktop notifications on FreeBSD use the terminal-native path
+(supported terminals only); audio playback needs a running PulseAudio/PipeWire
+server. Both degrade gracefully when unavailable.
+
 ### macOS / Linux — Homebrew
 
 ```sh
