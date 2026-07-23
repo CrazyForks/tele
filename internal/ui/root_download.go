@@ -6,8 +6,10 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"mime"
 	"os"
 	"path/filepath"
+	"sort"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/gabriel-vasile/mimetype"
@@ -454,19 +456,41 @@ func downloadFileName(ref store.DocumentRef, kind store.MediaKind) string {
 	return prefix + "_" + itoa64(ref.ID) + ext
 }
 
-// extFromMime maps common video MIME types to a file extension so the OS picks
-// the right player. Defaults to .mp4 (the usual Telegram video container).
-func extFromMime(mime string) string {
-	switch mime {
-	case "video/quicktime":
-		return ".mov"
-	case "video/webm":
-		return ".webm"
-	case "video/x-matroska":
-		return ".mkv"
-	default:
-		return ".mp4"
+// canonicalExts are the extensions we promise for common Telegram media. They
+// are registered into the stdlib MIME table (init below) so they resolve even
+// on a minimal host that lacks a system mime.types, and they are preferred by
+// extFromMime when a type maps to several extensions.
+var canonicalExts = map[string]string{
+	".mov":  "video/quicktime",
+	".mkv":  "video/x-matroska",
+	".mp4":  "video/mp4",
+	".webm": "video/webm",
+}
+
+func init() {
+	for ext, typ := range canonicalExts {
+		_ = mime.AddExtensionType(ext, typ)
 	}
+}
+
+// extFromMime picks a file extension for a MIME type from the standard library
+// system MIME table, so the OS opens the media in the right app without a
+// hand-maintained switch. When a type maps to several extensions (order is
+// unspecified) it prefers a canonical one and otherwise takes the
+// lexicographically first for stable behavior. Unknown types fall back to .mp4,
+// the usual Telegram video container.
+func extFromMime(mimeType string) string {
+	exts, _ := mime.ExtensionsByType(mimeType)
+	for _, e := range exts {
+		if _, ok := canonicalExts[e]; ok {
+			return e
+		}
+	}
+	if len(exts) > 0 {
+		sort.Strings(exts)
+		return exts[0]
+	}
+	return ".mp4"
 }
 
 func downloadVoiceCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef) tea.Cmd {

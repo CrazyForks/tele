@@ -142,7 +142,9 @@ func TestExtFromMime(t *testing.T) {
 		"video/webm":        ".webm",
 		"video/x-matroska":  ".mkv",
 		"video/mp4":         ".mp4",
-		"application/weird": ".mp4", // default container for Telegram video
+		"application/pdf":   ".pdf", // stdlib table drives non-video types too
+		"image/png":         ".png",
+		"application/weird": ".mp4", // unknown -> default container for Telegram video
 	}
 	for mime, want := range cases {
 		require.Equal(t, want, extFromMime(mime), mime)
