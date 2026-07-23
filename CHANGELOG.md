@@ -23,6 +23,17 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   Chat list, Chat, Composer, menus, and more). Dismiss with `Esc` or `?`. The
   list is generated from the live keymap, so it always matches the actual
   bindings — including any you have overridden in config (#46)
+- `tele` now builds and ships for FreeBSD, OpenBSD, and NetBSD. Every release
+  includes BSD tarballs and raw binaries (amd64, plus arm64 on FreeBSD and
+  OpenBSD), and CI cross-compiles all three to catch regressions. Audio playback
+  uses the pure-Go PulseAudio/PipeWire client, and on FreeBSD desktop
+  notifications use the terminal-native path where the system notifier is
+  unavailable — both degrade gracefully when no server is present (#176)
+- A one-line installer for any Unix — `curl -sL .../scripts/install.sh | sh` —
+  that detects your OS and CPU architecture and downloads the matching binary.
+  Pass `--beta` to install the latest prerelease as a coexisting `tele-beta`,
+  `--version` to pin a specific tag, or set `PREFIX` to choose the install
+  directory (#176)
 
 ### Changed
 
