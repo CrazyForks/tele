@@ -73,3 +73,14 @@ func TestOSCNotifierNotify(t *testing.T) {
 		}
 	})
 }
+
+// TestFallbackNotifierNotNil guards the platform wiring: newNotifier's
+// out-of-process fallback must be constructed via fallbackNotifier(), which
+// every target OS provides (beeep-backed on !freebsd, no-op on freebsd). We do
+// not call Notify() here on purpose — on a desktop host that would post a real
+// system notification during the test run.
+func TestFallbackNotifierNotNil(t *testing.T) {
+	if fallbackNotifier() == nil {
+		t.Fatal("fallbackNotifier returned nil")
+	}
+}

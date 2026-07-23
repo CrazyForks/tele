@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || freebsd || openbsd || netbsd
 
 package audio
 
@@ -10,9 +10,10 @@ import (
 	"github.com/jfreymuth/pulse/proto"
 )
 
-// On Linux oto needs ALSA (cgo), which breaks the static cgo-free build. Instead
-// we talk to the system audio server (PulseAudio / PipeWire's pulse protocol)
-// with the pure-Go jfreymuth/pulse client. One shared client per process.
+// On Linux and the BSDs oto needs a native backend (cgo), which breaks the
+// static cgo-free build. Instead we talk to the system audio server (PulseAudio
+// / PipeWire's pulse protocol) with the pure-Go jfreymuth/pulse client. One
+// shared client per process.
 var (
 	clientOnce sync.Once
 	clientInst *pulse.Client

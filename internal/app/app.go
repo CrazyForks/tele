@@ -12,7 +12,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/gen2brain/beeep"
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -27,12 +26,6 @@ import (
 // Notifier sends OS desktop notifications.
 type Notifier interface {
 	Notify(title, body string) error
-}
-
-type beeepNotifier struct{}
-
-func (b beeepNotifier) Notify(title, body string) error {
-	return beeep.Notify(title, body, "")
 }
 
 func truncate(s string, n int) string {

@@ -94,7 +94,7 @@ func newNotifier(log *zap.Logger) Notifier {
 		log.Debug("notifications: using terminal-native OSC", zap.Int("format", int(f)))
 		return &oscNotifier{w: os.Stderr, format: f}
 	}
-	return beeepNotifier{}
+	return fallbackNotifier()
 }
 
 func isTerminal(f *os.File) bool {
