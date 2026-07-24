@@ -99,6 +99,13 @@ func (r *BlockRenderer) Render(photoID int64, img image.Image, cols int) []strin
 	return r.cache.get(k, func() []string { return RenderBlockArt(img, cols) })
 }
 
+// RenderWindow renders the image at coverCols wide (cached via Render), then
+// slices the centered sub-rectangle to winCols x winRows. coverRows is implied by
+// the cover width and the image aspect, so it is not needed here.
+func (r *BlockRenderer) RenderWindow(photoID int64, img image.Image, coverCols, _, hOff, vOff, winCols, winRows int) []string {
+	return SliceArtWindow(r.Render(photoID, img, coverCols), hOff, vOff, winCols, winRows)
+}
+
 // Reset clears the render cache (call when the target width changes).
 func (r *BlockRenderer) Reset() {
 	r.cache.reset()

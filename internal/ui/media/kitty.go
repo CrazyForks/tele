@@ -197,6 +197,17 @@ func (r *KittyRenderer) Render(photoID int64, img image.Image, cols int) []strin
 	})
 }
 
+// RenderWindow returns the placeholder cells for a centered sub-rectangle of the
+// image transmitted at coverCols wide, or nil until it is transmitted at that
+// width. img/coverRows are unused (the placement already holds the pixels); they
+// keep the signature uniform with the block renderer.
+func (r *KittyRenderer) RenderWindow(photoID int64, _ image.Image, coverCols, _, hOff, vOff, winCols, winRows int) []string {
+	if !r.store.Ready(photoID, coverCols) {
+		return nil
+	}
+	return PlaceholderWindow(r.store.IDFor(photoID), hOff, vOff, winCols, winRows)
+}
+
 // Reset clears the placeholder cache (call on width change).
 func (r *KittyRenderer) Reset() {
 	r.cache.reset()

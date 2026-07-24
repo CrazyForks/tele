@@ -2,8 +2,10 @@ package components
 
 import (
 	"image"
+	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -136,5 +138,43 @@ func TestMosaicTileTransmitBoxStableUnderLoad(t *testing.T) {
 	c2, r2 := ml.MediaBoxForID(11, 600, 800)
 	if c1 != c2 || r1 != r2 {
 		t.Fatalf("tile transmit box changed under sibling load: (%d,%d) -> (%d,%d)", c1, r1, c2, r2)
+	}
+}
+
+func TestRenderMosaicTileShape(t *testing.T) {
+	ml := NewMessageList(40, 80)
+	ml.SetImage(11, testImage(1000, 1200)) // mild portrait -> cover
+	gm := groupMedia{Index: 3, Msg: store.Message{ID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}}}
+	g := coverWindow(1000, 1200, 20, 10)
+	lines := ml.renderMosaicTile(gm, g, "[3] photo ")
+	if len(lines) != g.TileRows {
+		t.Fatalf("tile lines = %d, want TileRows %d", len(lines), g.TileRows)
+	}
+	for i, ln := range lines {
+		if w := lipgloss.Width(ln); w != g.TileW {
+			t.Fatalf("tile line %d width %d, want TileW %d", i, w, g.TileW)
+		}
+	}
+	if !strings.Contains(lines[0], "[3]") {
+		t.Fatalf("badge missing from tile row 0: %q", lines[0])
+	}
+}
+
+func TestComposeMosaicRowWidth(t *testing.T) {
+	ml := NewMessageList(40, 80)
+	m := ml.measureBubble(store.Message{Text: ""})
+	tiles := [][]string{
+		{"aaa", "aaa"},
+		{"bb", "bb"},
+	}
+	out := ml.composeMosaicRow(tiles, []int{3, 2}, m)
+	if len(out) != 2 {
+		t.Fatalf("rows = %d, want 2", len(out))
+	}
+	w0 := lipgloss.Width(out[0])
+	for i, ln := range out {
+		if lipgloss.Width(ln) != w0 {
+			t.Fatalf("row %d width %d != row0 width %d", i, lipgloss.Width(ln), w0)
+		}
 	}
 }

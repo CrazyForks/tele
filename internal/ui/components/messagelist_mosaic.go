@@ -1,6 +1,10 @@
 package components
 
 import (
+	"strings"
+
+	"charm.land/lipgloss/v2"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
@@ -258,4 +262,90 @@ func minWidth(ws []int) int {
 		}
 	}
 	return m
+}
+
+// renderMosaicTile renders one tile as g.TileRows lines each g.TileW wide (no
+// bubble borders). It windows the cover placement (Kitty) or block art to the
+// visible sub-rectangle, or centers the fitted image with blank padding in
+// contain mode, then folds the badge onto row 0. A tile whose bytes are not
+// cached (or whose Kitty placement is not live yet) is a blank box; the badge
+// still shows, and the image swaps in at the same size on a later frame.
+func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string) []string {
+	lines := make([]string, g.TileRows)
+	blank := strings.Repeat(" ", g.TileW)
+	for i := range lines {
+		lines[i] = blank
+	}
+	if id, ok := ml.PreviewImageID(gm.Msg); ok {
+		if img, has := ml.cachedImage(id); has {
+			switch g.Mode {
+			case tileContain:
+				art := ml.renderer.RenderWindow(id, img, g.FitCols, g.FitRows, 0, 0, g.FitCols, g.FitRows)
+				for r := 0; r < len(art) && g.PadTop+r < g.TileRows; r++ {
+					line := strings.Repeat(" ", g.PadLeft) + art[r]
+					if w := lipgloss.Width(line); w < g.TileW {
+						line += strings.Repeat(" ", g.TileW-w)
+					}
+					lines[g.PadTop+r] = line
+				}
+			default: // tileCover
+				coverC, coverR := g.transmitBox()
+				art := ml.renderer.RenderWindow(id, img, coverC, coverR, g.HOff, g.VOff, g.TileW, g.TileRows)
+				for r := 0; r < len(art) && r < g.TileRows; r++ {
+					al := art[r]
+					if w := lipgloss.Width(al); w < g.TileW {
+						al += strings.Repeat(" ", g.TileW-w)
+					}
+					lines[r] = al
+				}
+			}
+		}
+	}
+	lines[0] = overlayBadgeOnArtRow(lines[0], badge, g.TileW)
+	// A badge wider than a narrow tile returns as plain text past TileW; clamp it
+	// (safe: only the pure-text overflow case exceeds TileW).
+	if lipgloss.Width(lines[0]) > g.TileW {
+		lines[0] = xansi.Truncate(lines[0], g.TileW, "")
+	}
+	for i, ln := range lines {
+		if w := lipgloss.Width(ln); w < g.TileW {
+			lines[i] = ln + strings.Repeat(" ", g.TileW-w)
+		}
+	}
+	return lines
+}
+
+// composeMosaicRow merges equal-height tile blocks left to right with mosaicGap
+// blank columns between them, then wraps each row in the bubble side borders and
+// pads to the content width. A nil tile (a missing trailing slot in a partial
+// last grid row) becomes a blank box of its column width.
+func (ml *MessageList) composeMosaicRow(tiles [][]string, widths []int, m bubbleMetrics) []string {
+	b, bs := m.b, m.bs
+	rows := 0
+	for _, t := range tiles {
+		if len(t) > rows {
+			rows = len(t)
+		}
+	}
+	gap := strings.Repeat(" ", mosaicGap)
+	out := make([]string, rows)
+	for r := 0; r < rows; r++ {
+		var sb strings.Builder
+		for c, t := range tiles {
+			if c > 0 {
+				sb.WriteString(gap)
+			}
+			cell := strings.Repeat(" ", widths[c])
+			if r < len(t) {
+				cell = t[r]
+			}
+			sb.WriteString(cell)
+		}
+		line := sb.String()
+		if w := lipgloss.Width(line); w < m.actualW {
+			line += strings.Repeat(" ", m.actualW-w)
+		}
+		out[r] = bs.Render(b.Left) + " " + line + " " + bs.Render(b.Right)
+	}
+	return out
 }
