@@ -1,40 +1,65 @@
 #!/usr/bin/env bash
 #
-# Show download counts for all releases of a given major version.
-# Prints per-tag totals (summed across all platform assets) and a grand total.
+# Show download counts for tele releases. Prints per-tag totals and a grand
+# total. Betas are included (they are prerelease GitHub tags).
+#
+# What the numbers cover: every package manager tele ships through — Homebrew,
+# AUR (tele-bin), Scoop, winget, and the Nix flake — fetches its artifact from
+# the GitHub release assets. So each `brew install` / `scoop install` /
+# `yay -S` / `winget install` / nix build increments the GitHub downloadCount.
+# That means these per-asset counts already fold in all of those channels; they
+# must NOT be summed on top or they double count. Only Gemfury (apt/dnf/apk) and
+# the Snap store serve bytes from their own infra and are invisible here — query
+# `snapcraft metrics tele` separately for Snap.
+#
+# checksums.txt, *.sigstore.json and *.sbom.json are excluded: those are pulled
+# by verification tooling and crawlers, not by users installing tele, so they
+# would inflate the install count.
 #
 # Usage:
+#   ./release-downloads.sh          # every release (all majors, betas included)
 #   ./release-downloads.sh 0        # all v0.x.y releases
 #   ./release-downloads.sh v1       # all v1.x.y releases
 #
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <major-version>   e.g. 0  or  v1" >&2
-  exit 1
+# Tag filter: no arg -> all releases; otherwise restrict to one major version.
+if [[ $# -ge 1 ]]; then
+  major="${1#v}"          # accept both "0" and "v0"
+  tag_filter="^v?${major}\."
+  scope="major version v${major}"
+else
+  tag_filter="^v"
+  scope="all versions"
 fi
 
-# Normalize: accept both "0" and "v0", reduce to the bare number.
-major="${1#v}"
-
-# Pull every release tag, keep only those matching the requested major version.
+# Pull every release tag, keep only those matching the requested scope.
 tags="$(gh release list --limit 200 --json tagName --jq '.[].tagName' \
-  | grep -E "^v?${major}\." || true)"
+  | grep -E "$tag_filter" || true)"
 
 if [[ -z "$tags" ]]; then
-  echo "no releases found for major version v${major}" >&2
+  echo "no releases found for ${scope}" >&2
   exit 1
 fi
+
+# jq expression: sum downloadCount across installable assets only, skipping
+# checksums/signatures/SBOMs. Empty asset list -> 0.
+count_jq='[.assets[]
+  | select(
+      (.name | endswith(".sbom.json")) or
+      (.name | endswith(".sigstore.json")) or
+      (.name == "checksums.txt")
+      | not
+    )
+  | .downloadCount] | add // 0'
 
 grand_total=0
 
 while IFS= read -r tag; do
   [[ -z "$tag" ]] && continue
-  # Sum downloadCount across all assets of this tag; empty asset list -> 0.
-  count="$(gh release view "$tag" --json assets \
-    --jq '[.assets[].downloadCount] | add // 0')"
-  printf '%-12s %d\n' "$tag" "$count"
+  count="$(gh release view "$tag" --json assets --jq "$count_jq")"
+  printf '%-16s %d\n' "$tag" "$count"
   grand_total=$(( grand_total + count ))
 done <<< "$tags"
 
-printf '%-12s %d\n' "TOTAL" "$grand_total"
+printf '%-16s %d\n' "TOTAL" "$grand_total"
