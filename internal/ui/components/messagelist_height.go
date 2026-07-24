@@ -175,6 +175,14 @@ func (ml *MessageList) computeItemHeight(i int) int {
 // load (mirrors msgHeight, issue #115). It must stay in lock-step with
 // renderGroupBubble; TestGroupHeightMatchesRender guards that.
 func (ml *MessageList) groupHeight(parts []store.Message) int {
+	if _, _, _, _, _, ok := ml.mosaicPlan(parts); ok {
+		return ml.mosaicHeight(parts)
+	}
+	return ml.groupHeightStack(parts)
+}
+
+// groupHeightStack is the vertical-stack album height (see renderGroupStack).
+func (ml *MessageList) groupHeightStack(parts []store.Message) int {
 	if ml.viewWidth <= 0 {
 		return 4
 	}

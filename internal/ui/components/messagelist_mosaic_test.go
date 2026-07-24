@@ -178,3 +178,24 @@ func TestComposeMosaicRowWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestMosaicHeightMatchesRender(t *testing.T) {
+	ml := NewMessageList(40, 80)
+	for _, id := range []int64{11, 22, 33, 44} {
+		ml.SetImage(id, testImage(600, 800))
+	}
+	mk := func(mid int, pid int64) store.Message {
+		return store.Message{ID: mid, GroupedID: 9, SenderID: 7,
+			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: pid}}
+	}
+	parts := []store.Message{mk(1, 11), mk(2, 22), mk(3, 33), mk(4, 44)}
+	want := ml.mosaicHeight(parts)
+	got := len(ml.renderMosaic(parts, false))
+	if got != want {
+		t.Fatalf("render lines = %d, mosaicHeight = %d; must match", got, want)
+	}
+	cols, _, nRows, _, _, ok := ml.mosaicPlan(parts)
+	if !ok || cols != 2 || nRows != 2 {
+		t.Fatalf("plan = (cols %d, nRows %d, ok %v), want 2,2,true", cols, nRows, ok)
+	}
+}

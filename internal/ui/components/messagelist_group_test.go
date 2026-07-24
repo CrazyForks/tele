@@ -253,7 +253,8 @@ func TestRenderGroupBubbleBlankLineBetweenItems(t *testing.T) {
 	// + one blank between them + two borders.
 	rows := ml.albumImageRows(parts)
 	want := 2 /*borders*/ + 2*(1 /*badge*/ +rows) + 1 /*inter-item blank*/
-	if got := len(ml.renderGroupBubble(parts, false)); got != want {
+	// This asserts the vertical-stack layout specifically (the grid fallback).
+	if got := len(ml.renderGroupStack(parts, false)); got != want {
 		t.Fatalf("album line count = %d, want %d (missing inter-item blank?)", got, want)
 	}
 }
@@ -315,7 +316,8 @@ func TestAlbumBadgeFoldedOntoCachedArt(t *testing.T) {
 		{ID: 1, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
 		{ID: 2, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 22}},
 	}
-	out := ml.renderGroupBubble(parts, false)
+	// Vertical-stack layout specifically (the grid fallback): badge folds onto row 0.
+	out := ml.renderGroupStack(parts, false)
 	joined := strings.Join(out, "\n")
 	if !strings.Contains(joined, "[1]") || !strings.Contains(joined, "[2]") {
 		t.Fatalf("badges missing from folded art:\n%s", joined)
@@ -329,8 +331,8 @@ func TestAlbumBadgeFoldedOntoCachedArt(t *testing.T) {
 	if len(out) != want {
 		t.Fatalf("folded album lines = %d, want %d (badge must not add a row)", len(out), want)
 	}
-	if got := ml.groupHeight(parts); got != len(out) {
-		t.Fatalf("groupHeight = %d, render = %d; must match", got, len(out))
+	if got := ml.groupHeightStack(parts); got != len(out) {
+		t.Fatalf("groupHeightStack = %d, render = %d; must match", got, len(out))
 	}
 }
 

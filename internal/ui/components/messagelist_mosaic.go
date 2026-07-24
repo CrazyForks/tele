@@ -12,7 +12,11 @@ import (
 const (
 	mosaicGap         = 1    // blank columns between tiles / blank rows between grid rows
 	mosaicMinTileCols = 6    // fall back to the vertical stack below this tile width
-	mosaicMaxCropFrac = 0.20 // max fraction of an axis a tile may crop before it letterboxes
+	mosaicMaxCropFrac = 0.34 // max fraction of an axis a tile may crop before it letterboxes
+	// mosaicTilePortraitFactor makes tiles portrait-oriented rather than square, so
+	// phone photos (3:4 to 9:16 portraits, the common album case) cover-fill their
+	// tile instead of letterboxing with wide side padding. A square tile is 1.0.
+	mosaicTilePortraitFactor = 1.4
 )
 
 // mosaicCols is the grid column count for nPreview previewable parts: 2 for up to
@@ -58,13 +62,13 @@ func tileWidths(contentW, cols int) []int {
 func (ml *MessageList) tileRowsFor(tileW int) int {
 	cw, ch := media.CellPx()
 	if cw <= 0 || ch <= 0 {
-		r := tileW / 2 // cells are ~2x taller than wide when the size is unknown
+		r := int(float64(tileW) / 2 * mosaicTilePortraitFactor) // ~2x taller cells when unknown
 		if r < 2 {
 			r = 2
 		}
 		return r
 	}
-	r := int(float64(tileW)*cw/ch + 0.5)
+	r := int(float64(tileW)*cw/ch*mosaicTilePortraitFactor + 0.5)
 	if r < 2 {
 		r = 2
 	}
@@ -348,4 +352,130 @@ func (ml *MessageList) composeMosaicRow(tiles [][]string, widths []int, m bubble
 		out[r] = bs.Render(b.Left) + " " + line + " " + bs.Render(b.Right)
 	}
 	return out
+}
+
+// mosaicPlan is the single geometry both mosaicHeight and renderMosaic consume,
+// keeping them in lock-step. ok=false means the album should render as the
+// vertical stack instead.
+func (ml *MessageList) mosaicPlan(parts []store.Message) (cols int, widths []int, nRows, tileRows, overhead int, ok bool) {
+	prev := ml.previewParts(parts)
+	cols = mosaicCols(len(prev))
+	widths = tileWidths(ml.mosaicContentW(), cols)
+	if len(widths) == 0 || !mosaicUsesGrid(len(prev), widths[len(widths)-1]) {
+		return 0, nil, 0, 0, 0, false
+	}
+	nRows = (len(prev) + cols - 1) / cols
+	overhead = ml.mosaicOverheadRows(parts, nRows)
+	tileRows = ml.mosaicTileRows(minWidth(widths), nRows, overhead)
+	return cols, widths, nRows, tileRows, overhead, true
+}
+
+// previewDims returns the image dimensions used to compute a part's tile window:
+// the cached image bounds, or a 3:4 portrait default before the bytes arrive, so
+// the pre-load window is stable and close to a typical phone photo.
+func (ml *MessageList) previewDims(msg store.Message) (int, int) {
+	if id, ok := ml.PreviewImageID(msg); ok {
+		if img, has := ml.cachedImage(id); has {
+			b := img.Bounds()
+			return b.Dx(), b.Dy()
+		}
+	}
+	return 600, 800
+}
+
+// mosaicHeight is the bubble line count for a gridded album: borders, the grid
+// rows (tileRows each) with a blank row between them, then any file rows and the
+// caption. Must equal renderMosaic's line count.
+func (ml *MessageList) mosaicHeight(parts []store.Message) int {
+	_, _, nRows, tileRows, _, ok := ml.mosaicPlan(parts)
+	if !ok {
+		return ml.groupHeightStack(parts)
+	}
+	return 2 + nRows*tileRows + (nRows - 1) + ml.mosaicFileAndCaptionRows(parts)
+}
+
+// mosaicFileAndCaptionRows is the file-row + caption line count; keep it identical
+// to what renderMosaic emits below the grid.
+func (ml *MessageList) mosaicFileAndCaptionRows(parts []store.Message) int {
+	h := 0
+	for _, gm := range groupMediaParts(parts) {
+		if !ml.albumPartReservesPreview(gm.Msg) {
+			h++ // one badge row per file part
+		}
+	}
+	if c := albumCaption(parts); c != "" {
+		h += 1 + wrappedLineCount(c, albumCaptionEntities(parts), ml.albumContentW())
+	}
+	return h
+}
+
+// mosaicFileRows renders the album's non-previewable file parts as standalone
+// badge lines below the grid.
+func (ml *MessageList) mosaicFileRows(parts []store.Message, m bubbleMetrics) []string {
+	var out []string
+	for _, gm := range groupMediaParts(parts) {
+		if !ml.albumPartReservesPreview(gm.Msg) {
+			out = append(out, labelLine(albumBadgeLabel(gm.Index, gm.Msg), m.actualW, m.b, m.bs))
+		}
+	}
+	return out
+}
+
+func sumWidths(ws []int) int {
+	s := 0
+	for _, w := range ws {
+		s += w
+	}
+	return s
+}
+
+// renderMosaic renders a gridded album bubble, falling back to the vertical stack
+// when the plan says not to grid. Must stay in lock-step with mosaicHeight.
+func (ml *MessageList) renderMosaic(parts []store.Message, selected bool) []string {
+	cols, widths, nRows, tileRows, _, ok := ml.mosaicPlan(parts)
+	if !ok {
+		return ml.renderGroupStack(parts, selected)
+	}
+	anchor := parts[0]
+	caption := albumCaption(parts)
+	framing := anchor
+	framing.Text, framing.Entities = caption, albumCaptionEntities(parts)
+	framing.Media, framing.Photo, framing.Document = nil, nil, nil
+	m := ml.measureBubble(framing)
+	if need := sumWidths(widths) + (cols-1)*mosaicGap; need > m.actualW {
+		m.actualW, m.innerW = need, need+2
+	}
+	top, bottom := ml.bubbleBorders(framing, m)
+	b, bs := m.b, m.bs
+	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
+
+	prev := ml.previewParts(parts)
+	lines := []string{top}
+	for row := 0; row < nRows; row++ {
+		var tiles [][]string
+		var w []int
+		for c := 0; c < cols; c++ {
+			w = append(w, widths[c])
+			idx := row*cols + c
+			if idx >= len(prev) {
+				tiles = append(tiles, nil) // blank slot in a partial last row
+				continue
+			}
+			gm := prev[idx]
+			iw, ih := ml.previewDims(gm.Msg)
+			g := coverWindow(iw, ih, widths[c], tileRows)
+			tiles = append(tiles, ml.renderMosaicTile(gm, g, albumBadgeLabel(gm.Index, gm.Msg)+" "))
+		}
+		lines = append(lines, ml.composeMosaicRow(tiles, w, m)...)
+		if row < nRows-1 {
+			lines = append(lines, blankRow)
+		}
+	}
+	lines = append(lines, ml.mosaicFileRows(parts, m)...)
+	if caption != "" {
+		lines = append(lines, blankRow)
+		lines = append(lines, ml.captionLines(caption, albumCaptionEntities(parts), m, ml.albumContentW())...)
+	}
+	lines = append(lines, bottom)
+	return ml.alignBubbleLines(lines, anchor.IsOut, selected)
 }

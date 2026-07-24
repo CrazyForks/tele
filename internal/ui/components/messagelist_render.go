@@ -570,13 +570,20 @@ func (ml *MessageList) renderItem(i int, selected bool) []string {
 	return ml.renderMessage(item.msg, selected)
 }
 
-// renderGroupBubble draws a Telegram album as one bubble: the sender/time frame
-// once, then each media part as an informative "[n] <type/context>" badge line
-// followed (for parts with a preview) by its scaled art, with a blank line
+// renderGroupBubble draws a collapsed album: a mosaic grid when the album grids,
+// otherwise the vertical stack. renderMosaic itself falls back to renderGroupStack
+// when the plan says not to grid.
+func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) []string {
+	return ml.renderMosaic(parts, selected)
+}
+
+// renderGroupStack draws a Telegram album as a vertical stack: the sender/time
+// frame once, then each media part as an informative "[n] <type/context>" badge
+// line followed (for parts with a preview) by its scaled art, with a blank line
 // between adjacent parts, then the shared caption. Previews are scaled down by
 // albumImageRows so the album never spans several screens. It must stay in
-// lock-step with groupHeight; TestGroupHeightMatchesRender guards that.
-func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) []string {
+// lock-step with groupHeightStack; TestGroupHeightMatchesRender guards that.
+func (ml *MessageList) renderGroupStack(parts []store.Message, selected bool) []string {
 	media := groupMediaParts(parts)
 	anchor := parts[0]
 	caption := albumCaption(parts)
