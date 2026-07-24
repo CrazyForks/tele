@@ -199,3 +199,44 @@ func TestMosaicHeightMatchesRender(t *testing.T) {
 		t.Fatalf("plan = (cols %d, nRows %d, ok %v), want 2,2,true", cols, nRows, ok)
 	}
 }
+
+func TestMosaicFallsBackToStack(t *testing.T) {
+	// One previewable part -> stack (no grid).
+	ml := NewMessageList(40, 80)
+	ml.SetImage(11, testImage(600, 800))
+	parts := []store.Message{
+		{ID: 1, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaFile, FileName: "a.pdf"}, Document: &store.DocumentRef{ID: 2}},
+	}
+	if _, _, _, _, _, ok := ml.mosaicPlan(parts); ok {
+		t.Fatalf("one previewable part should not grid")
+	}
+
+	// Narrow pane -> stack even with several photos (tileW below the minimum).
+	narrow := NewMessageList(40, 16)
+	four := []store.Message{}
+	for i, id := range []int64{11, 12, 13, 14} {
+		four = append(four, store.Message{ID: i + 1, GroupedID: 9, SenderID: 7,
+			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: id}})
+	}
+	if _, _, _, _, _, ok := narrow.mosaicPlan(four); ok {
+		t.Fatalf("narrow pane should fall back to the stack")
+	}
+}
+
+func TestMosaicBadgeIndexOrder(t *testing.T) {
+	ml := NewMessageList(40, 80)
+	for _, id := range []int64{11, 22, 33} {
+		ml.SetImage(id, testImage(600, 800))
+	}
+	mk := func(mid int, pid int64) store.Message {
+		return store.Message{ID: mid, GroupedID: 9, SenderID: 7,
+			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: pid}}
+	}
+	parts := []store.Message{mk(1, 11), mk(2, 22), mk(3, 33)}
+	out := strings.Join(ml.renderMosaic(parts, false), "\n")
+	i1, i2, i3 := strings.Index(out, "[1]"), strings.Index(out, "[2]"), strings.Index(out, "[3]")
+	if i1 < 0 || i2 < 0 || i3 < 0 || i1 >= i2 || i2 >= i3 {
+		t.Fatalf("badges out of order: [1]@%d [2]@%d [3]@%d", i1, i2, i3)
+	}
+}
