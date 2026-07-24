@@ -107,6 +107,14 @@ func (ml *MessageList) MediaBoxForID(id int64, imgW, imgH int) (cols, rows int) 
 		// placement must be sized the same way or the image is drawn at the wrong
 		// scale (crop/overflow). Match any part, not just the anchor.
 		if len(ml.items[i].parts) > 1 {
+			// A gridded album transmits each tile at its cover box; the stack path
+			// (fallback) uses the downscaled per-part box. Both are metadata-derived
+			// and stable as siblings load in.
+			if mid := ml.msgIDForPreviewID(ml.items[i].parts, id); mid != 0 {
+				if g, ok := ml.albumTileGeom(ml.items[i].parts, mid, imgW, imgH); ok {
+					return g.transmitBox()
+				}
+			}
 			budget := ml.albumImageRows(ml.items[i].parts)
 			for _, p := range ml.items[i].parts {
 				if pid, ok := ml.PreviewImageID(p); ok && pid == id {

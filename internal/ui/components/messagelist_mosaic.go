@@ -1,6 +1,9 @@
 package components
 
-import "github.com/sorokin-vladimir/tele/internal/ui/media"
+import (
+	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
+)
 
 const (
 	mosaicGap         = 1    // blank columns between tiles / blank rows between grid rows
@@ -154,4 +157,105 @@ func containWindow(imgW, imgH, tileW, tileRows int) tileGeom {
 		g.PadTop = 0
 	}
 	return g
+}
+
+// previewParts is the album's previewable parts (photos, thumbnailed video/GIF),
+// in album order. Metadata-derived (albumPartReservesPreview), stable across load.
+func (ml *MessageList) previewParts(parts []store.Message) []groupMedia {
+	var out []groupMedia
+	for _, gm := range groupMediaParts(parts) {
+		if ml.albumPartReservesPreview(gm.Msg) {
+			out = append(out, gm)
+		}
+	}
+	return out
+}
+
+// mosaicContentW is the content width the album tiles are laid out in — the same
+// three-quarter-viewport budget the album caption uses.
+func (ml *MessageList) mosaicContentW() int {
+	return ml.albumContentW()
+}
+
+// mosaicOverheadRows are the album's non-tile rows: two borders, one blank row
+// between grid rows, a badge row per non-previewable file part, and the caption.
+func (ml *MessageList) mosaicOverheadRows(parts []store.Message, nRows int) int {
+	fileCount := 0
+	for _, gm := range groupMediaParts(parts) {
+		if !ml.albumPartReservesPreview(gm.Msg) {
+			fileCount++
+		}
+	}
+	h := 2 + (nRows - 1) + fileCount
+	if c := albumCaption(parts); c != "" {
+		h += 1 + wrappedLineCount(c, albumCaptionEntities(parts), ml.albumContentW())
+	}
+	return h
+}
+
+// mosaicTileRows is the shared tile height: the square-ish height, capped so the
+// grid fits the viewport (mirrors the stack fill-pane logic).
+func (ml *MessageList) mosaicTileRows(tileW, nRows, overheadRows int) int {
+	square := ml.tileRowsFor(tileW)
+	budget := (ml.viewHeight - overheadRows) / nRows
+	if budget < 2 {
+		budget = 2
+	}
+	if square < budget {
+		return square
+	}
+	return budget
+}
+
+// albumTileGeom returns the tile geometry for the album part identified by
+// partMsgID, or ok=false when the album does not grid or the part is not a
+// previewable tile. Derived from metadata (previewable count, pane width, the
+// part's grid index) plus the image's own dimensions, so it does not change as
+// sibling parts load in.
+func (ml *MessageList) albumTileGeom(parts []store.Message, partMsgID, imgW, imgH int) (tileGeom, bool) {
+	prev := ml.previewParts(parts)
+	cols := mosaicCols(len(prev))
+	ws := tileWidths(ml.mosaicContentW(), cols)
+	if len(ws) == 0 || !mosaicUsesGrid(len(prev), ws[len(ws)-1]) {
+		return tileGeom{}, false
+	}
+	idx := -1
+	for i, gm := range prev {
+		if gm.Msg.ID == partMsgID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return tileGeom{}, false
+	}
+	nRows := (len(prev) + cols - 1) / cols
+	overhead := ml.mosaicOverheadRows(parts, nRows)
+	col := idx % cols
+	tileW := ws[col]
+	tileRows := ml.mosaicTileRows(minWidth(ws), nRows, overhead)
+	return coverWindow(imgW, imgH, tileW, tileRows), true
+}
+
+// msgIDForPreviewID returns the message ID of the album part whose preview image
+// is cached under id, or 0 if none.
+func (ml *MessageList) msgIDForPreviewID(parts []store.Message, id int64) int {
+	for _, p := range parts {
+		if pid, ok := ml.PreviewImageID(p); ok && pid == id {
+			return p.ID
+		}
+	}
+	return 0
+}
+
+// minWidth returns the smallest tile column width; every tile uses one tileRows
+// derived from the narrowest column so all tiles fit the shared budget.
+func minWidth(ws []int) int {
+	m := ws[0]
+	for _, w := range ws {
+		if w < m {
+			m = w
+		}
+	}
+	return m
 }

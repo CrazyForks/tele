@@ -1,6 +1,11 @@
 package components
 
-import "testing"
+import (
+	"image"
+	"testing"
+
+	"github.com/sorokin-vladimir/tele/internal/store"
+)
 
 func TestMosaicCols(t *testing.T) {
 	cases := []struct{ n, want int }{
@@ -101,5 +106,35 @@ func TestTransmitBoxByMode(t *testing.T) {
 	contain := coverWindow(200, 1200, 20, 10) // extreme -> contain
 	if c, r := contain.transmitBox(); c != contain.FitCols || r != contain.FitRows {
 		t.Fatalf("contain transmitBox = (%d,%d), want (%d,%d)", c, r, contain.FitCols, contain.FitRows)
+	}
+}
+
+func testImage(w, h int) image.Image { return image.NewRGBA(image.Rect(0, 0, w, h)) }
+
+func TestMosaicTileTransmitBoxStableUnderLoad(t *testing.T) {
+	ml := NewMessageList(40, 80)
+	ml.SetImage(11, testImage(600, 800)) // one photo cached
+	parts := []store.Message{
+		{ID: 1, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaVideo}, Document: &store.DocumentRef{ID: 22, ThumbSize: "m"}},
+		{ID: 3, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 33}},
+	}
+	ml.SetMessages(parts)
+
+	// MediaBoxForID must return the grid tile's cover transmit box.
+	g, ok := ml.albumTileGeom(parts, 1, 600, 800)
+	if !ok {
+		t.Fatalf("album should grid (3 photos, wide pane)")
+	}
+	wantC, wantR := g.transmitBox()
+	c1, r1 := ml.MediaBoxForID(11, 600, 800)
+	if c1 != wantC || r1 != wantR {
+		t.Fatalf("MediaBoxForID = (%d,%d), want tile cover box (%d,%d)", c1, r1, wantC, wantR)
+	}
+
+	ml.SetImage(22, testImage(320, 240)) // the video thumbnail arrives later
+	c2, r2 := ml.MediaBoxForID(11, 600, 800)
+	if c1 != c2 || r1 != r2 {
+		t.Fatalf("tile transmit box changed under sibling load: (%d,%d) -> (%d,%d)", c1, r1, c2, r2)
 	}
 }
