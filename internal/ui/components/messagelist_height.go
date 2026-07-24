@@ -183,8 +183,14 @@ func (ml *MessageList) groupHeight(parts []store.Message) int {
 
 	h := 0
 	for i, gm := range media {
-		h++                                   // "[n] <type/context>" badge row
-		h += ml.albumPartRows(budget, gm.Msg) // downscaled art, placeholder box, or 0 for a file
+		if ml.albumPartHasCachedArt(gm.Msg) {
+			h += ml.albumPartRows(budget, gm.Msg) // art rows; the badge is folded onto row 0
+		} else {
+			h++ // standalone badge line (no image to fold onto)
+			if gm.Msg.Photo != nil {
+				h += budget // photo awaiting bytes: placeholder box
+			}
+		}
 		if i < len(media)-1 {
 			h++ // blank line between adjacent parts
 		}

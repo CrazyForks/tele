@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -605,7 +606,9 @@ func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) [
 	}
 	budget := ml.albumImageRows(parts)
 	for _, gm := range media {
-		widen(lipgloss.Width(albumBadgeLabel(gm.Index, gm.Msg)))
+		// +1 for the one-column gap the folded badge adds (badge+" "); without it a
+		// badge wider than a narrow preview overflows actualW and tears the border.
+		widen(lipgloss.Width(albumBadgeLabel(gm.Index, gm.Msg)) + 1)
 		if id, ok := ml.PreviewImageID(gm.Msg); ok {
 			if img, has := ml.cachedImage(id); has {
 				b := img.Bounds()
@@ -622,9 +625,20 @@ func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) [
 	lines := make([]string, 0, len(media)*(budget+2)+4)
 	lines = append(lines, top)
 	for i, gm := range media {
-		lines = append(lines, labelLine(albumBadgeLabel(gm.Index, gm.Msg), m.actualW, b, bs))
-		if ml.albumPartHasPreview(gm.Msg) {
-			lines = append(lines, ml.groupPartArt(gm.Msg, budget, m)...)
+		badge := albumBadgeLabel(gm.Index, gm.Msg)
+		if ml.albumPartHasCachedArt(gm.Msg) {
+			// Fold the badge onto the image's first row (a Kitty "hole"), with a
+			// one-column gap so the picture does not butt against the label text.
+			lines = append(lines, ml.groupPartArt(gm.Msg, budget, badge+" ", m)...)
+		} else {
+			// No image to draw on: keep the badge as a standalone line, and reserve
+			// a placeholder box for a photo whose bytes have not arrived yet.
+			lines = append(lines, labelLine(badge, m.actualW, b, bs))
+			if gm.Msg.Photo != nil {
+				for j := 0; j < budget; j++ {
+					lines = append(lines, blankRow)
+				}
+			}
 		}
 		if i < len(media)-1 {
 			lines = append(lines, blankRow) // blank line between adjacent parts
@@ -638,35 +652,52 @@ func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) [
 	return ml.alignBubbleLines(lines, anchor.IsOut, selected)
 }
 
-// groupPartArt renders one album part's downscaled art rows, wrapped in the
-// bubble's side borders and padded to the content width. The image is rendered
-// into an albumPartBox (fit whole image, never crop); a part still awaiting its
-// bytes reserves the full budget as blank rows so it swaps in at a stable height
-// (the badge already labels it). Caller must have verified albumPartHasPreview.
-func (ml *MessageList) groupPartArt(msg store.Message, budget int, m bubbleMetrics) []string {
+// groupPartArt renders one album part's downscaled art rows, with the badge
+// folded onto the first row: overlayBadgeOnArtRow replaces that row's leading
+// columns so the "[n] type" label reads over the top-left of the picture (a Kitty
+// hole where no image is drawn). The image is rendered into an albumPartBox (fit
+// whole image, never crop). It reserves exactly albumPartRows rows, filling any
+// not-yet-transmitted rows with blanks so the height is stable while a Kitty
+// placement is still in flight (issue #115). Caller must have verified
+// albumPartHasCachedArt.
+func (ml *MessageList) groupPartArt(msg store.Message, budget int, badge string, m bubbleMetrics) []string {
 	b, bs := m.b, m.bs
-	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
-	if id, ok := ml.PreviewImageID(msg); ok {
-		if img, has := ml.cachedImage(id); has {
-			bb := img.Bounds()
-			cols, _ := ml.albumPartBox(budget, bb.Dx(), bb.Dy())
-			artLines := ml.renderer.Render(id, img, cols)
-			out := make([]string, 0, len(artLines))
-			for _, al := range artLines {
-				if w := lipgloss.Width(al); w < m.actualW {
-					al += strings.Repeat(" ", m.actualW-w)
-				}
-				out = append(out, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
-			}
-			return out
+	reserve := ml.albumPartRows(budget, msg)
+	id, _ := ml.PreviewImageID(msg)
+	img, _ := ml.cachedImage(id)
+	cols, _ := ml.albumPartBox(budget, img.Bounds().Dx(), img.Bounds().Dy())
+	artLines := ml.renderer.Render(id, img, cols) // nil until the Kitty placement is live
+
+	out := make([]string, 0, reserve)
+	for i := 0; i < reserve; i++ {
+		al := ""
+		if i < len(artLines) {
+			al = artLines[i]
 		}
-	}
-	// Photo awaiting bytes: reserve the budget as a blank box.
-	out := make([]string, 0, budget)
-	for i := 0; i < budget; i++ {
-		out = append(out, blankRow)
+		if i == 0 {
+			al = overlayBadgeOnArtRow(al, badge, cols)
+		}
+		if w := lipgloss.Width(al); w < m.actualW {
+			al += strings.Repeat(" ", m.actualW-w)
+		}
+		out = append(out, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
 	}
 	return out
+}
+
+// overlayBadgeOnArtRow composites label onto the leading columns of one art row.
+// It drops the first labelW display columns of artRow and prepends the label, so
+// the label reads over the picture: for a Kitty placeholder row the dropped cells
+// leave a hole where the terminal draws no image; for block art the label
+// overwrites the blocks. xansi.TruncateLeft is width-aware, so it slices whole
+// placeholder cells (rune + diacritics) and re-emits the active foreground for the
+// remaining image cells.
+func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
+	labelW := lipgloss.Width(label)
+	if labelW >= imgCols {
+		return label // label spans the whole row; no image cells remain
+	}
+	return label + xansi.TruncateLeft(artRow, labelW, "")
 }
 
 // captionLines wraps the album caption inside the bubble borders, matching the

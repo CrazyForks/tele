@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -155,18 +156,24 @@ func TestAlbumImageRowsScalesDown(t *testing.T) {
 
 func TestGroupHeightBoundedByBudget(t *testing.T) {
 	ml := NewMessageList(24, 60)
+	// Tall (portrait) images so each preview hits the per-part row budget: the
+	// loaded album must fill the pane without exceeding it (folded badges reclaim
+	// the rows a separate badge line would have cost).
+	for _, id := range []int64{1, 2, 3, 4} {
+		ml.SetImage(id, image.NewRGBA(image.Rect(0, 0, 600, 800))) // 3:4 portrait
+	}
 	parts := []store.Message{
-		{ID: 1, GroupedID: 100, Photo: &store.PhotoRef{ID: 1}},
-		{ID: 2, GroupedID: 100, Photo: &store.PhotoRef{ID: 2}},
-		{ID: 3, GroupedID: 100, Photo: &store.PhotoRef{ID: 3}},
-		{ID: 4, GroupedID: 100, Photo: &store.PhotoRef{ID: 4}, Text: "album caption"},
+		{ID: 1, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 1}},
+		{ID: 2, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 2}},
+		{ID: 3, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 3}},
+		{ID: 4, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 4}, Text: "album caption"},
 	}
 	h := ml.groupHeight(parts)
-	if h <= 0 {
-		t.Fatalf("groupHeight = %d, want > 0", h)
-	}
 	if h > ml.viewHeight {
-		t.Fatalf("groupHeight = %d exceeds viewHeight %d; scale-down failed", h, ml.viewHeight)
+		t.Fatalf("loaded album height = %d exceeds viewHeight %d; scale-down failed", h, ml.viewHeight)
+	}
+	if h < ml.viewHeight-len(parts) {
+		t.Fatalf("loaded album height = %d falls short of viewHeight %d; badges not reclaimed", h, ml.viewHeight)
 	}
 }
 
@@ -297,5 +304,55 @@ func TestAlbumPhotoBoxStableWhenSiblingVideoLoads(t *testing.T) {
 	if c1 != c2 || r1 != r2 {
 		t.Fatalf("photo box changed when sibling video loaded: (%d,%d) -> (%d,%d); "+
 			"placement no longer matches render, photo disappears", c1, r1, c2, r2)
+	}
+}
+
+func TestAlbumBadgeFoldedOntoCachedArt(t *testing.T) {
+	ml := NewMessageList(24, 80)
+	ml.SetImage(11, image.NewRGBA(image.Rect(0, 0, 400, 300)))
+	ml.SetImage(22, image.NewRGBA(image.Rect(0, 0, 400, 300)))
+	parts := []store.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 22}},
+	}
+	out := ml.renderGroupBubble(parts, false)
+	joined := strings.Join(out, "\n")
+	if !strings.Contains(joined, "[1]") || !strings.Contains(joined, "[2]") {
+		t.Fatalf("badges missing from folded art:\n%s", joined)
+	}
+	// The badge is folded onto the image's first row, so it must NOT add a separate
+	// row: total lines are borders + each part's art rows + one inter-item blank.
+	budget := ml.albumImageRows(parts)
+	r1 := ml.albumPartRows(budget, parts[0])
+	r2 := ml.albumPartRows(budget, parts[1])
+	want := 2 + r1 + r2 + 1
+	if len(out) != want {
+		t.Fatalf("folded album lines = %d, want %d (badge must not add a row)", len(out), want)
+	}
+	if got := ml.groupHeight(parts); got != len(out) {
+		t.Fatalf("groupHeight = %d, render = %d; must match", got, len(out))
+	}
+}
+
+func TestAlbumBubbleLinesEqualWidthNarrowPane(t *testing.T) {
+	// Narrow pane: the folded badge ("[n] 🎥 video 0:12") is wider than the tiny
+	// preview, so actualW must account for the badge (plus its trailing gap) or the
+	// badge row overflows and tears the bubble border.
+	ml := NewMessageList(30, 22)
+	ml.SetImage(11, image.NewRGBA(image.Rect(0, 0, 320, 240))) // video thumb cached
+	ml.SetImage(22, image.NewRGBA(image.Rect(0, 0, 600, 800))) // photo cached
+	parts := []store.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7,
+			Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 12},
+			Document: &store.DocumentRef{ID: 11, ThumbSize: "m"}},
+		{ID: 2, GroupedID: 100, SenderID: 7,
+			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 22}},
+	}
+	lines := ml.renderGroupBubble(parts, false)
+	w0 := lipgloss.Width(lines[0])
+	for i, ln := range lines {
+		if lipgloss.Width(ln) != w0 {
+			t.Fatalf("line %d width %d != line0 width %d (torn border)\n%q", i, lipgloss.Width(ln), w0, ln)
+		}
 	}
 }

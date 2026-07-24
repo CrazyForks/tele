@@ -62,7 +62,7 @@ func (ml *MessageList) albumContentW() int {
 // lock-step.
 func (ml *MessageList) albumImageRows(parts []store.Message) int {
 	media := groupMediaParts(parts)
-	imgCount := 0
+	imgCount, fileCount := 0, 0
 	for _, gm := range media {
 		// Count by metadata, not current cache state: a part that WILL show a
 		// preview (a photo, or a video/GIF with a thumbnail) must claim its budget
@@ -71,14 +71,20 @@ func (ml *MessageList) albumImageRows(parts []store.Message) int {
 		// photos, whose Kitty placements would then stop matching the render.
 		if ml.albumPartReservesPreview(gm.Msg) {
 			imgCount++
+		} else {
+			fileCount++
 		}
 	}
 	if imgCount == 0 {
 		return 0
 	}
-	// borders + one badge per part + one blank line between adjacent parts. File
-	// parts contribute only their badge (no preview rows), already counted here.
-	overhead := 2 + len(media) + (len(media) - 1)
+	// Overhead the images divide the remaining height against: borders, one blank
+	// line between adjacent parts, and a badge row for each file part. Image badges
+	// are folded onto the picture's first row, so they cost no extra row — which is
+	// why the budget must not reserve one for them (otherwise a loaded album falls
+	// short of the pane). Metadata-derived, so the budget stays stable as parts
+	// load in.
+	overhead := 2 + fileCount + (len(media) - 1)
 	if caption := albumCaption(parts); caption != "" {
 		overhead += 1 + wrappedLineCount(caption, albumCaptionEntities(parts), ml.albumContentW())
 	}
@@ -127,19 +133,16 @@ func (ml *MessageList) albumPartReservesPreview(msg store.Message) bool {
 	return msg.Photo != nil
 }
 
-// albumPartHasPreview reports whether an album part draws an inline art preview
-// (a photo, or any media whose thumbnail bytes are cached). Parts without a
-// preview — generic files, or images not yet downloaded — are described entirely
-// by their badge line and reserve no art rows.
-func (ml *MessageList) albumPartHasPreview(msg store.Message) bool {
+// albumPartHasCachedArt reports whether an album part's inline image bytes are
+// cached, so its preview can be drawn now with the badge folded onto the image's
+// first row. A photo still awaiting bytes, or a generic file, reports false and is
+// described by a standalone badge line instead.
+func (ml *MessageList) albumPartHasCachedArt(msg store.Message) bool {
 	if id, ok := ml.PreviewImageID(msg); ok {
-		if _, has := ml.cachedImage(id); has {
-			return true
-		}
+		_, has := ml.cachedImage(id)
+		return has
 	}
-	// A photo whose bytes are not cached yet still reserves a preview box so the
-	// image can swap in at a stable height.
-	return msg.Photo != nil
+	return false
 }
 
 // albumPartBox fits an album part's image within the album content width and the
