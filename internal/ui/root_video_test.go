@@ -65,8 +65,10 @@ func TestModalBorder_TruncatesWhenLabelsExceedWidth(t *testing.T) {
 }
 
 func TestVideoFooterHints_ReflectPlayState(t *testing.T) {
-	assert.Contains(t, videoFooterHints(true), "pause", "playing shows the pause action")
-	assert.Contains(t, videoFooterHints(false), "play", "paused shows the play action")
+	assert.Contains(t, videoFooterHints(true, false), "pause", "playing shows the pause action")
+	assert.Contains(t, videoFooterHints(false, false), "play", "paused shows the play action")
+	assert.NotContains(t, videoFooterHints(false, false), "browse", "no browse hint for a lone video")
+	assert.Contains(t, videoFooterHints(false, true), "browse", "album video shows the left/right browse hint")
 }
 
 func TestVideoLoadingSpinnerGlyph(t *testing.T) {

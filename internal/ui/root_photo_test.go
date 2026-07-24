@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,9 +101,13 @@ func TestClosePhotoModal_NoDeleteWhenNoImageTransmitted(t *testing.T) {
 }
 
 func TestPhotoFooterHints(t *testing.T) {
-	h := photoFooterHints()
+	h := photoFooterHints(false)
 	assert.Contains(t, h, "external", "hints mention the external-open action")
 	assert.Contains(t, h, "close", "hints mention close")
+	assert.NotContains(t, h, "browse", "no browse hint for a lone photo")
+
+	album := photoFooterHints(true)
+	assert.Contains(t, album, "browse", "album photo shows the left/right browse hint")
 }
 
 func TestPhotoViewerView_RendersOverBase(t *testing.T) {
@@ -175,4 +180,35 @@ func TestUpdatePhotoSpinner_AdvancesWhileLoading(t *testing.T) {
 	m.photoViewer.img = solidImage(4, 3)
 	m.updatePhotoSpinner()
 	assert.Equal(t, 1, m.photoViewer.spinnerIdx, "spinner stops once an image is shown")
+}
+
+func TestModalPagingWithinAlbum(t *testing.T) {
+	album := []components.GroupMediaRef{
+		{Index: 1, Kind: store.MediaPhoto, Photo: &store.PhotoRef{ID: 11}, MsgID: 1},
+		{Index: 2, Kind: store.MediaPhoto, Photo: &store.PhotoRef{ID: 22}, MsgID: 2},
+	}
+	m := newSizedModel(t)
+	m.imageMode = media.ModeBlocks
+	m.imageCache.Add(11, solidImage(400, 300))
+	m.imageCache.Add(22, solidImage(400, 300))
+
+	m, _ = m.openPhotoModalAlbum(*album[0].Photo, album[0].MsgID, "", time.Time{}, album, 0)
+	require.NotNil(t, m.photoViewer)
+	assert.Equal(t, 0, m.photoViewer.albumIdx)
+
+	m, _ = m.pageModal(1)
+	require.NotNil(t, m.photoViewer)
+	assert.Equal(t, 1, m.photoViewer.albumIdx)
+	assert.Equal(t, int64(22), m.photoViewer.photoID)
+
+	// Paging past the end is a no-op (stays on the last part).
+	m, _ = m.pageModal(1)
+	require.NotNil(t, m.photoViewer)
+	assert.Equal(t, 1, m.photoViewer.albumIdx)
+
+	// Paging back returns to the first part.
+	m, _ = m.pageModal(-1)
+	require.NotNil(t, m.photoViewer)
+	assert.Equal(t, 0, m.photoViewer.albumIdx)
+	assert.Equal(t, int64(11), m.photoViewer.photoID)
 }

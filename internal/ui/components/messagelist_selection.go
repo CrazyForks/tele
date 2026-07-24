@@ -10,13 +10,14 @@ import (
 // modal needs to open and page it: display index, kind, the photo or document
 // ref, and the part's own message ID and meta.
 type GroupMediaRef struct {
-	Index  int
-	Kind   store.MediaKind
-	Photo  *store.PhotoRef
-	Doc    *store.DocumentRef
-	MsgID  int
-	Sender string
-	Date   time.Time
+	Index   int
+	Kind    store.MediaKind
+	Photo   *store.PhotoRef
+	Doc     *store.DocumentRef
+	MsgID   int
+	Sender  string
+	Date    time.Time
+	DurSecs int // media duration in seconds (video), 0 when not applicable
 }
 
 // SelectedGroupMedia returns the media parts of the selected album in display
@@ -36,6 +37,7 @@ func (ml *MessageList) SelectedGroupMedia() []GroupMediaRef {
 		} else if gm.Msg.Media != nil {
 			ref.Kind = gm.Msg.Media.Kind
 			ref.Doc = gm.Msg.Document
+			ref.DurSecs = gm.Msg.Media.Duration
 		}
 		out = append(out, ref)
 	}

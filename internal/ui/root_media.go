@@ -122,9 +122,9 @@ func (m RootModel) openTarget(t components.OpenTarget) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// openAlbumPart opens media part i (1-based) of the selected album: photos and
-// videos in the in-app modal, generic files via the download/open path. Album
-// paging context is added in a later step.
+// openAlbumPart opens media part i (1-based) of the selected album, seeded with
+// the whole album so the modal can page across parts: photos and videos in the
+// in-app modal, generic files via the download/open path.
 func (m RootModel) openAlbumPart(i int) (tea.Model, tea.Cmd) {
 	parts := m.chat.SelectedGroupMedia()
 	idx := i - 1
@@ -134,15 +134,14 @@ func (m RootModel) openAlbumPart(i int) (tea.Model, tea.Cmd) {
 	p := parts[idx]
 	switch {
 	case p.Photo != nil:
-		return m.openPhotoModal(*p.Photo, p.MsgID, p.Sender, p.Date)
+		return m.openPhotoModalAlbum(*p.Photo, p.MsgID, p.Sender, p.Date, parts, idx)
 	case p.Doc != nil && p.Kind.IsVideo():
 		if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
-			dur, sender := m.selectedVideoInfo()
-			return m.openVideoModal(*p.Doc, p.MsgID, dur, sender)
+			return m.openVideoModalAlbum(*p.Doc, p.MsgID, p.DurSecs, p.Sender, parts, idx)
 		}
-		return m.startDocumentOpen(*p.Doc, p.MsgID, m.selectedDownloadLabel())
+		return m.startDocumentOpen(*p.Doc, p.MsgID, p.Sender)
 	case p.Doc != nil:
-		return m.startDocumentOpen(*p.Doc, p.MsgID, m.selectedDownloadLabel())
+		return m.startDocumentOpen(*p.Doc, p.MsgID, p.Sender)
 	}
 	return m, nil
 }

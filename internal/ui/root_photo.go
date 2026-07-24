@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	vmedia "github.com/sorokin-vladimir/tele/internal/media"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -26,6 +27,11 @@ type photoViewer struct {
 	cols       int
 	rows       int
 	spinnerIdx int // loading-spinner index while img == nil
+	// album is the full set of media parts when this photo belongs to an album,
+	// empty for a lone photo; albumIdx is the index of the shown part. They drive
+	// left/right paging across the album.
+	album    []components.GroupMediaRef
+	albumIdx int
 }
 
 // photoPlayerKey is the stable KittyStore key for the photo modal's image id,
@@ -93,6 +99,66 @@ func (m RootModel) openPhotoModal(ref store.PhotoRef, msgID int, sender string, 
 	return m, tea.Batch(cmds...)
 }
 
+// openPhotoModalAlbum opens a photo that is part of an album, recording the full
+// album and current index so left/right can page across parts.
+func (m RootModel) openPhotoModalAlbum(ref store.PhotoRef, msgID int, sender string, date time.Time, album []components.GroupMediaRef, idx int) (RootModel, tea.Cmd) {
+	m, cmd := m.openPhotoModal(ref, msgID, sender, date)
+	if m.photoViewer != nil {
+		m.photoViewer.album = album
+		m.photoViewer.albumIdx = idx
+	}
+	return m, cmd
+}
+
+// pageModal steps the open album modal by delta (+1 next, -1 previous), clamped
+// to the album bounds. The neighbor part opens in the modal that matches its kind,
+// so paging can cross photo<->video within one album. A no-op when no album modal
+// is open or the album has a single part.
+func (m RootModel) pageModal(delta int) (RootModel, tea.Cmd) {
+	var album []components.GroupMediaRef
+	var cur int
+	switch {
+	case m.photoViewer != nil && len(m.photoViewer.album) > 1:
+		album, cur = m.photoViewer.album, m.photoViewer.albumIdx
+	case m.videoPlayer != nil && len(m.videoPlayer.album) > 1:
+		album, cur = m.videoPlayer.album, m.videoPlayer.albumIdx
+	default:
+		return m, nil
+	}
+	next := cur + delta
+	if next < 0 || next >= len(album) {
+		return m, nil // clamp at the ends
+	}
+	p := album[next]
+
+	// Tear down whichever modal is open before opening the neighbor.
+	var cmds []tea.Cmd
+	if m.photoViewer != nil {
+		var c tea.Cmd
+		m, c = m.closePhotoModal()
+		cmds = append(cmds, c)
+	}
+	if m.videoPlayer != nil {
+		m = m.closeVideoPlayer()
+	}
+
+	switch {
+	case p.Photo != nil:
+		var c tea.Cmd
+		m, c = m.openPhotoModalAlbum(*p.Photo, p.MsgID, p.Sender, p.Date, album, next)
+		cmds = append(cmds, c)
+	case p.Doc != nil && p.Kind.IsVideo():
+		var c tea.Cmd
+		if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
+			m, c = m.openVideoModalAlbum(*p.Doc, p.MsgID, p.DurSecs, p.Sender, album, next)
+		} else {
+			m, c = m.startDocumentOpen(*p.Doc, p.MsgID, p.Sender)
+		}
+		cmds = append(cmds, c)
+	}
+	return m, tea.Batch(cmds...)
+}
+
 // closePhotoModal tears down the overlay and drops the transmitted image. In
 // Kitty mode it also deletes the modal's virtual placement from the terminal:
 // the modal reuses one stable image id across photos, so leaving the placement
@@ -147,6 +213,10 @@ func (m RootModel) handlePhotoModalKey(keyStr string) (RootModel, tea.Cmd) {
 	switch keys.NormalizeKey(keyStr) {
 	case "esc", "q":
 		return m.closePhotoModal()
+	case "right", "l":
+		return m.pageModal(1)
+	case "left", "h":
+		return m.pageModal(-1)
 	case "O":
 		if m.photoViewer != nil {
 			return m.openPhotoExternal(m.photoViewer.photoID)
@@ -157,8 +227,13 @@ func (m RootModel) handlePhotoModalKey(keyStr string) (RootModel, tea.Cmd) {
 
 // photoFooterHints renders the modal hint bar (bottom-border left label) in the
 // app's overlay-hint style: O opens externally, esc closes.
-func photoFooterHints() string {
-	return components.OverlayHint([][2]string{{"O", "external"}, {"esc", "close"}}, nil)
+func photoFooterHints(hasAlbum bool) string {
+	hints := [][2]string{}
+	if hasAlbum {
+		hints = append(hints, [2]string{"←/→", "browse"})
+	}
+	hints = append(hints, [2]string{"O", "external"}, [2]string{"esc", "close"})
+	return components.OverlayHint(hints, nil)
 }
 
 // photoViewerView composites the bordered photo modal over base (the chat),
@@ -198,7 +273,7 @@ func (m RootModel) photoViewerView(base string) string {
 		content = media.RenderBlockArt(pv.img, cols)
 	}
 
-	box := modalBoxLines(content, cols, pv.title, photoFooterHints(), pv.timeLabel)
+	box := modalBoxLines(content, cols, pv.title, photoFooterHints(len(pv.album) > 1), pv.timeLabel)
 
 	boxW := cols + 2
 	left := (m.width - boxW) / 2

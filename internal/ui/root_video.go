@@ -40,6 +40,11 @@ type videoPlayer struct {
 	posFrames  int // frames shown since the loop's start (position = posFrames/videoFPS)
 	gen        int // bumped on (re)open/close to drop stale ticks
 	spinnerIdx int // loading-spinner glyph index while no frame has been shown
+	// album is the full set of media parts when this video belongs to an album,
+	// empty for a lone video; albumIdx is the index of the shown part. They drive
+	// left/right paging across the album.
+	album    []components.GroupMediaRef
+	albumIdx int
 }
 
 // videoFPS is the modal playback rate. videoFrameInterval is the tick period.
@@ -190,6 +195,17 @@ func (m RootModel) openVideoModal(ref store.DocumentRef, msgID, durSecs int, sen
 	return m, downloadVideoFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, m.tmpDir)
 }
 
+// openVideoModalAlbum opens a video that is part of an album, recording the full
+// album and current index so left/right can page across parts.
+func (m RootModel) openVideoModalAlbum(ref store.DocumentRef, msgID, durSecs int, sender string, album []components.GroupMediaRef, idx int) (RootModel, tea.Cmd) {
+	m, cmd := m.openVideoModal(ref, msgID, durSecs, sender)
+	if m.videoPlayer != nil {
+		m.videoPlayer.album = album
+		m.videoPlayer.albumIdx = idx
+	}
+	return m, cmd
+}
+
 func (m RootModel) handleVideoFileReady(msg videoFileReadyMsg) (RootModel, tea.Cmd) {
 	if m.videoPlayer == nil || m.videoPlayer.docID != msg.docID {
 		return m, nil
@@ -291,6 +307,10 @@ func (m RootModel) handleVideoPlayerKey(keyStr string) (RootModel, tea.Cmd) {
 	switch keys.NormalizeKey(keyStr) {
 	case "esc":
 		return m.closeVideoPlayer(), nil
+	case "right", "l":
+		return m.pageModal(1)
+	case "left", "h":
+		return m.pageModal(-1)
 	case "o":
 		if m.videoPlayer != nil && m.videoPlayer.path != "" {
 			openPath(m.videoPlayer.path)
@@ -308,12 +328,17 @@ func (m RootModel) handleVideoPlayerKey(keyStr string) (RootModel, tea.Cmd) {
 
 // videoFooterHints renders the modal hint bar in the app's status-bar style; the
 // space action reflects the current state (pause while playing, play while paused).
-func videoFooterHints(playing bool) string {
+func videoFooterHints(playing, hasAlbum bool) string {
 	space := "play"
 	if playing {
 		space = "pause"
 	}
-	return components.OverlayHint([][2]string{{"space", space}, {"o", "external"}, {"esc", "close"}}, nil)
+	hints := [][2]string{{"space", space}}
+	if hasAlbum {
+		hints = append(hints, [2]string{"←/→", "browse"})
+	}
+	hints = append(hints, [2]string{"o", "external"}, [2]string{"esc", "close"})
+	return components.OverlayHint(hints, nil)
 }
 
 // videoProgressRow renders a full-width filled bar for posFrames/totalFrames.
@@ -413,7 +438,7 @@ func (m RootModel) videoPlayerView(base string) string {
 
 	posSecs := vp.posFrames / videoFPS
 	timeStr := fmtClock(posSecs) + " / " + fmtClock(vp.durSecs)
-	box := modalBoxLines(content, vp.cols, vp.title, videoFooterHints(vp.playing), timeStr)
+	box := modalBoxLines(content, vp.cols, vp.title, videoFooterHints(vp.playing, len(vp.album) > 1), timeStr)
 
 	boxW := vp.cols + 2
 	left := (m.width - boxW) / 2
