@@ -216,3 +216,36 @@ func TestRenderGroupBubbleFileRows(t *testing.T) {
 		t.Fatalf("badges missing in file-row album:\n%s", out)
 	}
 }
+
+func TestRenderGroupBubbleBadgeShowsTypeAndContext(t *testing.T) {
+	ml := NewMessageList(24, 70)
+	parts := []store.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 1}},
+		{ID: 2, GroupedID: 100, SenderID: 7,
+			Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 34},
+			Document: &store.DocumentRef{ID: 2}},
+	}
+	out := strings.Join(ml.renderGroupBubble(parts, false), "\n")
+	if !strings.Contains(out, "[1] 📷 photo") {
+		t.Fatalf("photo badge missing type/context in:\n%s", out)
+	}
+	if !strings.Contains(out, "[2] 🎥 video 0:34") {
+		t.Fatalf("video badge missing duration context in:\n%s", out)
+	}
+}
+
+func TestRenderGroupBubbleBlankLineBetweenItems(t *testing.T) {
+	ml := NewMessageList(24, 60)
+	parts := []store.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 1}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 2}},
+	}
+	// A two-part album with no caption must reserve exactly one more line than the
+	// same album rendered without an inter-item separator would: badges + previews
+	// + one blank between them + two borders.
+	rows := ml.albumImageRows(parts)
+	want := 2 /*borders*/ + 2*(1 /*badge*/ +rows) + 1 /*inter-item blank*/
+	if got := len(ml.renderGroupBubble(parts, false)); got != want {
+		t.Fatalf("album line count = %d, want %d (missing inter-item blank?)", got, want)
+	}
+}

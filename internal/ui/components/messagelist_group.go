@@ -2,7 +2,6 @@ package components
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
@@ -62,18 +61,18 @@ func (ml *MessageList) albumContentW() int {
 // lock-step.
 func (ml *MessageList) albumImageRows(parts []store.Message) int {
 	media := groupMediaParts(parts)
-	imgCount, fileRows := 0, 0
+	imgCount := 0
 	for _, gm := range media {
-		if !ml.isImageMediaPart(gm.Msg) && gm.Msg.Document != nil {
-			fileRows++
-		} else {
+		if ml.albumPartHasPreview(gm.Msg) {
 			imgCount++
 		}
 	}
 	if imgCount == 0 {
 		return 0
 	}
-	overhead := 2 + len(media) + fileRows // borders + one badge per part + file rows
+	// borders + one badge per part + one blank line between adjacent parts. File
+	// parts contribute only their badge (no preview rows), already counted here.
+	overhead := 2 + len(media) + (len(media) - 1)
 	if caption := albumCaption(parts); caption != "" {
 		overhead += 1 + wrappedLineCount(caption, albumCaptionEntities(parts), ml.albumContentW())
 	}
@@ -111,39 +110,36 @@ func albumCaptionEntities(parts []store.Message) []store.MessageEntity {
 	return nil
 }
 
-// isImageMediaPart reports whether an album part renders as inline art (photo,
-// video thumbnail, animation) rather than a compact file row. Document media
-// without a cached thumbnail (generic files) render as file rows.
-func (ml *MessageList) isImageMediaPart(msg store.Message) bool {
-	if msg.Photo != nil {
-		return true
-	}
+// albumPartHasPreview reports whether an album part draws an inline art preview
+// (a photo, or any media whose thumbnail bytes are cached). Parts without a
+// preview — generic files, or images not yet downloaded — are described entirely
+// by their badge line and reserve no art rows.
+func (ml *MessageList) albumPartHasPreview(msg store.Message) bool {
 	if id, ok := ml.PreviewImageID(msg); ok {
 		if _, has := ml.cachedImage(id); has {
 			return true
 		}
 	}
-	return false
+	// A photo whose bytes are not cached yet still reserves a preview box so the
+	// image can swap in at a stable height.
+	return msg.Photo != nil
 }
 
-// groupFileRow renders one document album part as a single labelled row:
-// the media placeholder glyph, the file name, and a human size when known.
-func (ml *MessageList) groupFileRow(msg store.Message, m bubbleMetrics) string {
-	name := ""
-	if msg.Document != nil && msg.Document.FileName != "" {
-		name = msg.Document.FileName
-	} else if msg.Media != nil && msg.Media.FileName != "" {
-		name = msg.Media.FileName
+// albumBadgeText describes an album part next to its index: an icon plus type and
+// context (a video's duration, a file's name and size), reusing the same labels
+// the single-message placeholders use. Photos without a MediaRef fall back to a
+// plain photo label rather than dereferencing a nil Media.
+func albumBadgeText(msg store.Message) string {
+	if msg.Media != nil {
+		return placeholderFor(msg.Media)
 	}
-	label := strings.TrimSpace(placeholderFor(msg.Media) + " " + name)
-	if msg.Media != nil && msg.Media.Size > 0 {
-		label += "  " + humanSize(msg.Media.Size)
+	if msg.Photo != nil {
+		return "📷 photo"
 	}
-	return labelLine(label, m.actualW, m.b, m.bs)
+	return "📦 media"
 }
 
-// badgeRow renders the "[n]" index badge that precedes each album part, matching
-// the labels used by the open picker.
-func (ml *MessageList) badgeRow(index int, m bubbleMetrics) string {
-	return labelLine("["+strconv.Itoa(index)+"]", m.actualW, m.b, m.bs)
+// albumBadgeLabel is the full badge line content for a part: "[n] <type/context>".
+func albumBadgeLabel(index int, msg store.Message) string {
+	return "[" + strconv.Itoa(index) + "] " + albumBadgeText(msg)
 }
