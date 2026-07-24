@@ -1,6 +1,8 @@
 package components
 
 import (
+	"strconv"
+
 	"github.com/sorokin-vladimir/tele/internal/markup"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
@@ -22,6 +24,10 @@ type OpenTarget struct {
 	Kind  OpenTargetKind
 	Label string
 	URL   string
+	// PartIndex is the 1-based album part this target opens, matching the bubble
+	// index badges and the modal paging order. 0 for a single-message media target
+	// or a link.
+	PartIndex int
 }
 
 // MessageOpenTargets returns the openable targets of a message in display order:
@@ -38,6 +44,40 @@ func MessageOpenTargets(msg store.Message) []OpenTarget {
 	}
 
 	targets = append(targets, linkTargets(msg.Text, msg.Entities)...)
+	return targets
+}
+
+// GroupOpenTargets lists the openable targets of an album: one entry per media
+// part labelled with its 1-based index (matching the bubble badges and the modal
+// paging order), followed by the links found in the album caption.
+func GroupOpenTargets(parts []store.Message) []OpenTarget {
+	var targets []OpenTarget
+	n := 0
+	for _, p := range parts {
+		var kind OpenTargetKind
+		var stem string
+		switch {
+		case p.Photo != nil:
+			kind, stem = OpenTargetPhoto, "Photo"
+		case p.Media != nil && p.Media.Kind.IsVideo() && p.Document != nil:
+			kind, stem = OpenTargetVideo, "Video"
+		case p.Document != nil:
+			// A generic file: routed to the download/open-external path by the root,
+			// distinguished from a photo by its label and non-zero PartIndex.
+			kind, stem = OpenTargetPhoto, "File"
+		default:
+			continue
+		}
+		n++
+		targets = append(targets, OpenTarget{Kind: kind, Label: stem + " " + strconv.Itoa(n), PartIndex: n})
+	}
+	// Links come from the caption-bearing part.
+	for _, p := range parts {
+		if p.Text != "" {
+			targets = append(targets, linkTargets(p.Text, p.Entities)...)
+			break
+		}
+	}
 	return targets
 }
 

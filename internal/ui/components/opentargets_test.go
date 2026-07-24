@@ -96,3 +96,23 @@ func TestMessageOpenTargets_PhotoThenLinks_MediaFirst(t *testing.T) {
 func TestMessageOpenTargets_PlainText_NoTargets(t *testing.T) {
 	assert.Empty(t, components.MessageOpenTargets(store.Message{Text: "just text"}))
 }
+
+func TestGroupOpenTargets(t *testing.T) {
+	parts := []store.Message{
+		{ID: 1, Photo: &store.PhotoRef{ID: 1}},
+		{ID: 2, Media: &store.MediaRef{Kind: store.MediaVideo}, Document: &store.DocumentRef{ID: 2}},
+		{ID: 3, Media: &store.MediaRef{Kind: store.MediaFile, FileName: "a.pdf"}, Document: &store.DocumentRef{ID: 3},
+			Text:     "see http://x.com",
+			Entities: []store.MessageEntity{{Type: "url", Offset: 4, Length: 12}}},
+	}
+	got := components.GroupOpenTargets(parts)
+	require.GreaterOrEqual(t, len(got), 4, "3 media + 1 link")
+	assert.Equal(t, 1, got[0].PartIndex)
+	assert.Equal(t, 2, got[1].PartIndex)
+	assert.Equal(t, 3, got[2].PartIndex)
+	assert.Equal(t, "Photo 1", got[0].Label)
+	assert.Equal(t, "Video 2", got[1].Label)
+	last := got[len(got)-1]
+	assert.Equal(t, components.OpenTargetLink, last.Kind)
+	assert.Equal(t, 0, last.PartIndex)
+}

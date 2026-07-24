@@ -1,6 +1,46 @@
 package components
 
-import "github.com/sorokin-vladimir/tele/internal/store"
+import (
+	"time"
+
+	"github.com/sorokin-vladimir/tele/internal/store"
+)
+
+// GroupMediaRef is one media part of the selected album, carrying everything the
+// modal needs to open and page it: display index, kind, the photo or document
+// ref, and the part's own message ID and meta.
+type GroupMediaRef struct {
+	Index  int
+	Kind   store.MediaKind
+	Photo  *store.PhotoRef
+	Doc    *store.DocumentRef
+	MsgID  int
+	Sender string
+	Date   time.Time
+}
+
+// SelectedGroupMedia returns the media parts of the selected album in display
+// order. Empty when the selection is not a multi-part album.
+func (ml *MessageList) SelectedGroupMedia() []GroupMediaRef {
+	it := ml.computeSelectedItem()
+	if it == nil || len(it.parts) <= 1 {
+		return nil
+	}
+	media := groupMediaParts(it.parts)
+	out := make([]GroupMediaRef, 0, len(media))
+	for _, gm := range media {
+		ref := GroupMediaRef{Index: gm.Index, MsgID: gm.Msg.ID, Sender: gm.Msg.SenderName, Date: gm.Msg.Date}
+		if gm.Msg.Photo != nil {
+			ref.Kind = store.MediaPhoto
+			ref.Photo = gm.Msg.Photo
+		} else if gm.Msg.Media != nil {
+			ref.Kind = gm.Msg.Media.Kind
+			ref.Doc = gm.Msg.Document
+		}
+		out = append(out, ref)
+	}
+	return out
+}
 
 // SelectedBubbleRect returns the rectangle of the selected message bubble from
 // the most recent View() call, local to View()'s output. ok is false when there
@@ -28,10 +68,36 @@ func (ml *MessageList) SelectedMessageText() (string, bool) {
 }
 
 // SelectedMessageOpenTargets returns the openable targets (media + links) of the
-// selected message, in display order. Empty when nothing is openable.
+// selected message, in display order. For a collapsed album it enumerates every
+// media part. Empty when nothing is openable.
 func (ml *MessageList) SelectedMessageOpenTargets() []OpenTarget {
-	if msg := ml.computeSelectedMsg(); msg != nil {
-		return MessageOpenTargets(*msg)
+	it := ml.computeSelectedItem()
+	if it == nil {
+		return nil
+	}
+	if len(it.parts) > 1 {
+		return GroupOpenTargets(it.parts)
+	}
+	return MessageOpenTargets(it.msg)
+}
+
+// computeSelectedItem returns the selected list item (album-aware), or nil. It
+// matches the selection by any of the item's part IDs so a multi-part album
+// resolves to its single item.
+func (ml *MessageList) computeSelectedItem() *listItem {
+	id := ml.computeSelectedMsgID()
+	if id == 0 {
+		return nil
+	}
+	for i := range ml.items {
+		if ml.items[i].kind != itemMessage {
+			continue
+		}
+		for _, p := range ml.items[i].parts {
+			if p.ID == id {
+				return &ml.items[i]
+			}
+		}
 	}
 	return nil
 }

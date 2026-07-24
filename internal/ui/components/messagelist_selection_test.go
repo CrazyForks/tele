@@ -2,10 +2,12 @@ package components_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessageList_SelectedMessageText_ReturnsFocusedText(t *testing.T) {
@@ -32,4 +34,21 @@ func TestMessageList_SelectedMessageText_EmptyOnMediaOnly(t *testing.T) {
 	text, ok := ml.SelectedMessageText()
 	assert.False(t, ok)
 	assert.Equal(t, "", text)
+}
+
+func TestSelectedGroupMedia(t *testing.T) {
+	d, _ := time.Parse(time.RFC3339, "2026-07-24T10:00:00Z")
+	ml := components.NewMessageList(24, 60)
+	ml.SetMessages([]store.Message{
+		{ID: 1, SenderID: 7, GroupedID: 100, Photo: &store.PhotoRef{ID: 11}, Date: d},
+		{ID: 2, SenderID: 7, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaVideo}, Document: &store.DocumentRef{ID: 22}, Date: d},
+	})
+	got := ml.SelectedGroupMedia()
+	require.Len(t, got, 2)
+	assert.Equal(t, 1, got[0].Index)
+	require.NotNil(t, got[0].Photo)
+	assert.Equal(t, int64(11), got[0].Photo.ID)
+	assert.Equal(t, 2, got[1].Index)
+	require.NotNil(t, got[1].Doc)
+	assert.Equal(t, int64(22), got[1].Doc.ID)
 }
