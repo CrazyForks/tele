@@ -176,19 +176,22 @@ type FolderFilter struct {
 }
 
 type Message struct {
-	ID           int
-	ChatID       int64
-	SenderID     int64
-	SenderName   string
-	Text         string
-	Date         time.Time
-	IsOut        bool
-	Entities     []MessageEntity
-	Media        *MediaRef    // nil if message has no media
-	Photo        *PhotoRef    // nil if message has no photo
-	Document     *DocumentRef // nil if message has no document-backed media
-	ReplyToMsgID int          // 0 if not a reply
-	EditDate     *time.Time   // nil if not edited
+	ID         int
+	ChatID     int64
+	SenderID   int64
+	SenderName string
+	Text       string
+	Date       time.Time
+	IsOut      bool
+	Entities   []MessageEntity
+	Media      *MediaRef    // nil if message has no media
+	Photo      *PhotoRef    // nil if message has no photo
+	Document   *DocumentRef // nil if message has no document-backed media
+	// GroupedID is Telegram's album key: album parts share the same non-zero
+	// grouped_id. 0 means the message is not part of an album.
+	GroupedID    int64
+	ReplyToMsgID int        // 0 if not a reply
+	EditDate     *time.Time // nil if not edited
 	Reactions    []Reaction
 	// HasUnreadReactions is true when the raw message carried at least one recent
 	// reaction flagged unread (a not-yet-viewed reaction on one of our messages).

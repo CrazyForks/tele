@@ -60,3 +60,23 @@ func TestConvertMessage_Mentioned(t *testing.T) {
 	require.True(t, ok)
 	assert.False(t, out2.Mentioned)
 }
+
+func TestConvertMessageGroupedID(t *testing.T) {
+	raw := &tg.Message{ID: 10, Message: "part", Date: 1700000000}
+	raw.SetGroupedID(9988776655)
+	got, ok := convertMessage(raw, 42)
+	if !ok {
+		t.Fatalf("convertMessage returned ok=false")
+	}
+	if got.GroupedID != 9988776655 {
+		t.Fatalf("GroupedID = %d, want 9988776655", got.GroupedID)
+	}
+}
+
+func TestConvertMessageNoGroupedID(t *testing.T) {
+	raw := &tg.Message{ID: 11, Message: "solo", Date: 1700000000}
+	got, _ := convertMessage(raw, 42)
+	if got.GroupedID != 0 {
+		t.Fatalf("GroupedID = %d, want 0", got.GroupedID)
+	}
+}

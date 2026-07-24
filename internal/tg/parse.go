@@ -278,6 +278,7 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 		Entities: convertEntities(msg.Entities),
 	}
 	out.Mentioned = msg.Mentioned
+	out.GroupedID = msg.GroupedID
 	out.Media = classifyMedia(msg.Media)
 	if hdr, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok {
 		out.ReplyToMsgID = hdr.ReplyToMsgID
