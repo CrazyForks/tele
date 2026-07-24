@@ -418,15 +418,14 @@ list of action names and what each one does.
 ## Roadmap
 
 Planned work lives on the public [**project board**](https://github.com/users/sorokin-vladimir/projects/2),
-grouped into release [milestones](https://github.com/sorokin-vladimir/tele/milestones).
+grouped into [milestones](https://github.com/sorokin-vladimir/tele/milestones). Milestones track
+minor lines (`v1.9`, `v1.10`, …); patch releases ship incrementally within a line as fixes land.
 
-| Release              | Focus                                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `v1.8.0` *(in work)* | Notifications & messaging UX — toast banners, in-app alerts for inactive chats, `@mentions`, unread mention/reaction indicators, own-message alert suppression, native Linux packages (deb/rpm/AUR) |
-| `v1.8.1`             | Composer polish & fixes — trim leading/trailing whitespace, multi-line past the height cap, attachment-chip and forward-comment width clamps      |
-| `v1.9.0`             | Media internals & sending — send multiple files as an album (grouped media), `?` keyboard-shortcuts help modal, renderer cache cleanup (LRU)      |
-| `v1.10.0`            | Offline history & search — persist messages in SQLite for instant chat open, full-text search over history, command palette, pinned messages     |
-| `Backlog`            | Power-user polish — color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards          |
+| Release             | Focus                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `v1.9` *(in work)*  | Offline history & media internals — SQLite-backed history for instant chat open, on-disk image LRU cache, album sending, `?` shortcuts help modal, Kitty renderer fixes |
+| `v1.10` *(planned)* | Search & chat polish — full-text history search, command palette, in-chat grep, pinned messages, search-modal preview, richer reply UX, plus image-modal and chat-list fixes |
+| `Backlog`           | Power-user & platform — color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards, voice and round-video messages, notification click routing |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.
