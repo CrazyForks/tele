@@ -11,6 +11,19 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Photo and video albums now render as one grouped message instead of a string of
+  separate bubbles. Media sent together collapse into a single bubble laid out as
+  a mosaic grid — two columns for up to four items, three for more, falling back
+  to a vertical stack on narrow panes — with each preview cropped to fit its tile
+  (whole subjects are kept; extreme aspect ratios letterbox rather than cut people
+  off). Every tile is labelled `[n]` with its type and, for video, its duration.
+  Open a specific item with `o` (the picker lists all parts), and once the viewer
+  is open, page through the whole album with the arrow keys — across photos and
+  videos — without reopening each one. Several files attached in one message are
+  grouped as well (#178)
+
 ## [1.9.0] - 2026-07-23
 
 ### Added
