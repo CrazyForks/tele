@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/stretchr/testify/require"
 )
@@ -66,4 +67,27 @@ func stripANSI(s string) string {
 		out.WriteRune(r)
 	}
 	return out.String()
+}
+
+func TestSliceArtWindow(t *testing.T) {
+	in := []string{"ABCDEF", "abcdef", "123456", "xxxxxx"}
+	out := media.SliceArtWindow(in, 1, 1, 3, 2) // hOff=1 vOff=1 winCols=3 winRows=2
+	if len(out) != 2 {
+		t.Fatalf("rows = %d, want 2", len(out))
+	}
+	if xansi.Strip(out[0]) != "bcd" || xansi.Strip(out[1]) != "234" {
+		t.Fatalf("window = %q,%q, want \"bcd\",\"234\"", xansi.Strip(out[0]), xansi.Strip(out[1]))
+	}
+}
+
+func TestSliceArtWindowPadsShort(t *testing.T) {
+	out := media.SliceArtWindow([]string{"AB"}, 0, 0, 4, 2)
+	if len(out) != 2 {
+		t.Fatalf("rows = %d, want 2 (padded)", len(out))
+	}
+	for _, ln := range out {
+		if w := xansi.StringWidth(xansi.Strip(ln)); w != 4 {
+			t.Fatalf("row width = %d, want 4 (padded)", w)
+		}
+	}
 }

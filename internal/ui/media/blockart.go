@@ -5,9 +5,32 @@ import (
 	"image"
 	"strings"
 
+	xansi "github.com/charmbracelet/x/ansi"
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/nfnt/resize"
 )
+
+// SliceArtWindow returns the sub-rectangle [vOff, vOff+winRows) x [hOff,
+// hOff+winCols) of rendered block-art lines: it drops vOff top rows, keeps
+// winRows, and horizontally slices each kept row to the winCols columns starting
+// at hOff (width-aware so ANSI color runs are preserved). Rows or columns beyond
+// the input are space-padded so the result is always winRows x winCols. Used to
+// crop a mosaic tile's block art to its centered cover window.
+func SliceArtWindow(lines []string, hOff, vOff, winCols, winRows int) []string {
+	out := make([]string, winRows)
+	for r := 0; r < winRows; r++ {
+		src := ""
+		if i := vOff + r; i >= 0 && i < len(lines) {
+			src = lines[i]
+		}
+		sliced := xansi.Cut(src, hOff, hOff+winCols)
+		if w := xansi.StringWidth(sliced); w < winCols {
+			sliced += strings.Repeat(" ", winCols-w)
+		}
+		out[r] = sliced
+	}
+	return out
+}
 
 // RenderBlockArt scales img to cols columns wide and renders it as ANSI half-block art.
 // Each returned string is one terminal line (no trailing newline).
