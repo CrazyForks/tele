@@ -1,6 +1,7 @@
 package components
 
 import (
+	"image"
 	"strings"
 	"testing"
 	"time"
@@ -247,5 +248,54 @@ func TestRenderGroupBubbleBlankLineBetweenItems(t *testing.T) {
 	want := 2 /*borders*/ + 2*(1 /*badge*/ +rows) + 1 /*inter-item blank*/
 	if got := len(ml.renderGroupBubble(parts, false)); got != want {
 		t.Fatalf("album line count = %d, want %d (missing inter-item blank?)", got, want)
+	}
+}
+
+func TestAlbumPreviewDownscalesNotCrops(t *testing.T) {
+	ml := NewMessageList(24, 80)
+	// A very tall (portrait) image: cropping to the budget would keep only its top;
+	// downscaling must fit the whole image, which forces the width narrower.
+	tall := image.NewRGBA(image.Rect(0, 0, 400, 2000))
+	ml.SetImage(11, tall)
+
+	parts := []store.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7,
+			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 100, SenderID: 7,
+			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 12}},
+	}
+
+	budget := ml.albumImageRows(parts)
+	cols, rows := ml.albumPartBox(budget, 400, 2000)
+	if rows > budget {
+		t.Fatalf("downscaled rows = %d exceed budget %d (still cropping?)", rows, budget)
+	}
+	if cols >= ml.photoContentCols() {
+		t.Fatalf("tall image not narrowed: cols=%d, contentCols=%d", cols, ml.photoContentCols())
+	}
+	// Render and height stay in lock-step with a real cached image.
+	if got, want := len(ml.renderGroupBubble(parts, false)), ml.groupHeight(parts); got != want {
+		t.Fatalf("render lines = %d, groupHeight = %d; must match with a cached image", got, want)
+	}
+}
+
+func TestAlbumPhotoBoxStableWhenSiblingVideoLoads(t *testing.T) {
+	ml := NewMessageList(24, 80)
+	ml.SetImage(11, image.NewRGBA(image.Rect(0, 0, 400, 300))) // photo already cached
+	parts := []store.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaVideo}, Document: &store.DocumentRef{ID: 22, ThumbSize: "m"}},
+		{ID: 3, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 33}},
+	}
+	ml.SetMessages(parts)
+
+	c1, r1 := ml.MediaBoxForID(11, 400, 300)
+	// The video thumbnail arrives later (first open after restart).
+	ml.SetImage(22, image.NewRGBA(image.Rect(0, 0, 320, 240)))
+	c2, r2 := ml.MediaBoxForID(11, 400, 300)
+
+	if c1 != c2 || r1 != r2 {
+		t.Fatalf("photo box changed when sibling video loaded: (%d,%d) -> (%d,%d); "+
+			"placement no longer matches render, photo disappears", c1, r1, c2, r2)
 	}
 }

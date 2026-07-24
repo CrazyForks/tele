@@ -595,23 +595,21 @@ func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) [
 	// bubble), so the rendered caption line count matches groupHeight.
 	captionW := m.actualW
 
-	// Widen to fit the badge labels (labelLine does not truncate) and the scaled
-	// preview columns once the first image's bytes are known.
+	// Widen to fit the badge labels (labelLine does not truncate) and the
+	// downscaled preview columns of any part whose bytes are known.
 	widen := func(cols int) {
 		if cols > m.actualW {
 			m.actualW = cols
 			m.innerW = cols + 2
 		}
 	}
+	budget := ml.albumImageRows(parts)
 	for _, gm := range media {
 		widen(lipgloss.Width(albumBadgeLabel(gm.Index, gm.Msg)))
-	}
-	rows := ml.albumImageRows(parts)
-	if len(media) > 0 {
-		if id, ok := ml.PreviewImageID(media[0].Msg); ok {
+		if id, ok := ml.PreviewImageID(gm.Msg); ok {
 			if img, has := ml.cachedImage(id); has {
 				b := img.Bounds()
-				cols, _ := ml.mediaBox(media[0].Msg, b.Dx(), b.Dy())
+				cols, _ := ml.albumPartBox(budget, b.Dx(), b.Dy())
 				widen(cols)
 			}
 		}
@@ -621,12 +619,12 @@ func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) [
 	b, bs := m.b, m.bs
 	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
 
-	lines := make([]string, 0, len(media)*(rows+2)+4)
+	lines := make([]string, 0, len(media)*(budget+2)+4)
 	lines = append(lines, top)
 	for i, gm := range media {
 		lines = append(lines, labelLine(albumBadgeLabel(gm.Index, gm.Msg), m.actualW, b, bs))
 		if ml.albumPartHasPreview(gm.Msg) {
-			lines = append(lines, ml.groupPartArt(gm.Msg, rows, m)...)
+			lines = append(lines, ml.groupPartArt(gm.Msg, budget, m)...)
 		}
 		if i < len(media)-1 {
 			lines = append(lines, blankRow) // blank line between adjacent parts
@@ -640,34 +638,33 @@ func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) [
 	return ml.alignBubbleLines(lines, anchor.IsOut, selected)
 }
 
-// groupPartArt renders one album part's scaled art rows, wrapped in the bubble's
-// side borders and padded to the content width. When the image bytes are not
-// cached yet it reserves the same number of blank rows so the image can swap in
-// at a stable height (the badge line already labels the part). Caller must have
-// verified albumPartHasPreview.
-func (ml *MessageList) groupPartArt(msg store.Message, rows int, m bubbleMetrics) []string {
+// groupPartArt renders one album part's downscaled art rows, wrapped in the
+// bubble's side borders and padded to the content width. The image is rendered
+// into an albumPartBox (fit whole image, never crop); a part still awaiting its
+// bytes reserves the full budget as blank rows so it swaps in at a stable height
+// (the badge already labels it). Caller must have verified albumPartHasPreview.
+func (ml *MessageList) groupPartArt(msg store.Message, budget int, m bubbleMetrics) []string {
 	b, bs := m.b, m.bs
 	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
-	var artLines []string
 	if id, ok := ml.PreviewImageID(msg); ok {
 		if img, has := ml.cachedImage(id); has {
-			artLines = ml.renderer.Render(id, img, m.actualW)
-			if len(artLines) > rows {
-				artLines = artLines[:rows] // honor the scale-down budget
+			bb := img.Bounds()
+			cols, _ := ml.albumPartBox(budget, bb.Dx(), bb.Dy())
+			artLines := ml.renderer.Render(id, img, cols)
+			out := make([]string, 0, len(artLines))
+			for _, al := range artLines {
+				if w := lipgloss.Width(al); w < m.actualW {
+					al += strings.Repeat(" ", m.actualW-w)
+				}
+				out = append(out, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
 			}
+			return out
 		}
 	}
-	out := make([]string, 0, rows)
-	for i := 0; i < rows; i++ {
-		if i < len(artLines) {
-			al := artLines[i]
-			if w := lipgloss.Width(al); w < m.actualW {
-				al += strings.Repeat(" ", m.actualW-w)
-			}
-			out = append(out, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
-		} else {
-			out = append(out, blankRow)
-		}
+	// Photo awaiting bytes: reserve the budget as a blank box.
+	out := make([]string, 0, budget)
+	for i := 0; i < budget; i++ {
+		out = append(out, blankRow)
 	}
 	return out
 }

@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
 // defaultAlbumImgW/H are the representative image dimensions used to size album
@@ -63,7 +64,12 @@ func (ml *MessageList) albumImageRows(parts []store.Message) int {
 	media := groupMediaParts(parts)
 	imgCount := 0
 	for _, gm := range media {
-		if ml.albumPartHasPreview(gm.Msg) {
+		// Count by metadata, not current cache state: a part that WILL show a
+		// preview (a photo, or a video/GIF with a thumbnail) must claim its budget
+		// slot from the start. Otherwise a late-loading sibling (e.g. a video
+		// thumbnail) would shrink the budget and resize the already-transmitted
+		// photos, whose Kitty placements would then stop matching the render.
+		if ml.albumPartReservesPreview(gm.Msg) {
 			imgCount++
 		}
 	}
@@ -110,6 +116,17 @@ func albumCaptionEntities(parts []store.Message) []store.MessageEntity {
 	return nil
 }
 
+// albumPartReservesPreview reports whether an album part will eventually show an
+// inline preview, based on metadata alone (independent of download state): a
+// photo, or a video/GIF/sticker that carries a thumbnail. Used to size the shared
+// per-part budget so it stays stable as parts load in.
+func (ml *MessageList) albumPartReservesPreview(msg store.Message) bool {
+	if _, ok := ml.PreviewImageID(msg); ok {
+		return true
+	}
+	return msg.Photo != nil
+}
+
 // albumPartHasPreview reports whether an album part draws an inline art preview
 // (a photo, or any media whose thumbnail bytes are cached). Parts without a
 // preview — generic files, or images not yet downloaded — are described entirely
@@ -123,6 +140,33 @@ func (ml *MessageList) albumPartHasPreview(msg store.Message) bool {
 	// A photo whose bytes are not cached yet still reserves a preview box so the
 	// image can swap in at a stable height.
 	return msg.Photo != nil
+}
+
+// albumPartBox fits an album part's image within the album content width and the
+// per-part row budget, preserving aspect. PhotoBox downscales (never crops): it
+// caps height at viewHeight*2/3, so passing budgetRows*3/2 makes the row cap equal
+// the budget. Both the render and the Kitty transmit sizing go through this so the
+// placement matches the drawn grid.
+func (ml *MessageList) albumPartBox(budgetRows, imgW, imgH int) (cols, rows int) {
+	cw, ch := media.CellPx()
+	return media.PhotoBox(imgW, imgH, ml.photoContentCols(), budgetRows*3/2, ml.maxMediaPx, cw, ch, media.CellAspect())
+}
+
+// albumPartRows returns the reserved art rows for one album part: the downscaled
+// box height when its image bytes are cached, the full budget as a placeholder box
+// for a photo still awaiting bytes, or 0 for a badge-only part (a generic file).
+func (ml *MessageList) albumPartRows(budgetRows int, msg store.Message) int {
+	if id, ok := ml.PreviewImageID(msg); ok {
+		if img, has := ml.cachedImage(id); has {
+			b := img.Bounds()
+			_, rows := ml.albumPartBox(budgetRows, b.Dx(), b.Dy())
+			return rows
+		}
+	}
+	if msg.Photo != nil {
+		return budgetRows
+	}
+	return 0
 }
 
 // albumBadgeText describes an album part next to its index: an icon plus type and

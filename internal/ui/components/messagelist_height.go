@@ -179,14 +179,12 @@ func (ml *MessageList) groupHeight(parts []store.Message) int {
 		return 4
 	}
 	media := groupMediaParts(parts)
-	rows := ml.albumImageRows(parts)
+	budget := ml.albumImageRows(parts)
 
 	h := 0
 	for i, gm := range media {
-		h++ // "[n] <type/context>" badge row
-		if ml.albumPartHasPreview(gm.Msg) {
-			h += rows // scaled art (or a reserved box of the same height)
-		}
+		h++                                   // "[n] <type/context>" badge row
+		h += ml.albumPartRows(budget, gm.Msg) // downscaled art, placeholder box, or 0 for a file
 		if i < len(media)-1 {
 			h++ // blank line between adjacent parts
 		}

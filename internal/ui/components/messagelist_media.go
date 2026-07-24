@@ -103,6 +103,18 @@ func (ml *MessageList) MediaBoxForID(id int64, imgW, imgH int) (cols, rows int) 
 		if ml.items[i].kind != itemMessage {
 			continue
 		}
+		// Album parts render into the downscaled per-part box, so their Kitty
+		// placement must be sized the same way or the image is drawn at the wrong
+		// scale (crop/overflow). Match any part, not just the anchor.
+		if len(ml.items[i].parts) > 1 {
+			budget := ml.albumImageRows(ml.items[i].parts)
+			for _, p := range ml.items[i].parts {
+				if pid, ok := ml.PreviewImageID(p); ok && pid == id {
+					return ml.albumPartBox(budget, imgW, imgH)
+				}
+			}
+			continue
+		}
 		if pid, ok := ml.PreviewImageID(ml.items[i].msg); ok && pid == id {
 			return ml.mediaBox(ml.items[i].msg, imgW, imgH)
 		}
