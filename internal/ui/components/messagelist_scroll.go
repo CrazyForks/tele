@@ -30,8 +30,12 @@ func (ml *MessageList) VisiblePhotoIDs() []int64 {
 		}
 		lines += h
 		if ml.items[i].kind == itemMessage {
-			if id, ok := ml.PreviewImageID(ml.items[i].msg); ok {
-				ids = append(ids, id)
+			// Request every album part's preview, not just the anchor, so sibling
+			// previews in a collapsed album bubble download too.
+			for _, p := range ml.items[i].parts {
+				if id, ok := ml.PreviewImageID(p); ok {
+					ids = append(ids, id)
+				}
 			}
 		}
 	}

@@ -563,7 +563,133 @@ func (ml *MessageList) renderItem(i int, selected bool) []string {
 	if item.kind == itemUnreadSeparator {
 		return ml.renderUnreadSeparator()
 	}
+	if len(item.parts) > 1 {
+		return ml.renderGroupBubble(item.parts, selected)
+	}
 	return ml.renderMessage(item.msg, selected)
+}
+
+// renderGroupBubble draws a Telegram album as one bubble: the sender/time frame
+// once, a vertical stack of the media parts (each preceded by a "[n]" index badge
+// matching the open picker), then the shared caption. Previews are scaled down by
+// groupMediaRows so the album never spans several screens. It must stay in
+// lock-step with groupHeight; TestGroupHeightMatchesRender guards that.
+func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) []string {
+	media := groupMediaParts(parts)
+	anchor := parts[0]
+	caption := albumCaption(parts)
+
+	// Frame width/identity: measure from an anchor bearing the caption so the
+	// bubble is at least as wide as the text and the sender name. Clear Media so
+	// the frame width is driven by the caption and the previews, not by a single
+	// message's placeholder.
+	framing := anchor
+	framing.Text = caption
+	framing.Entities = albumCaptionEntities(parts)
+	framing.Media = nil
+	framing.Photo = nil
+	framing.Document = nil
+	m := ml.measureBubble(framing)
+	// The caption wraps at its natural width (before any image widens the bubble),
+	// so the rendered caption line count matches groupHeight's wrappedLineCount.
+	captionW := m.actualW
+
+	// Widen to the scaled preview columns once the first image's bytes are known.
+	rows := ml.albumImageRows(parts)
+	if len(media) > 0 {
+		if id, ok := ml.PreviewImageID(media[0].Msg); ok {
+			if img, has := ml.cachedImage(id); has {
+				b := img.Bounds()
+				cols, _ := ml.mediaBox(media[0].Msg, b.Dx(), b.Dy())
+				if cols > m.actualW {
+					m.actualW = cols
+					m.innerW = cols + 2
+				}
+			}
+		}
+	}
+
+	top, bottom := ml.bubbleBorders(framing, m)
+	b, bs := m.b, m.bs
+	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
+
+	lines := make([]string, 0, len(media)*(rows+1)+4)
+	lines = append(lines, top)
+	for _, gm := range media {
+		lines = append(lines, ml.badgeRow(gm.Index, m))
+		lines = append(lines, ml.groupPartArt(gm.Msg, rows, m)...)
+	}
+	if caption != "" {
+		lines = append(lines, blankRow)
+		lines = append(lines, ml.captionLines(caption, albumCaptionEntities(parts), m, captionW)...)
+	}
+	lines = append(lines, bottom)
+	return ml.alignBubbleLines(lines, anchor.IsOut, selected)
+}
+
+// groupPartArt renders one album part's rows: a compact file row for a document
+// with no inline art, otherwise its scaled art rows (or a placeholder box of the
+// same reserved height when the bytes are not cached yet). Each row is wrapped in
+// the bubble's side borders and padded to the content width.
+func (ml *MessageList) groupPartArt(msg store.Message, rows int, m bubbleMetrics) []string {
+	b, bs := m.b, m.bs
+	if !ml.isImageMediaPart(msg) && msg.Document != nil {
+		return []string{ml.groupFileRow(msg, m)}
+	}
+	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
+	var artLines []string
+	if id, ok := ml.PreviewImageID(msg); ok {
+		if img, has := ml.cachedImage(id); has {
+			artLines = ml.renderer.Render(id, img, m.actualW)
+			if len(artLines) > rows {
+				artLines = artLines[:rows] // honor the scale-down budget
+			}
+		}
+	}
+	out := make([]string, 0, rows)
+	for i := 0; i < rows; i++ {
+		if i < len(artLines) {
+			al := artLines[i]
+			if w := lipgloss.Width(al); w < m.actualW {
+				al += strings.Repeat(" ", m.actualW-w)
+			}
+			out = append(out, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
+		} else if i == 0 && len(artLines) == 0 {
+			// No bytes yet: a placeholder box on the first row. A photo part may
+			// carry no MediaRef (only PhotoRef), so fall back to a photo label
+			// rather than dereferencing a nil Media in placeholderLine.
+			if msg.Media != nil {
+				out = append(out, placeholderLine(msg.Media, m.actualW, b, bs))
+			} else {
+				out = append(out, labelLine("📷 photo", m.actualW, b, bs))
+			}
+		} else {
+			out = append(out, blankRow)
+		}
+	}
+	return out
+}
+
+// captionLines wraps the album caption inside the bubble borders, matching the
+// text path of bubbleContentLines.
+func (ml *MessageList) captionLines(text string, entities []store.MessageEntity, m bubbleMetrics, wrapW int) []string {
+	b, bs := m.b, m.bs
+	rendered := RenderEntities(text, entities)
+	wrapStyle := lipgloss.NewStyle().Width(wrapW)
+	var out []string
+	for _, part := range strings.Split(rendered, "\n") {
+		if part == "" {
+			out = append(out, bs.Render(b.Left)+strings.Repeat(" ", m.innerW)+bs.Render(b.Right))
+			continue
+		}
+		for _, wl := range strings.Split(wrapStyle.Render(part), "\n") {
+			if w := lipgloss.Width(wl); w < m.actualW {
+				wl += strings.Repeat(" ", m.actualW-w)
+			}
+			out = append(out, bs.Render(b.Left)+" "+wl+" "+bs.Render(b.Right))
+		}
+	}
+	return out
 }
 
 func (ml *MessageList) View() string {

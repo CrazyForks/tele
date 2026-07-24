@@ -16,8 +16,9 @@ const (
 
 type listItem struct {
 	kind  itemKind
-	msg   store.Message // valid when kind == itemMessage
-	label string        // valid when kind == itemDateSeparator, e.g. "May 18"
+	msg   store.Message   // valid when kind == itemMessage; the album anchor (parts[0])
+	parts []store.Message // album parts when kind == itemMessage; len 1 for a lone message
+	label string          // valid when kind == itemDateSeparator, e.g. "May 18"
 }
 
 func sameDay(a, b time.Time) bool {
@@ -44,25 +45,53 @@ func FormatDateLabel(t time.Time) string {
 	return formatSepLabel(t)
 }
 
+// groupParts coalesces contiguous messages that belong to the same Telegram
+// album: an album is a run of messages sharing a non-zero GroupedID and the same
+// sender. Non-album messages, and any run reduced to a single part, come back as
+// a group of one. Order is preserved. Album parts arrive contiguous in the
+// timeline, so a single linear scan is sufficient; the function is pure so it can
+// be table-tested and re-run cheaply on every rebuild.
+func groupParts(msgs []store.Message) [][]store.Message {
+	if len(msgs) == 0 {
+		return nil
+	}
+	out := make([][]store.Message, 0, len(msgs))
+	for i := 0; i < len(msgs); {
+		j := i + 1
+		if msgs[i].GroupedID != 0 {
+			for j < len(msgs) &&
+				msgs[j].GroupedID == msgs[i].GroupedID &&
+				msgs[j].SenderID == msgs[i].SenderID {
+				j++
+			}
+		}
+		out = append(out, msgs[i:j])
+		i = j
+	}
+	return out
+}
+
 func (ml *MessageList) buildItems(msgs []store.Message) []listItem {
 	if len(msgs) == 0 {
 		return nil
 	}
-	items := make([]listItem, 0, len(msgs)+4)
+	groups := groupParts(msgs)
+	items := make([]listItem, 0, len(groups)+4)
 	var prev time.Time
 	unreadInserted := false
-	for _, msg := range msgs {
-		if !sameDay(prev, msg.Date) {
-			items = append(items, listItem{kind: itemDateSeparator, label: formatSepLabel(msg.Date)})
-			prev = msg.Date
+	for _, g := range groups {
+		anchor := g[0]
+		if !sameDay(prev, anchor.Date) {
+			items = append(items, listItem{kind: itemDateSeparator, label: formatSepLabel(anchor.Date)})
+			prev = anchor.Date
 		}
 		// The divider marks the first incoming unread message; own outgoing
 		// messages never anchor it, even though their ID exceeds inboxReadMaxID.
-		if !unreadInserted && !msg.IsOut && ml.inboxReadMaxID > 0 && msg.ID > ml.inboxReadMaxID {
+		if !unreadInserted && !anchor.IsOut && ml.inboxReadMaxID > 0 && anchor.ID > ml.inboxReadMaxID {
 			items = append(items, listItem{kind: itemUnreadSeparator})
 			unreadInserted = true
 		}
-		items = append(items, listItem{kind: itemMessage, msg: msg})
+		items = append(items, listItem{kind: itemMessage, msg: anchor, parts: g})
 	}
 	return items
 }
@@ -108,10 +137,14 @@ func (ml *MessageList) RemoveMessage(id int) {
 		if item.kind != itemMessage {
 			continue
 		}
-		if item.msg.ID == id {
-			found = true
-		} else {
-			msgs = append(msgs, item.msg)
+		// Reconstruct from every album part, not just the anchor, so removing one
+		// part of an album keeps its siblings.
+		for _, p := range item.parts {
+			if p.ID == id {
+				found = true
+			} else {
+				msgs = append(msgs, p)
+			}
 		}
 	}
 	if !found {
@@ -168,9 +201,14 @@ func (ml *MessageList) PrependMessages(older []store.Message) {
 	current := make([]store.Message, 0, len(ml.items))
 	existing := make(map[int]struct{}, len(ml.items))
 	for _, item := range ml.items {
-		if item.kind == itemMessage {
-			current = append(current, item.msg)
-			existing[item.msg.ID] = struct{}{}
+		if item.kind != itemMessage {
+			continue
+		}
+		// Include every album part so the flat slice round-trips through buildItems
+		// without losing non-anchor parts.
+		for _, p := range item.parts {
+			current = append(current, p)
+			existing[p.ID] = struct{}{}
 		}
 	}
 	fresh := make([]store.Message, 0, len(older))
@@ -200,8 +238,13 @@ func (ml *MessageList) OldestID() int {
 
 func (ml *MessageList) findMessage(id int) *store.Message {
 	for i := range ml.items {
-		if ml.items[i].kind == itemMessage && ml.items[i].msg.ID == id {
-			return &ml.items[i].msg
+		if ml.items[i].kind != itemMessage {
+			continue
+		}
+		for j := range ml.items[i].parts {
+			if ml.items[i].parts[j].ID == id {
+				return &ml.items[i].parts[j]
+			}
 		}
 	}
 	return nil

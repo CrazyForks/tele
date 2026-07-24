@@ -161,7 +161,45 @@ func (ml *MessageList) computeItemHeight(i int) int {
 	if ml.items[i].kind == itemDateSeparator || ml.items[i].kind == itemUnreadSeparator {
 		return 3
 	}
+	if len(ml.items[i].parts) > 1 {
+		return ml.groupHeight(ml.items[i].parts)
+	}
 	return ml.msgHeight(ml.items[i].msg)
+}
+
+// groupHeight estimates the rendered line count for a collapsed album bubble:
+// 2 border rows, then for each media part one index-badge row plus its scaled art
+// rows (or a single compact file row for a document part), then (once) the shared
+// caption wrapped to content width. Parts with no cached bytes reserve the same
+// scaled rows as a placeholder box so the height is stable before/after image
+// load (mirrors msgHeight, issue #115). It must stay in lock-step with
+// renderGroupBubble; TestGroupHeightMatchesRender guards that.
+func (ml *MessageList) groupHeight(parts []store.Message) int {
+	if ml.viewWidth <= 0 {
+		return 4
+	}
+	media := groupMediaParts(parts)
+	rows := ml.albumImageRows(parts)
+
+	h := 0
+	for _, gm := range media {
+		h++ // "[n]" index-badge row
+		if !ml.isImageMediaPart(gm.Msg) && gm.Msg.Document != nil {
+			h++ // one compact file row
+		} else {
+			h += rows // scaled art (or placeholder box of the same height)
+		}
+	}
+
+	caption := albumCaption(parts)
+	if caption != "" {
+		h++ // blank separator between media and caption
+		h += wrappedLineCount(caption, albumCaptionEntities(parts), ml.albumContentW())
+	}
+	if h == 0 {
+		h = 1
+	}
+	return h + 2 // top + bottom border
 }
 
 // invalidateHeights drops every memoized height. Cheap and called only on
