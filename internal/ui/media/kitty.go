@@ -215,20 +215,31 @@ func PlaceholderLines(id uint32, cols, rows int) []string {
 // explicit (row, col) so the message list's line slicing shows the correct
 // vertical slice when a photo is partially scrolled.
 func placeholderLines(id uint32, cols, rows int) []string {
+	return PlaceholderWindow(id, 0, 0, cols, rows)
+}
+
+// PlaceholderWindow builds winRows lines of winCols Kitty Unicode placeholder
+// cells that reference the sub-rectangle [vOff, vOff+winRows) x [hOff,
+// hOff+winCols) of the image transmitted under id. Each cell carries explicit
+// (row, col) diacritics, so the terminal draws exactly that slice of the
+// placement — the same mechanism the message list uses for partial-scroll
+// slicing, here used to crop a mosaic tile to a centered window. hOff/vOff of 0
+// with winCols/winRows equal to the placement size yields the whole image.
+func PlaceholderWindow(id uint32, hOff, vOff, winCols, winRows int) []string {
 	fg := fmt.Sprintf("\x1b[38;2;%d;%d;%dm",
 		byte((id>>16)&0xff), byte((id>>8)&0xff), byte(id&0xff))
-	lines := make([]string, rows)
-	for row := 0; row < rows; row++ {
+	lines := make([]string, winRows)
+	for r := 0; r < winRows; r++ {
 		var sb strings.Builder
 		sb.WriteString(fg)
-		rd := kitty.Diacritic(row)
-		for col := 0; col < cols; col++ {
+		rd := kitty.Diacritic(vOff + r)
+		for c := 0; c < winCols; c++ {
 			sb.WriteRune(kitty.Placeholder)
 			sb.WriteRune(rd)
-			sb.WriteRune(kitty.Diacritic(col))
+			sb.WriteRune(kitty.Diacritic(hOff + c))
 		}
 		sb.WriteString("\x1b[0m")
-		lines[row] = sb.String()
+		lines[r] = sb.String()
 	}
 	return lines
 }

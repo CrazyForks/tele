@@ -139,3 +139,21 @@ func TestKittyStore_DeleteLiveSeq_SkipsUnassigned(t *testing.T) {
 	// 99 was never assigned an image id, so it contributes nothing.
 	require.Empty(t, s.DeleteLiveSeq([]int64{99}))
 }
+
+func TestPlaceholderWindowDimensions(t *testing.T) {
+	lines := media.PlaceholderWindow(7, 3, 2, 5, 4) // hOff=3 vOff=2 winCols=5 winRows=4
+	if len(lines) != 4 {
+		t.Fatalf("lines = %d, want winRows 4", len(lines))
+	}
+	for i, ln := range lines {
+		n := 0
+		for _, r := range ln {
+			if r == kitty.Placeholder {
+				n++
+			}
+		}
+		if n != 5 {
+			t.Fatalf("line %d has %d placeholder cells, want winCols 5", i, n)
+		}
+	}
+}
