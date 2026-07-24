@@ -12,5 +12,7 @@ pre-push:
 
 pre-commit:
   commands:
-    lint:
+    lint-fmt:
       run: golangci-lint fmt ./...
+    lint-run:
+      run: golangci-lint run ./...
