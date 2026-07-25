@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-07-25
+
 ### Added
 
 - Photo and video albums now render as one grouped message instead of a string of
