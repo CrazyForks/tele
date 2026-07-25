@@ -21,6 +21,9 @@ type Client interface {
 	// RefreshMessage re-fetches a single message to obtain fresh media file
 	// references (Telegram FileReferences expire).
 	RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error)
+	// RefreshMessages re-fetches several messages in one round-trip, for the
+	// media refs and grouped_id of a just-sent album.
+	RefreshMessages(ctx context.Context, peer store.Peer, ids []int) ([]store.Message, error)
 	SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error)
 	// GetParticipants returns mention candidates for a group/channel peer.
 	GetParticipants(ctx context.Context, peer store.Peer) ([]store.ChatMember, error)
@@ -28,10 +31,17 @@ type Client interface {
 	// returning the confirmed message ID. It is type-agnostic: the caller builds
 	// the InputMedia (photo/document/...); SendMedia knows nothing about MIME.
 	SendMedia(ctx context.Context, p SendMediaParams) (int, error)
+	// SendAlbum sends several already-uploaded media as one grouped album
+	// (messages.sendMultiMedia), returning the message IDs in item order.
+	SendAlbum(ctx context.Context, p SendAlbumParams) ([]int, error)
 	// UploadFile uploads a local file in chunks and returns the resulting
 	// InputFile, ready to wrap in an InputMedia. Cancel via ctx. OnProgress is
 	// nil-safe and may be called concurrently-serialized by the uploader.
 	UploadFile(ctx context.Context, p UploadParams) (tg.InputFileClass, error)
+	// UploadMedia converts an uploaded InputFile into a server-side media ref
+	// (messages.uploadMedia). Album parts require it: messages.sendMultiMedia
+	// rejects raw inputMediaUploaded* constructors.
+	UploadMedia(ctx context.Context, peer store.Peer, media tg.InputMediaClass) (tg.InputMediaClass, error)
 	MarkRead(ctx context.Context, peer store.Peer, maxID int) error
 	// MarkDialogUnread sets or clears the manual unread mark on a dialog.
 	MarkDialogUnread(ctx context.Context, peer store.Peer, unread bool) error

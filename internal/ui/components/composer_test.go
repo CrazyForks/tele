@@ -872,3 +872,80 @@ func TestSetSourceSeedsMentionsSoTheySurviveEditing(t *testing.T) {
 	assert.Equal(t, int64(7), ents[0].UserID)
 	assert.Equal(t, int64(8), ents[0].AccessHash)
 }
+
+func TestAttachments_SingleFileKeepsOneLine(t *testing.T) {
+	c := components.NewComposer(60)
+	c.SetAttachments([]components.AttachmentChip{
+		{Name: "photo.jpg", Size: 2100000, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+	}, true)
+
+	view := c.View()
+	assert.Contains(t, view, "photo.jpg")
+	assert.Contains(t, view, "Send as:")
+	assert.NotContains(t, view, "1 photo.jpg", "a single attachment is not numbered")
+}
+
+func TestAttachments_ThreeFilesAreListedAndNumbered(t *testing.T) {
+	c := components.NewComposer(60)
+	c.SetAttachments([]components.AttachmentChip{
+		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "b.jpg", Size: 20, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "c.jpg", Size: 30, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+	}, true)
+
+	view := c.View()
+	for _, want := range []string{"1 a.jpg", "2 b.jpg", "3 c.jpg"} {
+		assert.Contains(t, view, want)
+	}
+	assert.Equal(t, 1, strings.Count(view, "Send as:"), "the toggle is album-wide, shown once")
+}
+
+func TestAttachments_FourFilesCollapseToSummary(t *testing.T) {
+	c := components.NewComposer(60)
+	items := []components.AttachmentChip{}
+	for _, n := range []string{"a.jpg", "b.jpg", "c.jpg", "d.jpg"} {
+		items = append(items, components.AttachmentChip{Name: n, Size: 1024, Kind: store.MediaPhoto, SendAs: store.MediaPhoto})
+	}
+	c.SetAttachments(items, true)
+
+	view := c.View()
+	assert.Contains(t, view, "4 files")
+	assert.NotContains(t, view, "a.jpg", "the collapsed summary lists no names")
+}
+
+func TestAttachments_MixedKindsHideToggle(t *testing.T) {
+	c := components.NewComposer(60)
+	c.SetAttachments([]components.AttachmentChip{
+		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "b.pdf", Size: 20, Kind: store.MediaFile, SendAs: store.MediaFile},
+	}, false)
+
+	assert.NotContains(t, c.View(), "Send as:")
+}
+
+func TestAttachments_NarrowWidthDoesNotTearBorder(t *testing.T) {
+	c := components.NewComposer(24)
+	c.SetAttachments([]components.AttachmentChip{
+		{Name: "a-very-long-file-name-indeed.jpg", Size: 2100000, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "another-very-long-name.jpg", Size: 2100000, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+	}, true)
+
+	for _, line := range strings.Split(c.View(), "\n") {
+		assert.LessOrEqual(t, lipgloss.Width(line), 24, "line %q overflows the composer width", line)
+	}
+}
+
+func TestAttachments_VisualHeightGrowsWithList(t *testing.T) {
+	c := components.NewComposer(60)
+	c.SetAttachments([]components.AttachmentChip{
+		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+	}, true)
+	one := c.VisualHeight()
+
+	c.SetAttachments([]components.AttachmentChip{
+		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "b.jpg", Size: 20, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+	}, true)
+
+	assert.Equal(t, one+1, c.VisualHeight())
+}

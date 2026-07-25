@@ -229,3 +229,30 @@ func TestStatusBar_DownloadBeatsStatus(t *testing.T) {
 	assert.Contains(t, view, "downloading video…")
 	assert.NotContains(t, view, "idle status")
 }
+
+func TestTransfer_UpdateReplacesLabelForMatchingSerial(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	serial := sb.StartTransfer("up 1/3 0%")
+	sb.UpdateTransfer(serial, "up 2/3 45%")
+
+	assert.Contains(t, strip(sb.View()), "up 2/3 45%")
+	assert.True(t, sb.DownloadActive())
+}
+
+func TestTransfer_UpdateIgnoresStaleSerial(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	sb.StartTransfer("first")
+	serial := sb.StartTransfer("second")
+	sb.UpdateTransfer(serial-1, "stale")
+
+	assert.Contains(t, strip(sb.View()), "second")
+	assert.NotContains(t, strip(sb.View()), "stale")
+}
+
+func TestTransfer_ClearMatchingSerialClearsIt(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	serial := sb.StartTransfer("up 1/3 0%")
+	sb.ClearTransfer(serial)
+
+	assert.False(t, sb.DownloadActive())
+}

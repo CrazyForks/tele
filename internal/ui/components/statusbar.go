@@ -53,26 +53,42 @@ func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
 func (sb *StatusBar) SetAttachStaged(v bool)   { sb.attachStaged = v }
 func (sb *StatusBar) SetPickerOpen(v bool)     { sb.pickerOpen = v }
 
-// StartDownload shows a transient, animated download indicator with label and
-// returns the serial identifying it, so a later ClearDownload only clears this
-// exact download (a newer StartDownload supersedes it).
-func (sb *StatusBar) StartDownload(label string) int {
+// StartTransfer shows a transient, animated transfer indicator with label and
+// returns the serial identifying it, so a later UpdateTransfer/ClearTransfer
+// only touches this exact transfer (a newer StartTransfer supersedes it).
+// Downloads and uploads share the slot: only one long transfer is shown at a
+// time.
+func (sb *StatusBar) StartTransfer(label string) int {
 	sb.dlSerial++
 	sb.dlText = label
 	return sb.dlSerial
 }
 
-// DownloadActive reports whether a download indicator (animated spinner) is
-// currently shown. Drives the spinner tick loop (issue #147).
-func (sb *StatusBar) DownloadActive() bool { return sb.dlText != "" }
+// UpdateTransfer replaces the label of the active transfer, ignoring a stale or
+// superseded serial. Used to tick a percentage without restarting the spinner.
+func (sb *StatusBar) UpdateTransfer(serial int, label string) {
+	if serial == sb.dlSerial {
+		sb.dlText = label
+	}
+}
 
-// ClearDownload clears the indicator only when serial matches the current one,
-// so a stale or superseded completion cannot wipe a newer download's indicator.
-func (sb *StatusBar) ClearDownload(serial int) {
+// ClearTransfer clears the indicator only when serial matches the current one,
+// so a stale or superseded completion cannot wipe a newer transfer's indicator.
+func (sb *StatusBar) ClearTransfer(serial int) {
 	if serial == sb.dlSerial {
 		sb.dlText = ""
 	}
 }
+
+// StartDownload is the download-side name for StartTransfer.
+func (sb *StatusBar) StartDownload(label string) int { return sb.StartTransfer(label) }
+
+// DownloadActive reports whether a download indicator (animated spinner) is
+// currently shown. Drives the spinner tick loop (issue #147).
+func (sb *StatusBar) DownloadActive() bool { return sb.dlText != "" }
+
+// ClearDownload is the download-side name for ClearTransfer.
+func (sb *StatusBar) ClearDownload(serial int) { sb.ClearTransfer(serial) }
 
 // TickDownloadSpinner advances the download indicator's spinner one frame.
 func (sb *StatusBar) TickDownloadSpinner() {

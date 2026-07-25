@@ -167,6 +167,11 @@ func (m RootModel) handleUploadProgress(msg uploadProgressMsg) (RootModel, tea.C
 	frac := float64(msg.sent) / float64(msg.total)
 	m.st.UpdateLocalMediaProgress(msg.sentinelID, frac)
 	m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+	// An album shows its aggregate progress in the status bar, since its parts
+	// upload one at a time and each bubble only knows its own share (#130).
+	if m.album != nil && m.album.ownsSentinel(msg.sentinelID) {
+		m.statusBar.UpdateTransfer(m.album.statusSerial, m.album.progressLabel(msg.sent))
+	}
 	// Re-arm the pump to keep receiving until the channel closes.
 	if ch, ok := m.uploadProgress[msg.sentinelID]; ok {
 		return m, recvProgressCmd(ch)
@@ -246,10 +251,10 @@ func (m RootModel) handleSentMediaRefreshed(msg sentMediaRefreshedMsg) (RootMode
 
 func (m RootModel) handleCancelUpload() (RootModel, tea.Cmd) {
 	// The cancel key (x) removes one composer extra at a time, in priority order:
-	// a staged attachment first, then an active reply/edit, then an in-flight
-	// upload. See item C.
-	if m.pendingAttachment != nil {
-		m.clearPendingAttachment()
+	// the last staged attachment first, then an active reply/edit, then an
+	// in-flight upload. See item C.
+	if len(m.pendingAttachments) > 0 {
+		m.popPendingAttachment()
 		return m, nil
 	}
 	if m.chat != nil && (m.chat.ReplyToMsgID() != 0 || m.chat.EditMsgID() != 0) {
@@ -260,6 +265,22 @@ func (m RootModel) handleCancelUpload() (RootModel, tea.Cmd) {
 		return m, nil
 	}
 	sentinelID := m.chat.SelectedMessageID()
+	// Cancelling any part of an in-flight album cancels the whole album: a
+	// half-cancelled album would not match the bubbles the user is looking at.
+	if m.album != nil && m.album.ownsSentinel(sentinelID) {
+		m.album.cancel()
+		for _, g := range m.album.groups {
+			for _, p := range g {
+				delete(m.uploadProgress, p.sentinelID)
+				m.st.RemoveMessage(m.currentChatID, p.sentinelID)
+				m.chat.RemoveMessage(p.sentinelID)
+			}
+		}
+		m.statusBar.ClearTransfer(m.album.statusSerial)
+		m.album = nil
+		m.albumCtx = nil
+		return m, nil
+	}
 	cancel, ok := m.uploadCancels[sentinelID]
 	if !ok {
 		return m, nil // not a pending upload

@@ -40,7 +40,13 @@ type mockTGClient struct {
 	lastSendCtx           context.Context
 	sendMediaErr          error
 	uploadErr             error
+	uploadMediaErr        error
+	failUploadForName     string
 	lastSendMediaParams   internaltg.SendMediaParams
+	lastSendAlbumParams   internaltg.SendAlbumParams
+	sendAlbumCalls        int
+	sendAlbumErr          error
+	sendAlbumIDs          []int
 	savedDrafts           []savedDraft
 	forwardErr            error
 	lastForwardFrom       store.Peer
@@ -82,6 +88,25 @@ func (m *mockTGClient) RefreshMessage(_ context.Context, _ store.Peer, msgID int
 	}
 	return store.Message{}, nil
 }
+func (m *mockTGClient) RefreshMessages(ctx context.Context, _ store.Peer, ids []int) ([]store.Message, error) {
+	// A real client fails on a cancelled context; the mock must too, or a caller
+	// that cancels its context too early looks healthy in tests (#130).
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if m.refreshFunc == nil {
+		return nil, nil
+	}
+	out := make([]store.Message, 0, len(ids))
+	for _, id := range ids {
+		msg, err := m.refreshFunc(id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, msg)
+	}
+	return out, nil
+}
 func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error) {
 	m.lastSendCtx = ctx
 	m.lastReplyToMsgID = replyToMsgID
@@ -106,9 +131,35 @@ func (m *mockTGClient) SendMedia(_ context.Context, p internaltg.SendMediaParams
 	}
 	return 4242, nil
 }
+func (m *mockTGClient) SendAlbum(_ context.Context, p internaltg.SendAlbumParams) ([]int, error) {
+	m.lastSendAlbumParams = p
+	m.sendAlbumCalls++
+	if m.sendAlbumErr != nil {
+		return nil, m.sendAlbumErr
+	}
+	if m.sendAlbumIDs != nil {
+		return m.sendAlbumIDs, nil
+	}
+	ids := make([]int, len(p.Items))
+	for i := range ids {
+		ids[i] = 5000 + i
+	}
+	return ids, nil
+}
+func (m *mockTGClient) UploadMedia(_ context.Context, _ store.Peer, _ tg.InputMediaClass) (tg.InputMediaClass, error) {
+	if m.uploadMediaErr != nil {
+		return nil, m.uploadMediaErr
+	}
+	// Stand in for the server ref: album tests only care that the part reached
+	// this hop, not what the ref contains.
+	return &tg.InputMediaPhoto{ID: &tg.InputPhoto{ID: 7}}, nil
+}
 func (m *mockTGClient) UploadFile(_ context.Context, p internaltg.UploadParams) (tg.InputFileClass, error) {
 	if m.uploadErr != nil {
 		return nil, m.uploadErr
+	}
+	if m.failUploadForName != "" && filepath.Base(p.Path) == m.failUploadForName {
+		return nil, errors.New("upload failed for " + m.failUploadForName)
 	}
 	if p.OnProgress != nil {
 		p.OnProgress(100, 100)

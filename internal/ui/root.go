@@ -113,10 +113,15 @@ type RootModel struct {
 	filePicker          *screens.FilePickerModel
 	videoPlayer         *videoPlayer
 	photoViewer         *photoViewer
-	pendingAttachment   *pendingAttachment
-	lastPickerDir       string
-	uploadCancels       map[int]context.CancelFunc
-	uploadProgress      map[int]chan uploadProgressMsg
+	pendingAttachments  []pendingAttachment
+	// album is the in-flight multi-file send (#130), nil when none is running;
+	// albumCtx cancels its uploads and sends.
+	album          *albumSend
+	albumCtx       context.Context
+	nextAlbumSer   int
+	lastPickerDir  string
+	uploadCancels  map[int]context.CancelFunc
+	uploadProgress map[int]chan uploadProgressMsg
 
 	// logoTicking / spinnerTicking track whether each animation loop is currently
 	// scheduled. The loops self-stop when nothing is visible/active and are
@@ -329,10 +334,16 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.SetPickerOpen(false)
 		return m, nil
 	case screens.SendMediaRequest:
-		if m.pendingAttachment == nil {
+		if len(m.pendingAttachments) == 0 {
 			return m, nil
 		}
-		att := m.pendingAttachment
+		if len(m.pendingAttachments) > 1 {
+			nm, cmd := m.startAlbumSend(msg.Peer, msg.Caption, msg.Entities, msg.ReplyToMsgID)
+			nm.clearPendingAttachments()
+			return nm, cmd
+		}
+		// A lone file keeps the single-media path: same behavior as before #130.
+		att := &m.pendingAttachments[0]
 		job := mediaSendJob{
 			peer:         msg.Peer,
 			path:         att.path,
@@ -353,8 +364,14 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			job.buildMedia = build
 		}
-		m.clearPendingAttachment()
+		m.clearPendingAttachments()
 		return m.handleSendMedia(job)
+	case albumPartUploadedMsg:
+		return m.handleAlbumPartUploaded(msg)
+	case albumGroupSentMsg:
+		return m.handleAlbumGroupSent(msg)
+	case albumRefreshedMsg:
+		return m.handleAlbumRefreshed(msg)
 	case uploadProgressMsg:
 		return m.handleUploadProgress(msg)
 	case sentMediaConfirmedMsg:

@@ -49,7 +49,7 @@ func (c *Composer) SignalLimit(kind ComposerLimitKind) tea.Cmd {
 	})}
 	if !c.warned {
 		c.warned = true
-		limit, caption := c.limit(), c.attachOn
+		limit, caption := c.limit(), len(c.attachments) > 0
 		cmds = append(cmds, func() tea.Msg {
 			return ComposerLimitMsg{Kind: kind, Limit: limit, Caption: caption}
 		})

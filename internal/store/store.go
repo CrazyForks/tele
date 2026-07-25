@@ -31,6 +31,9 @@ type Store interface {
 	// server assigned (fetched via RefreshMessage) and clears LocalMedia, so the
 	// outgoing photo renders inline without waiting for a manual refresh.
 	AdoptServerMedia(chatID int64, msgID int, photo *PhotoRef, doc *DocumentRef, media *MediaRef)
+	// SetGroupedID stamps Telegram's album key onto a message, so the parts of a
+	// just-sent album collapse into one album bubble.
+	SetGroupedID(chatID int64, msgID int, groupedID int64)
 	RemoveMessage(chatID int64, msgID int)
 	RemoveMessages(chatID int64, msgIDs []int)
 	RemoveMessagesByID(msgIDs []int) (affected []int64)

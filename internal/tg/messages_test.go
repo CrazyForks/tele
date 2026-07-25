@@ -790,3 +790,28 @@ func TestBuildInputMediaUploadedVideo_NoThumbZeroMeta(t *testing.T) {
 	assert.Zero(t, vid.W)
 	assert.Zero(t, vid.H)
 }
+
+func TestExtractSentMessageIDs_OrderMatchesRandomIDs(t *testing.T) {
+	updates := &tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateMessageID{ID: 20, RandomID: 200},
+		&tg.UpdateMessageID{ID: 10, RandomID: 100},
+	}}
+	got := extractSentMessageIDs(updates, []int64{100, 200})
+	assert.Equal(t, []int{10, 20}, got, "IDs must follow the randomID order, not the update order")
+}
+
+func TestExtractSentMessageIDs_MissingIsZero(t *testing.T) {
+	updates := &tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateMessageID{ID: 10, RandomID: 100},
+	}}
+	got := extractSentMessageIDs(updates, []int64{100, 999})
+	assert.Equal(t, []int{10, 0}, got)
+}
+
+func TestSelectMessagesByIDs_KeepsOnlyRequested(t *testing.T) {
+	msgs := []store.Message{{ID: 5}, {ID: 7}, {ID: 9}}
+	got := selectMessagesByIDs(msgs, []int{9, 5, 11})
+	require.Len(t, got, 2)
+	assert.Equal(t, 5, got[0].ID)
+	assert.Equal(t, 9, got[1].ID)
+}

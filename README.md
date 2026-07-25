@@ -101,6 +101,8 @@ per-chat drafts synced with Telegram (saved on the server, shared across devices
 
 **Sending media** — attach an existing file from disk with `u` (photos, videos,
 voice notes, music, documents) and confirm the send-as type before sending.
+Press `u` again to stage more files: they are sent as one grouped album, with
+photos and documents split into separate albums automatically.
 
 > **Recording is out of scope.** `tele` can _send_ a pre-recorded audio or video
 > file, but it cannot **record** voice messages or round videos (кружки) in-app:
@@ -338,7 +340,7 @@ Then prompts for:
 | `e` / `d`           | Edit / delete message                             |
 | `t`                 | React                                             |
 | `f`                 | Forward message                                   |
-| `u`                 | Attach a file to send                             |
+| `u`                 | Attach a file to send (repeat to send an album)   |
 | `o`                 | Open / view media (photo in viewer, video inline) |
 | `O`                 | Open video in the external player                 |
 | `p`                 | Play voice message in-app                         |

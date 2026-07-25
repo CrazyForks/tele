@@ -416,7 +416,15 @@ func (m *ChatModel) ComposerFlashActive() bool { return m.composer.FlashActive()
 func (m *ChatModel) ComposerFlashSerial() int  { return m.composer.FlashSerialForTest() }
 
 func (m *ChatModel) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
-	m.composer.SetAttachment(name, size, nativeKind, sendAs, toggleable)
+	m.SetAttachments([]components.AttachmentChip{
+		{Name: name, Size: size, Kind: nativeKind, SendAs: sendAs},
+	}, toggleable)
+}
+
+// SetAttachments stages several files as chips in the composer (#130).
+// toggleable shows the album-wide Send as affordance.
+func (m *ChatModel) SetAttachments(items []components.AttachmentChip, toggleable bool) {
+	m.composer.SetAttachments(items, toggleable)
 	m.refreshPlaceholder()
 	m.syncMsgListHeight()
 }

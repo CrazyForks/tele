@@ -33,11 +33,7 @@ type Composer struct {
 	replyPreview      string
 	focused           bool
 	hasDarkBackground bool
-	attachName        string
-	attachSize        int64
-	attachKind        store.MediaKind // native kind (Photo/Video); labels the non-file toggle option
-	attachAs          store.MediaKind // current "send as" selection
-	attachOn          bool
+	attachments       []AttachmentChip
 	attachToggle      bool
 	pending           []pendingMention
 	flash             bool // border is flashing red after a limit event
@@ -154,7 +150,7 @@ func (c *Composer) Reset() {
 // attachment staged the composer is the caption field, which Telegram caps
 // lower than a plain text message.
 func (c *Composer) limit() int {
-	if c.attachOn {
+	if len(c.attachments) > 0 {
 		return maxCaptionUTF16
 	}
 	return maxTextUTF16
@@ -352,55 +348,117 @@ func (c *Composer) ResolveEntities() (string, []store.MessageEntity) {
 func (c *Composer) SetReplyPreview(preview string) { c.replyPreview = preview }
 func (c *Composer) ClearReplyPreview()             { c.replyPreview = "" }
 
-// SetAttachment stages a file as a chip above the textarea. nativeKind is the
-// file's detected media kind (Photo/Video), used to label the non-file toggle
-// option; sendAs is the current "send as" selection. toggleable controls whether
-// the "Send as: Photo|Video / File" affordance is shown (image/video only).
-func (c *Composer) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
-	c.attachName = name
-	c.attachSize = size
-	c.attachKind = nativeKind
-	c.attachAs = sendAs
+// AttachmentChip is one staged file in the composer's attachment list. Kind is
+// the MIME-detected kind (it labels the non-file toggle option); SendAs is the
+// current "send as" selection.
+type AttachmentChip struct {
+	Name   string
+	Size   int64
+	Kind   store.MediaKind
+	SendAs store.MediaKind
+}
+
+// attachChipMaxRows is the largest attachment list rendered one file per line.
+// Beyond it the list collapses to a single summary line so the composer does not
+// eat the chat pane.
+const attachChipMaxRows = 3
+
+// SetAttachments stages files as chips above the textarea. toggleable controls
+// whether the album-wide "Send as: Photo|Video / File" affordance is shown; the
+// caller decides that, since only a set where every part is a photo or a video
+// has a meaningful single choice.
+func (c *Composer) SetAttachments(items []AttachmentChip, toggleable bool) {
+	c.attachments = items
 	c.attachToggle = toggleable
-	c.attachOn = true
+}
+
+// SetAttachment stages a single file, the one-attachment form of SetAttachments.
+// nativeKind is the file's detected media kind (Photo/Video), used to label the
+// non-file toggle option; sendAs is the current "send as" selection.
+func (c *Composer) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
+	c.SetAttachments([]AttachmentChip{
+		{Name: name, Size: size, Kind: nativeKind, SendAs: sendAs},
+	}, toggleable)
 }
 
 func (c *Composer) ClearAttachment() {
-	c.attachOn = false
-	c.attachName = ""
+	c.attachments = nil
 	c.attachToggle = false
 }
 
-func (c *Composer) HasAttachment() bool { return c.attachOn }
+func (c *Composer) HasAttachment() bool { return len(c.attachments) > 0 }
 
-// attachmentLine renders the chip shown above the textarea, or "" if none.
-// The line is clamped to the composer's inner width so it never overflows the
-// box border (RenderBox pads short lines but does not truncate long ones): the
-// filename is ellipsized first to keep the "Send as" toggle readable, and the
-// whole line is truncated only as a last resort on very narrow widths (#162).
-func (c *Composer) attachmentLine() string {
-	if !c.attachOn {
+// attachmentLines renders the staged attachment chips shown above the textarea,
+// or nil if none. One line per file up to attachChipMaxRows; beyond that a
+// single summary line. Every line is clamped to the composer's inner width so it
+// never overflows the box border (#162).
+func (c *Composer) attachmentLines() []string {
+	if len(c.attachments) == 0 {
+		return nil
+	}
+	suffix := c.sendAsSuffix()
+	if len(c.attachments) > attachChipMaxRows {
+		var total int64
+		for _, a := range c.attachments {
+			total += a.Size
+		}
+		label := fmt.Sprintf("%d files", len(c.attachments))
+		return []string{c.chipLine(label, "  "+humanSize(total), suffix)}
+	}
+	lines := make([]string, 0, len(c.attachments))
+	for i, a := range c.attachments {
+		name := a.Name
+		if len(c.attachments) > 1 {
+			name = fmt.Sprintf("%d %s", i+1, a.Name)
+		}
+		// The album-wide toggle belongs to the list, not to a file: show it once,
+		// on the last line.
+		lineSuffix := ""
+		if i == len(c.attachments)-1 {
+			lineSuffix = suffix
+		}
+		lines = append(lines, c.chipLine(name, "  "+humanSize(a.Size), lineSuffix))
+	}
+	return lines
+}
+
+// sendAsSuffix renders the album-wide "Send as" affordance, or "" when the set
+// is not toggleable. With several parts of differing native kinds the non-file
+// option is labelled generically.
+func (c *Composer) sendAsSuffix() string {
+	if !c.attachToggle || len(c.attachments) == 0 {
 		return ""
 	}
-	suffix := ""
-	if c.attachToggle {
-		kindLabel := "Photo"
-		if c.attachKind == store.MediaVideo {
-			kindLabel = "Video"
-		}
-		file := "File"
-		if c.attachAs == store.MediaFile {
-			file = "[File]"
-		} else {
-			kindLabel = "[" + kindLabel + "]"
-		}
-		suffix = fmt.Sprintf("   Send as: %s %s", kindLabel, file)
+	kindLabel := "Photo"
+	switch {
+	case allChipsOfKind(c.attachments, store.MediaVideo):
+		kindLabel = "Video"
+	case !allChipsOfKind(c.attachments, store.MediaPhoto):
+		kindLabel = "Media"
 	}
+	file := "File"
+	if c.attachments[0].SendAs == store.MediaFile {
+		file = "[File]"
+	} else {
+		kindLabel = "[" + kindLabel + "]"
+	}
+	return fmt.Sprintf("   Send as: %s %s", kindLabel, file)
+}
 
+func allChipsOfKind(items []AttachmentChip, kind store.MediaKind) bool {
+	for _, a := range items {
+		if a.Kind != kind {
+			return false
+		}
+	}
+	return true
+}
+
+// chipLine assembles one clamped chip line: the filename is ellipsized first to
+// keep the "Send as" toggle readable, and the whole line is truncated only as a
+// last resort on very narrow widths.
+func (c *Composer) chipLine(name, sizePart, suffix string) string {
 	const prefix = "📎 "
-	sizePart := "  " + humanSize(c.attachSize)
-	name := c.attachName
-
 	inner := c.width - 2
 	// Width left for the filename once the fixed parts (icon, size, toggle) are placed.
 	nameBudget := inner - runewidth.StringWidth(prefix) - runewidth.StringWidth(sizePart) - runewidth.StringWidth(suffix)
@@ -432,9 +490,7 @@ func humanSize(n int64) string {
 // optional reply/edit preview (plus a blank spacer line), then the textarea.
 func (c *Composer) buildContent() string {
 	var parts []string
-	if line := c.attachmentLine(); line != "" {
-		parts = append(parts, line)
-	}
+	parts = append(parts, c.attachmentLines()...)
 	if c.replyPreview != "" {
 		parts = append(parts, c.replyPreview, "")
 	}

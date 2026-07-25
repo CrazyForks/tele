@@ -23,6 +23,15 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   is open, page through the whole album with the arrow keys — across photos and
   videos — without reopening each one. Several files attached in one message are
   grouped as well (#178)
+- Press `u` repeatedly to stage several files in the composer and send them as
+  one grouped album. The chips list every staged file (collapsing to a summary
+  from four files up), `x` removes the last one, and `Ctrl+T` switches the whole
+  album between media and file sending. Each file gets its own progress bubble
+  while the status bar counts the batch as a whole; the parts then collapse into
+  a single album message. Mixing photos with documents, or staging more than ten
+  files, splits the batch into separate albums automatically, and a file that
+  fails to upload is left behind as a failed bubble instead of sinking the rest
+  (#130)
 
 ## [1.9.0] - 2026-07-23
 

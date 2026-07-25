@@ -91,7 +91,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		// Normalize so the toggle fires on the same physical key under non-Latin
 		// layouts (e.g. Russian ЙЦУКЕН), like the other bindings.
-		if keys.NormalizeKey(keyStr) == "ctrl+t" && m.pendingAttachment != nil {
+		if keys.NormalizeKey(keyStr) == "ctrl+t" && len(m.pendingAttachments) > 0 {
 			return m.toggleSendAs()
 		}
 		if keyStr == "esc" {

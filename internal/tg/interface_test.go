@@ -43,6 +43,10 @@ func (m *mockClient) RefreshMessage(_ context.Context, _ store.Peer, _ int) (sto
 	return store.Message{}, nil
 }
 
+func (m *mockClient) RefreshMessages(_ context.Context, _ store.Peer, _ []int) ([]store.Message, error) {
+	return nil, nil
+}
+
 func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string, _ int, _ []store.MessageEntity) (int, error) {
 	m.sent = append(m.sent, text)
 	return 0, nil
@@ -52,12 +56,20 @@ func (m *mockClient) SendMedia(_ context.Context, _ internaltg.SendMediaParams) 
 	return 0, nil
 }
 
+func (m *mockClient) SendAlbum(_ context.Context, _ internaltg.SendAlbumParams) ([]int, error) {
+	return nil, nil
+}
+
 func (m *mockClient) GetParticipants(_ context.Context, _ store.Peer) ([]store.ChatMember, error) {
 	return nil, nil
 }
 
 func (m *mockClient) UploadFile(_ context.Context, _ internaltg.UploadParams) (tg.InputFileClass, error) {
 	return &tg.InputFile{ID: 1, Parts: 1, Name: "a.jpg"}, nil
+}
+
+func (m *mockClient) UploadMedia(_ context.Context, _ store.Peer, media tg.InputMediaClass) (tg.InputMediaClass, error) {
+	return media, nil
 }
 
 func (m *mockClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }

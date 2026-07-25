@@ -360,6 +360,18 @@ func (s *SQLiteStore) AdoptServerMedia(chatID int64, msgID int, photo *PhotoRef,
 	}
 }
 
+func (s *SQLiteStore) SetGroupedID(chatID int64, msgID int, groupedID int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.messages[chatID] {
+		if s.messages[chatID][i].ID == msgID {
+			s.messages[chatID][i].GroupedID = groupedID
+			s.markMsgDirtyLocked(chatID, msgID)
+			return
+		}
+	}
+}
+
 // UpdateMessageText replaces a message's text and its entities together. They
 // must move as a unit: entity offsets address the text they were parsed from,
 // so keeping the old ones would leave them pointing at characters that changed.

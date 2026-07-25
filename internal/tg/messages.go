@@ -14,15 +14,23 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-// RefreshMessage re-fetches one message and returns it with fresh media refs.
-func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error) {
+// RefreshMessages re-fetches several messages in one round-trip and returns them
+// with fresh media refs and grouped_id. Only the messages the server returned
+// are present; the order follows the server response.
+func (c *GotdClient) RefreshMessages(ctx context.Context, peer store.Peer, msgIDs []int) ([]store.Message, error) {
+	if len(msgIDs) == 0 {
+		return nil, nil
+	}
 	api, err := c.acquireAPI()
 	if err != nil {
-		return store.Message{}, err
+		return nil, err
 	}
 
-	ids := []tg.InputMessageClass{&tg.InputMessageID{ID: msgID}}
-	var out store.Message
+	ids := make([]tg.InputMessageClass, 0, len(msgIDs))
+	for _, id := range msgIDs {
+		ids = append(ids, &tg.InputMessageID{ID: id})
+	}
+	var out []store.Message
 	err = WithRetry(ctx, func() error {
 		var (
 			result tg.MessagesMessagesClass
@@ -37,18 +45,46 @@ func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID 
 			result, err = api.MessagesGetMessages(ctx, ids)
 		}
 		if err != nil {
-			c.log.Error("RefreshMessage failed", zap.Error(err))
+			c.log.Error("RefreshMessages failed", zap.Error(err))
 			return err
 		}
-		msgs := parseHistory(result, peer.ID)
-		m, ok := selectMessageByID(msgs, msgID)
-		if !ok {
-			return fmt.Errorf("refresh message %d: not found", msgID)
+		found := selectMessagesByIDs(parseHistory(result, peer.ID), msgIDs)
+		if len(found) == 0 {
+			return fmt.Errorf("refresh messages %v: none found", msgIDs)
 		}
-		out = m
+		out = found
 		return nil
 	})
 	return out, err
+}
+
+// RefreshMessage re-fetches one message and returns it with fresh media refs.
+func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error) {
+	msgs, err := c.RefreshMessages(ctx, peer, []int{msgID})
+	if err != nil {
+		return store.Message{}, err
+	}
+	m, ok := selectMessageByID(msgs, msgID)
+	if !ok {
+		return store.Message{}, fmt.Errorf("refresh message %d: not found", msgID)
+	}
+	return m, nil
+}
+
+// selectMessagesByIDs keeps only the messages whose ID is in want, preserving
+// the order of msgs.
+func selectMessagesByIDs(msgs []store.Message, want []int) []store.Message {
+	set := make(map[int]struct{}, len(want))
+	for _, id := range want {
+		set[id] = struct{}{}
+	}
+	out := make([]store.Message, 0, len(want))
+	for _, m := range msgs {
+		if _, ok := set[m.ID]; ok {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error) {
@@ -500,20 +536,35 @@ func peerToInput(p store.Peer) tg.InputPeerClass {
 	}
 }
 
-func extractSentMessageID(updates tg.UpdatesClass, randomID int64) int {
+// extractSentMessageIDs maps each randomID to the message ID Telegram assigned
+// it. The result is index-aligned with randomIDs; an entry the server did not
+// report back is 0.
+func extractSentMessageIDs(updates tg.UpdatesClass, randomIDs []int64) []int {
+	out := make([]int, len(randomIDs))
 	if short, ok := updates.(*tg.UpdateShortSentMessage); ok {
-		return short.ID
+		if len(out) > 0 {
+			out[0] = short.ID
+		}
+		return out
 	}
 	upds, ok := updates.(*tg.Updates)
 	if !ok {
-		return 0
+		return out
 	}
+	index := make(map[int64]int, len(upds.Updates))
 	for _, u := range upds.Updates {
-		if mid, ok := u.(*tg.UpdateMessageID); ok && mid.RandomID == randomID {
-			return mid.ID
+		if mid, ok := u.(*tg.UpdateMessageID); ok {
+			index[mid.RandomID] = mid.ID
 		}
 	}
-	return 0
+	for i, rid := range randomIDs {
+		out[i] = index[rid]
+	}
+	return out
+}
+
+func extractSentMessageID(updates tg.UpdatesClass, randomID int64) int {
+	return extractSentMessageIDs(updates, []int64{randomID})[0]
 }
 
 func typingActionToTG(a store.TypingAction) tg.SendMessageActionClass {

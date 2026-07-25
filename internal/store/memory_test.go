@@ -354,3 +354,25 @@ func TestMemory_FolderFilters_Replace(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "New", got[0].Title)
 }
+
+func TestMemory_SetGroupedID(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}})
+	s.AppendMessage(store.Message{ID: 4242, ChatID: 7, IsOut: true})
+
+	s.SetGroupedID(7, 4242, 999)
+
+	msgs := s.Messages(7)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, int64(999), msgs[0].GroupedID)
+}
+
+func TestMemory_SetGroupedID_UnknownMessageIsNoop(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}})
+	s.AppendMessage(store.Message{ID: 1, ChatID: 7})
+
+	s.SetGroupedID(7, 999, 5)
+
+	assert.Equal(t, int64(0), s.Messages(7)[0].GroupedID)
+}

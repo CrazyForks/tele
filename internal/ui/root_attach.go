@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -39,11 +40,25 @@ func (m RootModel) handleFileSelected(msg screens.FileSelectedMsg) (RootModel, t
 	return m.stageAttachmentFromPath(msg.Path)
 }
 
-// stageAttachmentFromPath stages a local file as a pending attachment: it MIME-
-// detects the kind, shows the composer chip, enters insert mode so the caption
-// field is active, and focuses the composer. Shared by the file picker and the
-// clipboard-image paste (#163). Photo/File is toggleable for image/video.
+// maxStagedAttachments caps the composer queue at four full albums. Telegram
+// takes at most 10 parts per album and partitionAlbums splits the queue, so the
+// cap only exists to keep an accidental select-everything from staging hundreds
+// of files.
+const maxStagedAttachments = 40
+
+// stageAttachmentFromPath appends a local file to the pending queue: it MIME-
+// detects the kind, refreshes the composer chips, enters insert mode so the
+// caption field is active, and focuses the composer. Shared by the file picker
+// and the clipboard-image paste (#163). Photo/File is toggleable for image/video.
 func (m RootModel) stageAttachmentFromPath(path string) (RootModel, tea.Cmd) {
+	if len(m.pendingAttachments) >= maxStagedAttachments {
+		return m, func() tea.Msg {
+			return StatusErrMsg{
+				Text: fmt.Sprintf("too many attachments (max %d)", maxStagedAttachments),
+				Sev:  components.SeverityWarning,
+			}
+		}
+	}
 	mime, err := media.DetectMIME(path)
 	if err != nil {
 		return m, func() tea.Msg {
@@ -52,16 +67,15 @@ func (m RootModel) stageAttachmentFromPath(path string) (RootModel, tea.Cmd) {
 	}
 	kind := media.DefaultMediaType(mime)
 	name, size := fileNameSize(path)
-	m.pendingAttachment = &pendingAttachment{
+	m.pendingAttachments = append(m.pendingAttachments, pendingAttachment{
 		path:   path,
 		mime:   mime,
 		kind:   kind,
 		sendAs: kind,
 		name:   name,
 		size:   size,
-	}
-	toggleable := kind == store.MediaPhoto || kind == store.MediaVideo
-	m.chat.SetAttachment(name, size, m.pendingAttachment.kind, m.pendingAttachment.sendAs, toggleable)
+	})
+	m.syncAttachmentChips()
 	m.statusBar.SetAttachStaged(true)
 	// Enter real insert mode so the caption field is active (the composer focus
 	// alone does not flip the root's vim mode, which key routing depends on).
@@ -80,34 +94,91 @@ func (m RootModel) stageAttachmentFromPath(path string) (RootModel, tea.Cmd) {
 	return m, focusCmd
 }
 
-// PendingAttachmentSendAs reports the staged "send as" kind (test accessor).
-func (m RootModel) PendingAttachmentSendAs() (store.MediaKind, bool) {
-	if m.pendingAttachment == nil {
-		return 0, false
+// syncAttachmentChips pushes the queue to the composer. The album-wide "Send as"
+// toggle is offered only when every staged part is a photo or a video: Telegram
+// cannot mix visual media with documents in one album, so a mixed set has no
+// meaningful single choice.
+func (m *RootModel) syncAttachmentChips() {
+	if len(m.pendingAttachments) == 0 {
+		m.chat.ClearAttachment()
+		return
 	}
-	return m.pendingAttachment.sendAs, true
+	items := make([]components.AttachmentChip, 0, len(m.pendingAttachments))
+	toggleable := true
+	for _, a := range m.pendingAttachments {
+		if a.kind != store.MediaPhoto && a.kind != store.MediaVideo {
+			toggleable = false
+		}
+		items = append(items, components.AttachmentChip{
+			Name: a.name, Size: a.size, Kind: a.kind, SendAs: a.sendAs,
+		})
+	}
+	m.chat.SetAttachments(items, toggleable)
 }
 
-// toggleSendAs flips the staged attachment between its native kind and File.
-// Only image/video are toggleable; the File branch hands off to #129.
+// PendingAttachmentCount reports how many files are staged (test accessor).
+func (m RootModel) PendingAttachmentCount() int { return len(m.pendingAttachments) }
+
+// PendingAttachmentSendAs reports the first staged part's "send as" kind (test
+// accessor).
+func (m RootModel) PendingAttachmentSendAs() (store.MediaKind, bool) {
+	if len(m.pendingAttachments) == 0 {
+		return 0, false
+	}
+	return m.pendingAttachments[0].sendAs, true
+}
+
+// PendingAttachmentSendAsAll reports every staged part's "send as" kind (test
+// accessor).
+func (m RootModel) PendingAttachmentSendAsAll() []store.MediaKind {
+	out := make([]store.MediaKind, 0, len(m.pendingAttachments))
+	for _, a := range m.pendingAttachments {
+		out = append(out, a.sendAs)
+	}
+	return out
+}
+
+// toggleSendAs flips the whole staged queue between the native kinds and File.
+// The toggle is album-wide because a Telegram album cannot mix the two.
 func (m RootModel) toggleSendAs() (RootModel, tea.Cmd) {
-	if m.pendingAttachment == nil {
+	if len(m.pendingAttachments) == 0 {
 		return m, nil
 	}
-	if m.pendingAttachment.kind != store.MediaPhoto && m.pendingAttachment.kind != store.MediaVideo {
-		return m, nil
+	for _, a := range m.pendingAttachments {
+		if a.kind != store.MediaPhoto && a.kind != store.MediaVideo {
+			return m, nil
+		}
 	}
-	if m.pendingAttachment.sendAs == store.MediaFile {
-		m.pendingAttachment.sendAs = m.pendingAttachment.kind
-	} else {
-		m.pendingAttachment.sendAs = store.MediaFile
+	toFile := m.pendingAttachments[0].sendAs != store.MediaFile
+	next := make([]pendingAttachment, len(m.pendingAttachments))
+	copy(next, m.pendingAttachments)
+	for i := range next {
+		if toFile {
+			next[i].sendAs = store.MediaFile
+		} else {
+			next[i].sendAs = next[i].kind
+		}
 	}
-	m.chat.SetAttachment(m.pendingAttachment.name, m.pendingAttachment.size, m.pendingAttachment.kind, m.pendingAttachment.sendAs, true)
+	m.pendingAttachments = next
+	m.syncAttachmentChips()
 	return m, nil
 }
 
-func (m *RootModel) clearPendingAttachment() {
-	m.pendingAttachment = nil
+// popPendingAttachment removes the most recently staged file. Removing an
+// arbitrary item needs a cursor over the list, which is #187.
+func (m *RootModel) popPendingAttachment() {
+	if len(m.pendingAttachments) == 0 {
+		return
+	}
+	m.pendingAttachments = m.pendingAttachments[:len(m.pendingAttachments)-1]
+	m.syncAttachmentChips()
+	if len(m.pendingAttachments) == 0 {
+		m.statusBar.SetAttachStaged(false)
+	}
+}
+
+func (m *RootModel) clearPendingAttachments() {
+	m.pendingAttachments = nil
 	m.chat.ClearAttachment()
 	m.statusBar.SetAttachStaged(false)
 }
