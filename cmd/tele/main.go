@@ -117,10 +117,11 @@ func main() {
 	defer lock.Release() //nolint:errcheck
 
 	// A pinned session_file is left exactly where the user put it, so nothing is
-	// migrated in that case. Migrate reports whether it moved anything; that is
-	// consumed by the startup notice in #197.
+	// migrated in that case.
+	stateMoved := false
 	if !cfg.SessionPinned {
-		if _, err := statedir.Migrate(cfg.StateDir, filepath.Dir(*cfgPath), log); err != nil {
+		stateMoved, err = statedir.Migrate(cfg.StateDir, filepath.Dir(*cfgPath), log)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "state migration: %v\n", err)
 			os.Exit(1)
 		}
@@ -131,6 +132,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		os.Exit(1)
 	}
+	a.SetStateMoved(stateMoved)
 	if err := a.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

@@ -150,6 +150,12 @@ func (m RootModel) View() tea.View {
 			content = overlayAt(content, z.Block, m.width, m.height, z.Top, z.Left)
 		}
 	}
+	// Stamped after both screen branches so a startup notice covers the login
+	// splash too: the migration and deprecation messages matter most exactly
+	// when the session is invalid or the network is down.
+	if m.noticeActive() {
+		content = m.noticeView(content)
+	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	// Enable mouse reporting (clicks + wheel). CellMotion delivers button and

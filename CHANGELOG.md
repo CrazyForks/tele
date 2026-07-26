@@ -11,6 +11,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- One-time startup notices for changes that are easy to mistake for a bug. A
+  notice appears once, before anything else including the login screen, and
+  cannot be dismissed for seven seconds so it is actually read. Each is shown
+  exactly once and only to the people it applies to (#197).
+
 ### Changed
 
 - Account state — the Telegram session, the local database and a new instance

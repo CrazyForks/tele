@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
@@ -96,13 +97,63 @@ func reactionBody(emoji string) string {
 }
 
 type App struct {
-	cfg           *config.Config
-	log           *zap.Logger
-	st            store.Store
-	client        *internaltg.GotdClient
+	cfg    *config.Config
+	log    *zap.Logger
+	st     store.Store
+	client *internaltg.GotdClient
+	// sqlite is the same object as st, kept concretely because notice
+	// seen-state needs the database handle and store.Store does not expose it.
+	sqlite        *store.SQLiteStore
 	verbose       bool
 	notifier      Notifier
 	currentChatID int64
+	// stateMoved reports that startup migration relocated the account state, so
+	// the user can be told where it went.
+	stateMoved bool
+}
+
+// SetStateMoved records whether startup migration relocated the account state.
+func (a *App) SetStateMoved(moved bool) { a.stateMoved = moved }
+
+// pendingNotices lists the one-time startup messages this build can show.
+// Conditional entries are omitted when they do not apply, so a user only ever
+// sees what actually happened on their machine.
+func (a *App) pendingNotices() []notices.Notice {
+	const delay = 7 * time.Second
+	out := []notices.Notice{
+		{
+			ID:    "single-instance-v1.10",
+			Title: "Only one tele at a time",
+			Delay: delay,
+			Body: "Starting a second tele on the same account now fails with a message " +
+				"instead of starting. Two instances shared one session and one database " +
+				"with nothing arbitrating between them, quietly overwriting each other's " +
+				"unread counts and sync state, which surfaced later as missed messages.",
+		},
+	}
+	if a.stateMoved {
+		out = append(out, notices.Notice{
+			ID:    "state-dir-moved-v1.10",
+			Title: "Your data moved",
+			Delay: delay,
+			Body: "The session and local database now live in " + a.cfg.StateDir +
+				", instead of next to the config file. They were moved for you and " +
+				"nothing was lost: you are still logged in. The old location is now empty " +
+				"and can be ignored.",
+		})
+	}
+	if a.cfg.SessionPinned {
+		out = append(out, notices.Notice{
+			ID:    "session-file-deprecated-v1.10",
+			Title: "session_file is going away",
+			Delay: delay,
+			Body: "Your config sets telegram.session_file, so your session was left exactly " +
+				"where it is. That setting is deprecated and will be removed in the next " +
+				"release. Replace it with state_dir pointing at the directory that should " +
+				"hold the session and the database.",
+		})
+	}
+	return out
 }
 
 func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, error) {
@@ -116,6 +167,7 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 		cfg:      cfg,
 		log:      log,
 		st:       sqliteStore,
+		sqlite:   sqliteStore,
 		client:   internaltg.NewGotdClient(log, stateStorage, trace),
 		verbose:  verbose,
 		notifier: newNotifier(log),
@@ -160,6 +212,11 @@ func (a *App) Run() error {
 		atomic.StoreInt64(&a.currentChatID, id)
 	})
 	root.SetTmpDir(tmpDir)
+
+	// One-time startup notices (#197). Seen-state is written on dismissal, so
+	// quitting before the countdown ends shows the notice again next time.
+	noticeSeen := notices.NewSQLiteSeen(a.sqlite.DB())
+	root = root.WithNotices(notices.Pending(a.pendingNotices(), noticeSeen), noticeSeen)
 
 	prog := tea.NewProgram(root)
 

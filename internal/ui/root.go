@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
+	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -65,9 +66,15 @@ type RootModel struct {
 	historyLimit     int
 	verbose          bool
 	cfg              *config.Config
-	imageCache       *imagecache.Cache
-	fullImageCache   *imagecache.Cache
-	mediaCache       *mediacache.Cache
+	// Pending one-time startup notices (#197). The head of the queue is shown
+	// above every screen, including login; noticeLeft counts down whole seconds
+	// of blocked dismissal.
+	noticeQueue    []notices.Notice
+	noticeLeft     int
+	noticeSeen     notices.Seen
+	imageCache     *imagecache.Cache
+	fullImageCache *imagecache.Cache
+	mediaCache     *mediacache.Cache
 	// gifFrames caches decoded frames per document id for inline GIF looping.
 	gifFrames      map[int64][]image.Image
 	gifActiveID    int64 // document id currently animating (0 = none)
@@ -286,7 +293,11 @@ func (m RootModel) Init() tea.Cmd {
 	// login splash is visible at startup). Init probes the background color once
 	// and enables OS color-scheme reports (mode 2031) for event-driven theme
 	// updates (issue #148).
-	return tea.Batch(requestBGColorCmd(), enableColorSchemeReportsCmd())
+	cmds := []tea.Cmd{requestBGColorCmd(), enableColorSchemeReportsCmd()}
+	if m.noticeActive() {
+		cmds = append(cmds, noticeTickCmd())
+	}
+	return tea.Batch(cmds...)
 }
 
 // SettleToastsForTest advances the toast slide animation to completion so a
@@ -318,6 +329,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case noticeTickMsg:
+		if !m.noticeActive() {
+			return m, nil
+		}
+		return m.noticeTick(), noticeTickCmd()
 	// message operations (steps 1+2)
 	case store.Event:
 		return m.handleStoreEvent(msg)
@@ -519,6 +535,11 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleMouse(msg)
 	// key input
 	case tea.KeyPressMsg:
+		// A startup notice swallows every key until its countdown ends, then
+		// consumes one more to dismiss itself.
+		if next, handled := m.handleNoticeKey(); handled {
+			return next, nil
+		}
 		if m.screen == ScreenLogin {
 			newLogin, cmd := m.login.Update(msg)
 			m.login = newLogin.(screens.LoginModel)
