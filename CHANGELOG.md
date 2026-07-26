@@ -32,6 +32,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   database with no arbiter, quietly overwriting each other's unread counts, read
   pointers and Telegram update state, which surfaced later as missed or
   duplicated messages. It never worked; now it says so (#188).
+- tele now identifies itself properly in Telegram's active-sessions list. A
+  session used to be listed as `go1.26.0` running `tele app v0.160.0` — the Go
+  toolchain the binary was built with and the version of an internal library,
+  neither of which says which app or which machine it is. It now reports the
+  machine's host name, tele's own version and the platform, so a session you do
+  not recognise is one you can act on. Sessions created before this change keep
+  their old labels: the values are recorded when a session is established, so
+  log out and back in if you want an existing one relabelled (#200).
 - The Telegram connection, the update loop and the notification decision now sit
   behind a single owner instead of being assembled inline at startup, and every
   state change an incoming update causes goes through one place. Nothing behaves

@@ -16,13 +16,13 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/statedir"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
 // Injected at build time via -ldflags. Fall back to config file values if zero.
 var (
 	buildAPIID   = "0"
 	buildAPIHash = ""
-	version      = "dev"
 	appName      = "tele" // injected via -ldflags for the beta channel
 )
 
@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Println(version)
+		fmt.Println(version.Version)
 		os.Exit(0)
 	}
 

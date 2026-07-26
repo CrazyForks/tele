@@ -27,7 +27,7 @@ builds:
       - -s -w
       - -X main.buildAPIID={{ .Env.TG_API_ID }}
       - -X main.buildAPIHash={{ .Env.TG_API_HASH }}
-      - -X main.version={{ .Version }}
+      - -X github.com/sorokin-vladimir/tele/internal/version.Version={{ .Version }}
       - -X main.appName={{ if contains .Prerelease "beta" }}tele-beta{{ else }}tele{{ end }}
 
 archives:

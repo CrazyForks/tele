@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 
 	"github.com/gotd/log/logzap"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
 // GotdClient wraps the gotd telegram client and implements the Client interface
@@ -173,6 +175,9 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		SessionStorage: sess,
 		Resolver:       resolver,
 		Logger:         logzap.New(c.log),
+		// Names this app and this machine in Telegram's active-sessions list;
+		// without it gotd reports the Go toolchain and its own version (#200).
+		Device: deviceConfig(version.Version, os.Hostname),
 		// OnDead marks MTProto connection death (and the reconnect that follows)
 		// so a long-idle update stall (#119) can be correlated with connection
 		// drops in the logs. Logged at warn so it shows without -e.
