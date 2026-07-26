@@ -37,7 +37,11 @@ type Store interface {
 	RemoveMessage(chatID int64, msgID int)
 	RemoveMessages(chatID int64, msgIDs []int)
 	RemoveMessagesByID(msgIDs []int) (affected []int64)
-	IncrementChatUnread(chatID int64)
+	// ApplyUnreadMessage records an inbound message as unread for its chat.
+	// Idempotent per message ID so a replayed update cannot inflate the count;
+	// no-op for an unknown chat or a message at or below the read pointer.
+	// Returns true when the count changed.
+	ApplyUnreadMessage(chatID int64, msgID int) bool
 	UpdateChatReadMaxID(chatID int64, maxID int) bool
 	UpdateChatOutboxReadMaxID(chatID int64, maxID int)
 	UpdateChatOnline(userID int64, online bool) bool

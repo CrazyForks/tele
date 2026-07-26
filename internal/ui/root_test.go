@@ -1090,7 +1090,9 @@ func TestRoot_NewMessageEvent_UnreadPersistsAcrossMultipleEvents(t *testing.T) {
 	assert.Equal(t, 2, chat2.UnreadCount, "unread count should accumulate across multiple new-message events")
 }
 
-func TestRoot_NewMessageEvent_NoUnreadForCurrentChat(t *testing.T) {
+// Unread is account state, not a property of the open viewport: a message in the
+// open chat counts, and the MarkRead round trip clears it (#189).
+func TestRoot_NewMessageEvent_CountsUnreadForCurrentChat(t *testing.T) {
 	m, _ := newRootWithTwoChats(t)
 
 	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
@@ -1098,7 +1100,7 @@ func TestRoot_NewMessageEvent_NoUnreadForCurrentChat(t *testing.T) {
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ChatID: 1, Text: "hi"},
+		Message: store.Message{ID: 7, ChatID: 1, Text: "hi"},
 	}
 	newM, _ = m.Update(evt)
 	root := newM.(ui.RootModel)
@@ -1110,7 +1112,7 @@ func TestRoot_NewMessageEvent_NoUnreadForCurrentChat(t *testing.T) {
 			chat1 = c
 		}
 	}
-	assert.Equal(t, 0, chat1.UnreadCount)
+	assert.Equal(t, 1, chat1.UnreadCount)
 }
 
 func TestRoot_NewMessageEvent_NoUnreadForOutgoingMessage(t *testing.T) {

@@ -93,8 +93,17 @@ type SQLiteStore struct {
 	// per chat, the message IDs observed this session to carry an unread mention.
 	// Keeps ApplyUnreadMention idempotent; session-only, dialog list authoritative.
 	unreadMentionMsgs map[int64]map[int]struct{}
-	db                *sql.DB
-	log               *zap.Logger
+	// baselineUnread holds the last server-authoritative unread count per chat:
+	// the dialog-list number, or the value restored from disk on startup.
+	// Locally observed unread messages are counted on top of it via unreadMsgs.
+	baselineUnread map[int64]int
+	// unreadMsgs tracks, per chat, the inbound message IDs observed this session
+	// above the read pointer. Keeps unread counting idempotent so a replayed or
+	// duplicated update cannot inflate the count. Session-only: the dialog list
+	// is authoritative on restart. See issue #189.
+	unreadMsgs map[int64]map[int]struct{}
+	db         *sql.DB
+	log        *zap.Logger
 
 	// sortedIDs caches chat IDs in display order; orderDirty marks it stale.
 	// Only the order is cached — field values are always read fresh from the
@@ -173,6 +182,8 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		messages:           make(map[int64][]Message),
 		unreadReactionMsgs: make(map[int64]map[int]struct{}),
 		unreadMentionMsgs:  make(map[int64]map[int]struct{}),
+		baselineUnread:     make(map[int64]int),
+		unreadMsgs:         make(map[int64]map[int]struct{}),
 		msgChat:            make(map[int]int64),
 		dirtyPersist:       make(map[int64]struct{}),
 		flushStop:          make(chan struct{}),

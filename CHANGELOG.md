@@ -33,6 +33,21 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   pointers and Telegram update state, which surfaced later as missed or
   duplicated messages. It never worked; now it says so (#188).
 
+### Fixed
+
+- Messages arriving in a chat that is open but not being read are no longer
+  swallowed. Unread is now counted for every incoming message and cleared when
+  the server confirms the read, rather than being skipped for whichever chat
+  happens to be open. Previously, if the chat list held focus or the history was
+  scrolled up, nothing counted the message and nothing marked it read, so it left
+  no trace until the next full dialog sync. A side effect of counting first: the
+  badge on the open chat now appears for the length of the read round trip
+  (#189).
+- A read receipt for a chat not opened in the current session no longer wipes its
+  unread count. The count was recomputed by scanning messages held in memory, and
+  messages load only when a chat is first opened, so the scan found nothing and
+  settled on zero until the next dialog sync corrected it (#189).
+
 ## [1.9.1] - 2026-07-25
 
 ### Added

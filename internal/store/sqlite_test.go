@@ -152,7 +152,7 @@ func TestSQLite_Chats_ReflectsFreshUnreadAndOnlineWithoutReorder(t *testing.T) {
 
 	// Mutations that do not affect ordering must still be reflected in the
 	// cached view (the cache stores order only; field values are read fresh).
-	s.IncrementChatUnread(1)
+	s.ApplyUnreadMessage(1, 100)
 	s.UpdateChatOnline(1, true)
 
 	chats := s.Chats()

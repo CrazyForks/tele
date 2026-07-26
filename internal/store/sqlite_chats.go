@@ -45,6 +45,9 @@ func (s *SQLiteStore) loadChats() error {
 			}
 		}
 		s.chats[c.ID] = c
+		// The persisted count is the baseline for this session; the tracked set
+		// starts empty, so the restored value is reproduced exactly.
+		s.baselineUnread[c.ID] = c.UnreadCount
 	}
 	return rows.Err()
 }
@@ -136,9 +139,11 @@ func (s *SQLiteStore) GetChat(id int64) (Chat, bool) {
 func (s *SQLiteStore) SetChat(chat Chat) {
 	s.mu.Lock()
 	s.chats[chat.ID] = chat
-	delete(s.unreadReactionMsgs, chat.ID) // server count is authoritative; drop stale session tracking
-	delete(s.unreadMentionMsgs, chat.ID)  // same: mention count comes fresh from the dialog list
-	s.orderDirty = true                   // title/pin/last-message may change ordering
+	s.baselineUnread[chat.ID] = chat.UnreadCount // dialog-list count is authoritative
+	delete(s.unreadMsgs, chat.ID)                // its messages are already inside that count
+	delete(s.unreadReactionMsgs, chat.ID)        // server count is authoritative; drop stale session tracking
+	delete(s.unreadMentionMsgs, chat.ID)         // same: mention count comes fresh from the dialog list
+	s.orderDirty = true                          // title/pin/last-message may change ordering
 	s.mu.Unlock()
 	s.persistChat(chat)
 }
@@ -182,19 +187,15 @@ func sqliteLastMsgTime(c Chat) time.Time {
 	return c.LastMessage.Date
 }
 
-func (s *SQLiteStore) IncrementChatUnread(chatID int64) {
-	s.mu.Lock()
-	chat, ok := s.chats[chatID]
-	if !ok {
-		s.mu.Unlock()
-		return
-	}
-	chat.UnreadCount++
-	s.chats[chatID] = chat
-	s.markDirtyLocked(chatID)
-	s.mu.Unlock()
-}
-
+// UpdateChatReadMaxID advances a chat's read pointer and reconciles its unread
+// count, returning false when the pointer did not move. Reconciliation prunes
+// the tracked message set rather than scanning s.messages, because messages load
+// lazily and a chat never opened this session has none in memory (#189).
+//
+// The server baseline is dropped: an advancing pointer means some of the
+// messages it stood for have been read, and they are identified by a count only.
+// Anything observed locally above maxID survives, and the next dialog-list sync
+// restores a full baseline.
 func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
 	s.mu.Lock()
 	chat, ok := s.chats[chatID]
@@ -203,13 +204,13 @@ func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
 		return false
 	}
 	chat.ReadInboxMaxID = maxID
-	unread := 0
-	for _, m := range s.messages[chatID] {
-		if !m.IsOut && m.ID > maxID {
-			unread++
+	for id := range s.unreadMsgs[chatID] {
+		if id <= maxID {
+			delete(s.unreadMsgs[chatID], id)
 		}
 	}
-	chat.UnreadCount = unread
+	s.baselineUnread[chatID] = 0
+	s.recomputeUnreadLocked(&chat)
 	s.chats[chatID] = chat
 	s.markDirtyLocked(chatID)
 	s.mu.Unlock()

@@ -15,23 +15,12 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 	}
 	switch msg.Kind {
 	case store.EventNewMessage:
-		m.st.AppendMessage(msg.Message)
-		// Track unread in the store (single source of truth) before rebuilding the
-		// list. Skip messages already covered by the read pointer — they were read
-		// elsewhere and arrive via getDifference catch-up. The store value is later
-		// overwritten by authoritative GetDialogs server state, so it must not be
-		// shadowed by a sticky list badge.
-		unreadChanged := false
+		// Unread and mention counts are account state and are updated without
+		// consulting the viewport (#189): the open chat clears them through the
+		// MarkRead path once the server confirms. Only presentation below — the
+		// row highlight and the toast — depends on which chat is open.
+		unreadChanged := store.ApplyIncomingMessage(m.st, msg.Message)
 		incomingOther := msg.Message.ChatID != m.currentChatID && !msg.Message.IsOut
-		if incomingOther {
-			if chat, ok := m.st.GetChat(msg.Message.ChatID); ok && msg.Message.ID > chat.ReadInboxMaxID {
-				m.st.IncrementChatUnread(msg.Message.ChatID)
-				unreadChanged = true
-			}
-			if msg.Message.Mentioned && m.st.ApplyUnreadMention(msg.Message.ChatID, msg.Message.ID, true) {
-				unreadChanged = true
-			}
-		}
 		m.chatList.SetChats(m.filteredChats())
 		// Folder unread counts only depend on per-chat unread; recompute solely
 		// when this message actually bumped a chat's unread count.
