@@ -68,8 +68,20 @@ func (m RootModel) handleChange(chg state.Change) (RootModel, tea.Cmd) {
 		// A message was edited on another client: the stored text and edit date
 		// are already updated, so re-render the open chat in place (no history
 		// reload) and keep the scroll position.
+		//
+		// An edit also carries the message's reactions, including a reaction that
+		// arrived on a message edited earlier (#199), so it needs the same
+		// treatment as a plain reactions change: mark them read when the user is
+		// looking at the chat, and refresh the list indicator when they are not.
 		if chg.ChatID == m.currentChatID {
 			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+			if m.focus == FocusChat && chg.ReactionsUnread {
+				return m, m.readReactionsCmd(chg.ChatID)
+			}
+			return m, nil
+		}
+		if chg.UnreadReactionChanged {
+			m.chatList.SetChats(m.filteredChats())
 		}
 
 	case state.ChangeMessageReactions:

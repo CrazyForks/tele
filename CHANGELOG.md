@@ -54,6 +54,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   unread count. The count was recomputed by scanning messages held in memory, and
   messages load only when a chat is first opened, so the scan found nothing and
   settled on zero until the next dialog sync corrected it (#189).
+- Reactions on a message that was edited earlier now appear straight away. They
+  used to show up only after leaving the chat and coming back. Telegram delivers
+  a reaction as an edit of the message, and for a message that already carried
+  the "edited" label the client treated it as a text edit alone and threw the
+  reactions away. Text and reactions arrive together and are now both applied
+  (#199).
 
 ## [1.9.1] - 2026-07-25
 

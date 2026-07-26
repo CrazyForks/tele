@@ -1926,6 +1926,33 @@ func TestRoot_ReactionUpdate_BumpsIndicatorOnOtherChat(t *testing.T) {
 	assert.Equal(t, 1, chat2.UnreadReactionsCount)
 }
 
+// A reaction on a message that was edited earlier arrives as an edit update
+// carrying a non-nil EditDate. The chat list must still pick up the indicator,
+// exactly as it does for a plain reactions update (#199).
+func TestRoot_EditWithReaction_BumpsIndicatorOnOtherChat(t *testing.T) {
+	m, st := newRootWithTwoChats(t)
+	edited := time.Now().Add(-time.Hour)
+	st.AppendMessage(store.Message{ID: 500, ChatID: 2, Text: "fixed typo", EditDate: &edited})
+
+	newM, _ := applyEvent(t, m, st, store.Event{
+		Kind: store.EventEditMessage,
+		Message: store.Message{
+			ID: 500, ChatID: 2, Text: "fixed typo", EditDate: &edited,
+			Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+			HasUnreadReactions: true,
+		},
+	})
+	root := newM.(ui.RootModel)
+
+	var chat2 store.Chat
+	for _, ch := range root.ChatList().Chats() {
+		if ch.ID == 2 {
+			chat2 = ch
+		}
+	}
+	assert.Equal(t, 1, chat2.UnreadReactionsCount)
+}
+
 func TestRoot_ReactionUpdate_OnOpenChat_ReadsReactions(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock) // chat 1 open and focused
@@ -1943,6 +1970,28 @@ func TestRoot_ReactionUpdate_OnOpenChat_ReadsReactions(t *testing.T) {
 	// Invoking the command sends readReactions to the server.
 	done := cmd()
 	_ = done
+	assert.Equal(t, 1, mock.readReactionsCalls)
+}
+
+// A reaction delivered as an edit of an already-edited message must be marked
+// read like any other when the user is looking at the chat (#199).
+func TestRoot_EditWithReaction_OnOpenChat_ReadsReactions(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock) // chat 1 open and focused
+	edited := time.Now().Add(-time.Hour)
+	st.AppendMessage(store.Message{ID: 500, ChatID: 1, Text: "fixed typo", EditDate: &edited})
+
+	_, cmd := applyEvent(t, m, st, store.Event{
+		Kind: store.EventEditMessage,
+		Message: store.Message{
+			ID: 500, ChatID: 1, Text: "fixed typo", EditDate: &edited,
+			Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+			HasUnreadReactions: true,
+		},
+	})
+	require.NotNil(t, cmd)
+
+	cmd()
 	assert.Equal(t, 1, mock.readReactionsCalls)
 }
 

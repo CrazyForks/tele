@@ -72,6 +72,31 @@ func TestApplyEdit_RealEditUpdatesText(t *testing.T) {
 	assert.Equal(t, "after", st.Messages(1)[0].Text)
 }
 
+// A reaction on a message that was genuinely edited earlier arrives with a
+// non-nil EditDate: edit_date still carries the original edit time and
+// edit_hide is false, because the "edited" label genuinely should show. The
+// reactions ride along in the same payload and must not be dropped (#199).
+func TestApplyEdit_AlreadyEditedMessageStillAppliesReactions(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1})
+	edited := time.Now().Add(-time.Hour)
+	st.AppendMessage(store.Message{ID: 5, ChatID: 1, Text: "fixed typo", EditDate: &edited})
+
+	chg, ok := s.ApplyEdit(store.Message{
+		ID: 5, ChatID: 1, Text: "fixed typo", EditDate: &edited,
+		Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+		HasUnreadReactions: true,
+	})
+
+	require.True(t, ok)
+	got := st.Messages(1)[0]
+	require.Len(t, got.Reactions, 1, "the reaction carried by the edit must be applied")
+	assert.Equal(t, "👍", got.Reactions[0].Emoji)
+	assert.Equal(t, "fixed typo", got.Text, "the text edit still applies")
+	assert.NotNil(t, got.EditDate, "the message stays marked as edited")
+	assert.True(t, chg.UnreadReactionChanged, "the chat's unread-reaction count moved")
+}
+
 // Telegram delivers a 1:1 peer reaction as a hidden edit with no EditDate. It
 // must apply the reactions and must NOT flip the message to "edited" (#118,
 // #160), so it surfaces as a reactions change, not an edit.
