@@ -11,6 +11,21 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Changed
+
+- Account state — the Telegram session, the local database and a new instance
+  lock — now lives in one place, `$XDG_STATE_HOME/tele` (usually
+  `~/.local/state/tele`), instead of sitting next to the config file. Existing
+  sessions and databases are moved there automatically on first run, so there is
+  nothing to do and no need to log in again. The `telegram.session_file` config
+  key still works and still keeps the session where it points, but it is
+  deprecated and will be removed in the next release; use `state_dir` instead.
+- A second `tele` on the same state directory now refuses to start and names the
+  process already holding it. Two instances shared one session file and one
+  database with no arbiter, quietly overwriting each other's unread counts, read
+  pointers and Telegram update state, which surfaced later as missed or
+  duplicated messages. It never worked; now it says so (#188).
+
 ## [1.9.1] - 2026-07-25
 
 ### Added

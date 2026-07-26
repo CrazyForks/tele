@@ -106,7 +106,7 @@ type App struct {
 }
 
 func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, error) {
-	statePath := filepath.Join(filepath.Dir(cfg.Telegram.SessionFile), "state.db")
+	statePath := filepath.Join(cfg.StateDir, "state.db")
 	sqliteStore, err := store.NewSQLite(statePath, log)
 	if err != nil {
 		return nil, fmt.Errorf("open state DB: %w", err)

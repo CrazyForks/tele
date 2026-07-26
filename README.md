@@ -357,8 +357,7 @@ Full reference: [docs/keybindings.md](docs/keybindings.md)
 ## Configuration
 
 ```yaml
-telegram:
-  session_file: ~/.config/tele/session.json
+# state_dir: ~/.local/state/tele # session, local database and instance lock
 
 ui:
   history_limit: 50 # messages fetched per chat on open
@@ -372,6 +371,21 @@ photos:
 
 # keybindings: see "Customizing keybindings" below
 ```
+
+`state_dir` sets where the account's state lives — the Telegram session, the
+local database, and the instance lock. It defaults to `$XDG_STATE_HOME/tele`,
+falling back to `~/.local/state/tele`.
+
+Only one `tele` instance can use a state directory at a time. A second one exits
+immediately and names the process holding it. Two instances shared one session
+and one database with nothing arbitrating between them, quietly overwriting each
+other's unread counts and sync state, so this is now refused rather than left to
+fail quietly later.
+
+The older `telegram.session_file` key still works and keeps the session where it
+points, but it is deprecated and will be removed in the next release. If you have
+not set it, your existing session and database are moved into the state directory
+automatically on first run — nothing is lost and you stay logged in.
 
 > **`kitty_placement_cap`** bounds how many Kitty image placements are live on
 > the terminal simultaneously. Only on-screen images (plus a few recently

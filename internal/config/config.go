@@ -1,7 +1,9 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -54,9 +56,23 @@ type Config struct {
 	UI          UIConfig                  `mapstructure:"ui"`
 	Photos      PhotosConfig              `mapstructure:"photos"`
 	Keybindings map[string]map[string]any `mapstructure:"keybindings"`
+
+	// StateDir holds one account's state: the session, the SQLite database and
+	// the ownership lock. See resolveState for how it is chosen.
+	StateDir string `mapstructure:"state_dir"`
+
+	// SessionPinned reports that telegram.session_file named a deliberate
+	// location. The caller must not migrate files away from it.
+	SessionPinned bool `mapstructure:"-"`
+
+	// Warnings collects non-fatal config notices for the caller to log, in the
+	// same spirit as keys.MergeOverrides.
+	Warnings []string `mapstructure:"-"`
 }
 
-func Load(path string) (*Config, error) {
+// Load reads the config at path. defaultStateDir is the platform state
+// directory, used when the config names none.
+func Load(path, defaultStateDir string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
 	setDefaults(v)
@@ -67,10 +83,50 @@ func Load(path string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-	if cfg.Telegram.SessionFile == "" {
-		cfg.Telegram.SessionFile = filepath.Join(filepath.Dir(path), "session.json")
-	}
+	cfg.resolveState(defaultStateDir)
 	return &cfg, nil
+}
+
+// resolveState fixes StateDir and Telegram.SessionFile. Precedence:
+//
+//  1. state_dir is canonical when set; a session_file alongside it is ignored.
+//  2. telegram.session_file alone keeps its own directory as the state
+//     directory and pins it. A deliberate path — an encrypted volume, an
+//     external disk — must never be relocated behind the user's back.
+//  3. neither: the platform state directory. Legacy files next to the config
+//     are moved into it at startup by statedir.Migrate.
+func (c *Config) resolveState(defaultStateDir string) {
+	switch {
+	case c.StateDir != "":
+		c.StateDir = ExpandTilde(c.StateDir)
+		if c.Telegram.SessionFile != "" {
+			c.Warnings = append(c.Warnings,
+				"telegram.session_file is ignored because state_dir is set; remove it from the config")
+		}
+	case c.Telegram.SessionFile != "":
+		c.Telegram.SessionFile = ExpandTilde(c.Telegram.SessionFile)
+		c.StateDir = filepath.Dir(c.Telegram.SessionFile)
+		c.SessionPinned = true
+		c.Warnings = append(c.Warnings,
+			"telegram.session_file is deprecated and will be removed in the next release; set state_dir instead")
+		return
+	default:
+		c.StateDir = defaultStateDir
+	}
+	c.Telegram.SessionFile = filepath.Join(c.StateDir, "session.json")
+}
+
+// ExpandTilde replaces a leading ~/ with the user home directory. Paths that do
+// not start with ~/ are returned unchanged.
+func ExpandTilde(path string) string {
+	if !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return filepath.Join(home, path[2:])
 }
 
 // KeybindingOverrides flattens the raw keybindings section into

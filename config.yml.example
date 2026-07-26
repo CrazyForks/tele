@@ -1,7 +1,11 @@
 telegram:
   api_id: YOUR_API_ID
   api_hash: YOUR_API_HASH
-  session_file: ~/.config/tele/session.json
+
+# Where this account's state lives: the Telegram session, the local database,
+# and the lock that keeps a second instance out. Defaults to
+# $XDG_STATE_HOME/tele, or ~/.local/state/tele when that is unset.
+# state_dir: ~/.local/state/tele
 
 ui:
   date_format: "15:04"

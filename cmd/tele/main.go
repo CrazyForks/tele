@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/app"
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/statedir"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
@@ -38,7 +38,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	expanded := expandTilde(*cfgPath)
+	expanded := config.ExpandTilde(*cfgPath)
 	cfgPath = &expanded
 
 	if err := ensureConfig(*cfgPath); err != nil {
@@ -46,7 +46,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load(*cfgPath)
+	defaultState, err := stateDirPath(appName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "state dir: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg, err := config.Load(*cfgPath, defaultState)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
@@ -66,8 +72,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	sd, err := stateDir(appName)
-	if err != nil {
+	// The log lives in the platform state home regardless of where the account
+	// state was pinned: it is per-machine diagnostic output, not account data.
+	if err := os.MkdirAll(defaultState, 0700); err != nil {
 		fmt.Fprintf(os.Stderr, "state dir: %v\n", err)
 		os.Exit(1)
 	}
@@ -76,7 +83,7 @@ func main() {
 		level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	}
 	w := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   filepath.Join(sd, "tele.log"),
+		Filename:   filepath.Join(defaultState, "tele.log"),
 		MaxSize:    10,
 		MaxBackups: 3,
 		Compress:   false,
@@ -88,6 +95,36 @@ func main() {
 	)
 	log := zap.New(core)
 	defer log.Sync() //nolint:errcheck
+
+	for _, w := range cfg.Warnings {
+		log.Warn("config: " + w)
+		fmt.Fprintf(os.Stderr, "config: %s\n", w)
+	}
+
+	// Ownership of the state directory is taken before anything opens the
+	// session or the database, and held for the process lifetime.
+	lock, err := statedir.Acquire(cfg.StateDir)
+	if err != nil {
+		if errors.Is(err, statedir.ErrLocked) {
+			fmt.Fprintf(os.Stderr,
+				"tele is already running (%v).\nOnly one instance can use %s at a time.\n",
+				err, cfg.StateDir)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "state dir: %v\n", err)
+		os.Exit(1)
+	}
+	defer lock.Release() //nolint:errcheck
+
+	// A pinned session_file is left exactly where the user put it, so nothing is
+	// migrated in that case. Migrate reports whether it moved anything; that is
+	// consumed by the startup notice in #197.
+	if !cfg.SessionPinned {
+		if _, err := statedir.Migrate(cfg.StateDir, filepath.Dir(*cfgPath), log); err != nil {
+			fmt.Fprintf(os.Stderr, "state migration: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	a, err := app.New(cfg, log, *verbose, *trace)
 	if err != nil {
@@ -123,14 +160,6 @@ func defaultConfig() string {
 	return defaultConfigHead + keys.DefaultKeybindingsYAML()
 }
 
-func expandTilde(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
-	}
-	return path
-}
-
 // defaultConfigPath returns the default config file location for the given app
 // name, e.g. ~/.config/tele/config.yml (or ~/.config/tele-beta/config.yml for
 // the beta channel). The tilde is expanded later by expandTilde.
@@ -138,8 +167,11 @@ func defaultConfigPath(app string) string {
 	return filepath.Join("~", ".config", app, "config.yml")
 }
 
-// stateDir returns ~/.local/state/<app> (or $XDG_STATE_HOME/<app>) and ensures it exists.
-func stateDir(app string) (string, error) {
+// stateDirPath returns $XDG_STATE_HOME/<app>, falling back to
+// ~/.local/state/<app>. It does not create the directory: the state directory
+// is created under lock by statedir.Acquire, and the log directory is created
+// by its own caller.
+func stateDirPath(app string) (string, error) {
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
 		home, err := os.UserHomeDir()
@@ -148,11 +180,7 @@ func stateDir(app string) (string, error) {
 		}
 		base = filepath.Join(home, ".local", "state")
 	}
-	dir := filepath.Join(base, app)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", err
-	}
-	return dir, nil
+	return filepath.Join(base, app), nil
 }
 
 // ensureConfig creates a default config file if it does not exist.
