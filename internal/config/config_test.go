@@ -130,7 +130,8 @@ func TestLoad_SessionFilePinsItsOwnDirectoryAndWarns(t *testing.T) {
 	cfg, err := config.Load(f, "/default/state")
 	require.NoError(t, err)
 
-	assert.Equal(t, "/vault", cfg.StateDir)
+	// StateDir comes from filepath.Dir, so it carries the native separator.
+	assert.Equal(t, filepath.FromSlash("/vault"), cfg.StateDir)
 	assert.Equal(t, "/vault/tg.json", cfg.Telegram.SessionFile)
 	assert.True(t, cfg.SessionPinned, "a deliberate session path must not be migrated away")
 	require.Len(t, cfg.Warnings, 1)
