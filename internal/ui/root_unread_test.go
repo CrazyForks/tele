@@ -19,7 +19,7 @@ func TestRoot_OpenChat_UnreadClearedOnMarkReadConfirmation(t *testing.T) {
 	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(RootModel)
 
-	newM, _ = m.Update(store.Event{
+	newM, _ = applyEventInternal(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 7, ChatID: 1, Text: "hi"},
 	})
@@ -44,7 +44,7 @@ func TestRoot_OpenChatUnfocused_KeepsUnread(t *testing.T) {
 	m = newM.(RootModel)
 	m = m.WithFocus(FocusChatList)
 
-	m.Update(store.Event{
+	applyEventInternal(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 7, ChatID: 1, Text: "hi"},
 	})

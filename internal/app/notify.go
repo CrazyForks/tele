@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
+
 	"go.uber.org/zap"
 )
 
@@ -89,7 +91,7 @@ func (n *oscNotifier) Notify(title, body string) error {
 
 // newNotifier picks the best available desktop notifier: terminal-native OSC
 // when the terminal supports it and stderr is a real terminal, otherwise beeep.
-func newNotifier(log *zap.Logger) Notifier {
+func newNotifier(log *zap.Logger) core.Notifier {
 	if f := detectOSCFormat(os.Getenv); f != oscNone && isTerminal(os.Stderr) {
 		log.Debug("notifications: using terminal-native OSC", zap.Int("format", int(f)))
 		return &oscNotifier{w: os.Stderr, format: f}

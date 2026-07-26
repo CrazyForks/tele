@@ -25,7 +25,7 @@ func rootOnOpenChatWithMsg(t *testing.T, msgID int) RootModel {
 		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
 	}})
 	m = newM.(RootModel)
-	newM, _ = m.Update(store.Event{Kind: store.EventNewMessage,
+	newM, _ = applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
 		Message: store.Message{ID: msgID, ChatID: 1, Text: "target", Date: time.Now()}})
 	return newM.(RootModel)
 }
@@ -68,9 +68,9 @@ func TestRoot_MsgHighlightFade_StaleSerialIgnored(t *testing.T) {
 }
 
 func TestRoot_IncomingMsg_HighlightsNonOpenChat(t *testing.T) {
-	m, _ := newRootWithTwoChatsInternal(t)
+	m, st := newRootWithTwoChatsInternal(t)
 
-	newM, cmd := m.Update(store.Event{Kind: store.EventNewMessage,
+	newM, cmd := applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
 		Message: store.Message{ID: 1, ChatID: 2, Text: "hi", Date: time.Now()}})
 	root := newM.(RootModel)
 
@@ -89,7 +89,7 @@ func TestRoot_IncomingMsg_NoHighlightForOpenChat(t *testing.T) {
 	}})
 	m = newM.(RootModel)
 
-	newM, _ = m.Update(store.Event{Kind: store.EventNewMessage,
+	newM, _ = applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
 		Message: store.Message{ID: 9, ChatID: 1, Text: "hi", Date: time.Now()}})
 	root := newM.(RootModel)
 
@@ -98,9 +98,9 @@ func TestRoot_IncomingMsg_NoHighlightForOpenChat(t *testing.T) {
 }
 
 func TestRoot_IncomingMsg_NoHighlightForOutgoing(t *testing.T) {
-	m, _ := newRootWithTwoChatsInternal(t)
+	m, st := newRootWithTwoChatsInternal(t)
 
-	newM, _ := m.Update(store.Event{Kind: store.EventNewMessage,
+	newM, _ := applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
 		Message: store.Message{ID: 1, ChatID: 2, Text: "hi", IsOut: true, Date: time.Now()}})
 	root := newM.(RootModel)
 
@@ -109,8 +109,8 @@ func TestRoot_IncomingMsg_NoHighlightForOutgoing(t *testing.T) {
 }
 
 func TestRoot_ChatHighlightFade_DecrementsAndStaleIgnored(t *testing.T) {
-	m, _ := newRootWithTwoChatsInternal(t)
-	newM, _ := m.Update(store.Event{Kind: store.EventNewMessage,
+	m, st := newRootWithTwoChatsInternal(t)
+	newM, _ := applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
 		Message: store.Message{ID: 1, ChatID: 2, Text: "hi", Date: time.Now()}})
 	m = newM.(RootModel)
 

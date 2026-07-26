@@ -1,0 +1,142 @@
+package state_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/store"
+)
+
+func newState(t *testing.T) (*state.State, store.Store) {
+	t.Helper()
+	st := store.NewMemory()
+	return state.New(st), st
+}
+
+func TestApplyIncoming_AppendsCountsAndReportsChange(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1, Title: "A"})
+
+	chg, ok := s.ApplyIncoming(store.Message{ID: 5, ChatID: 1, Text: "hi"})
+
+	require.True(t, ok)
+	assert.Equal(t, state.ChangeNewMessage, chg.Kind)
+	assert.Equal(t, int64(1), chg.ChatID)
+	assert.Equal(t, 5, chg.Message.ID)
+	assert.True(t, chg.UnreadChanged)
+	require.Len(t, st.Messages(1), 1)
+	c, _ := st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadCount)
+}
+
+// A message already covered by the read pointer is still appended to history,
+// but no counter moved, so the folder bar must not be recomputed.
+func TestApplyIncoming_ReadElsewhereReportsNoUnreadChange(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 10})
+
+	chg, ok := s.ApplyIncoming(store.Message{ID: 5, ChatID: 1})
+
+	require.True(t, ok, "the message is still news to the client")
+	assert.False(t, chg.UnreadChanged)
+	require.Len(t, st.Messages(1), 1)
+}
+
+func TestApplyIncoming_OutgoingDoesNotCount(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1})
+
+	chg, ok := s.ApplyIncoming(store.Message{ID: 5, ChatID: 1, IsOut: true})
+
+	require.True(t, ok)
+	assert.False(t, chg.UnreadChanged)
+	c, _ := st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadCount)
+}
+
+// A real content edit carries an EditDate and rewrites the text.
+func TestApplyEdit_RealEditUpdatesText(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1})
+	st.AppendMessage(store.Message{ID: 5, ChatID: 1, Text: "before"})
+	when := time.Now()
+
+	chg, ok := s.ApplyEdit(store.Message{ID: 5, ChatID: 1, Text: "after", EditDate: &when})
+
+	require.True(t, ok)
+	assert.Equal(t, state.ChangeMessageEdited, chg.Kind)
+	assert.Equal(t, "after", st.Messages(1)[0].Text)
+}
+
+// Telegram delivers a 1:1 peer reaction as a hidden edit with no EditDate. It
+// must apply the reactions and must NOT flip the message to "edited" (#118,
+// #160), so it surfaces as a reactions change, not an edit.
+func TestApplyEdit_HiddenEditSurfacesAsReactions(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1})
+	st.AppendMessage(store.Message{ID: 5, ChatID: 1, Text: "hi"})
+
+	chg, ok := s.ApplyEdit(store.Message{
+		ID: 5, ChatID: 1, Text: "hi",
+		Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+		HasUnreadReactions: true,
+	})
+
+	require.True(t, ok)
+	assert.Equal(t, state.ChangeMessageReactions, chg.Kind)
+	assert.Equal(t, 5, chg.MsgID)
+	assert.True(t, chg.ReactionsUnread)
+	assert.True(t, chg.UnreadReactionChanged)
+	assert.Nil(t, st.Messages(1)[0].EditDate, "a hidden edit must not mark the message edited")
+}
+
+func TestApplyReactions_TracksUnreadOnce(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1})
+	st.AppendMessage(store.Message{ID: 5, ChatID: 1})
+
+	chg, ok := s.ApplyReactions(1, 5, []store.Reaction{{Emoji: "👍", Count: 1}}, true)
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+
+	// Same message again: the count is already tracked.
+	chg, ok = s.ApplyReactions(1, 5, []store.Reaction{{Emoji: "👍", Count: 2}}, true)
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	c, _ := st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+}
+
+func TestApplyDelete_WithChatID(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1})
+	st.AppendMessage(store.Message{ID: 5, ChatID: 1})
+	st.AppendMessage(store.Message{ID: 6, ChatID: 1})
+
+	chg, ok := s.ApplyDelete(1, []int{5})
+
+	require.True(t, ok)
+	assert.Equal(t, state.ChangeMessagesDeleted, chg.Kind)
+	assert.Equal(t, int64(1), chg.ChatID)
+	assert.Equal(t, []int{5}, chg.MsgIDs)
+	require.Len(t, st.Messages(1), 1)
+	assert.Equal(t, 6, st.Messages(1)[0].ID)
+}
+
+// A non-channel delete arrives with no peer context; the store resolves each ID
+// to its owning chat through its index (#72).
+func TestApplyDelete_WithoutChatIDResolvesThroughStore(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.AppendMessage(store.Message{ID: 5, ChatID: 1})
+
+	chg, ok := s.ApplyDelete(0, []int{5})
+
+	require.True(t, ok)
+	assert.Equal(t, int64(0), chg.ChatID)
+	assert.Empty(t, st.Messages(1))
+}

@@ -305,10 +305,10 @@ func TestRoot_ReactionFailure_SurfacesError(t *testing.T) {
 
 func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {
 	mc := &mockTGClient{}
-	m, _ := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
+	m, st := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
 
 	newMsg := store.Message{ID: 101, ChatID: 1, Photo: &store.PhotoRef{ID: 9}}
-	_, cmd := m.Update(store.Event{Kind: store.EventNewMessage, Message: newMsg})
+	_, cmd := applyEvent(t, m, st, store.Event{Kind: store.EventNewMessage, Message: newMsg})
 	require.NotNil(t, cmd) // download command batched
 }
 
@@ -349,7 +349,7 @@ func TestRoot_EventDraftMessage_UpdatesStore(t *testing.T) {
 	mc := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mc)
 
-	m.Update(store.Event{Kind: store.EventDraftMessage, ChatID: 1, Draft: "remote draft"})
+	applyEvent(t, m, st, store.Event{Kind: store.EventDraftMessage, ChatID: 1, Draft: "remote draft"})
 	got, ok := st.GetChat(1)
 	require.True(t, ok)
 	assert.Equal(t, "remote draft", got.Draft)
@@ -1029,13 +1029,13 @@ func newRootWithTwoChats(t *testing.T) (ui.RootModel, store.Store) {
 }
 
 func TestRoot_NewMessageEvent_UpdatesChatList(t *testing.T) {
-	m, _ := newRootWithTwoChats(t)
+	m, st := newRootWithTwoChats(t)
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "hi", Date: time.Now()},
 	}
-	newM, _ := m.Update(evt)
+	newM, _ := applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
@@ -1044,13 +1044,13 @@ func TestRoot_NewMessageEvent_UpdatesChatList(t *testing.T) {
 }
 
 func TestRoot_NewMessageEvent_IncrementsUnread(t *testing.T) {
-	m, _ := newRootWithTwoChats(t)
+	m, st := newRootWithTwoChats(t)
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 1, ChatID: 2, Text: "hi"},
 	}
-	newM, _ := m.Update(evt)
+	newM, _ := applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
@@ -1064,20 +1064,20 @@ func TestRoot_NewMessageEvent_IncrementsUnread(t *testing.T) {
 }
 
 func TestRoot_NewMessageEvent_UnreadPersistsAcrossMultipleEvents(t *testing.T) {
-	m, _ := newRootWithTwoChats(t)
+	m, st := newRootWithTwoChats(t)
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 1, ChatID: 2, Text: "first"},
 	}
-	newM, _ := m.Update(evt)
+	newM, _ := applyEvent(t, m, st, evt)
 	m = newM.(ui.RootModel)
 
 	evt2 := store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 2, ChatID: 2, Text: "second"},
 	}
-	newM, _ = m.Update(evt2)
+	newM, _ = applyEvent(t, m, st, evt2)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
@@ -1093,7 +1093,7 @@ func TestRoot_NewMessageEvent_UnreadPersistsAcrossMultipleEvents(t *testing.T) {
 // Unread is account state, not a property of the open viewport: a message in the
 // open chat counts, and the MarkRead round trip clears it (#189).
 func TestRoot_NewMessageEvent_CountsUnreadForCurrentChat(t *testing.T) {
-	m, _ := newRootWithTwoChats(t)
+	m, st := newRootWithTwoChats(t)
 
 	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(ui.RootModel)
@@ -1102,7 +1102,7 @@ func TestRoot_NewMessageEvent_CountsUnreadForCurrentChat(t *testing.T) {
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 7, ChatID: 1, Text: "hi"},
 	}
-	newM, _ = m.Update(evt)
+	newM, _ = applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
@@ -1116,13 +1116,13 @@ func TestRoot_NewMessageEvent_CountsUnreadForCurrentChat(t *testing.T) {
 }
 
 func TestRoot_NewMessageEvent_NoUnreadForOutgoingMessage(t *testing.T) {
-	m, _ := newRootWithTwoChats(t)
+	m, st := newRootWithTwoChats(t)
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ChatID: 2, Text: "sent from phone", IsOut: true},
 	}
-	newM, _ := m.Update(evt)
+	newM, _ := applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
@@ -1728,7 +1728,7 @@ func TestRoot_EventDeleteMessages_Channel_RemovesFromCurrentChat(t *testing.T) {
 		ChatID: 1,
 		MsgIDs: []int{10},
 	}
-	newM, _ = m.Update(evt)
+	newM, _ = applyEvent(t, m, st, evt)
 	_ = newM.(ui.RootModel)
 
 	msgs := st.Messages(1)
@@ -1749,7 +1749,7 @@ func TestRoot_EventDeleteMessages_NonChannel_TargetsOwningChat(t *testing.T) {
 		ChatID: 0,
 		MsgIDs: []int{5},
 	}
-	newM, _ := m.Update(evt)
+	newM, _ := applyEvent(t, m, st, evt)
 	_ = newM.(ui.RootModel)
 
 	assert.Empty(t, st.Messages(1))   // owning chat lost the message
@@ -1804,7 +1804,7 @@ func TestRoot_EventUserPresence_UpdatesChatOnline(t *testing.T) {
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
 
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:   store.EventUserPresence,
 		ChatID: 1,
 		Online: true,
@@ -1826,7 +1826,7 @@ func TestRoot_EventUserPresence_NoopWhenOnlineUnchanged(t *testing.T) {
 	// the no-op event would appear to return a command (issue #147).
 	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 
-	newM, cmd := m.Update(store.Event{
+	newM, cmd := applyEvent(t, m, st, store.Event{
 		Kind:   store.EventUserPresence,
 		ChatID: 1,
 		Online: true, // same as stored
@@ -1846,7 +1846,7 @@ func TestRoot_EventMuteUpdate_UpdatesStoreMuteFlag(t *testing.T) {
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
 
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:   store.EventMuteUpdate,
 		ChatID: 1,
 		Muted:  true,
@@ -1868,7 +1868,7 @@ func TestRoot_EventMuteUpdate_NoopWhenUnchanged(t *testing.T) {
 	// the no-op event would appear to return a command (issue #147).
 	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 
-	newM, cmd := m.Update(store.Event{
+	newM, cmd := applyEvent(t, m, st, store.Event{
 		Kind:   store.EventMuteUpdate,
 		ChatID: 1,
 		Muted:  true, // same as stored
@@ -1889,7 +1889,7 @@ func TestRoot_EventEditMessage_UpdatesStoredText(t *testing.T) {
 	m = m.WithScreen(ui.ScreenMain)
 
 	edited := time.Unix(int64(1700000000), 0)
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:    store.EventEditMessage,
 		Message: store.Message{ID: 10, ChatID: 1, Text: "edited", EditDate: &edited},
 	})
@@ -1904,7 +1904,7 @@ func TestRoot_EventEditMessage_UpdatesStoredText(t *testing.T) {
 func TestRoot_ReactionUpdate_BumpsIndicatorOnOtherChat(t *testing.T) {
 	m, st := newRootWithTwoChats(t)
 	// Neither chat is open, so a reaction on chat 2 should bump its indicator.
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:            store.EventReactionsUpdate,
 		ChatID:          2,
 		MsgID:           500,
@@ -1931,7 +1931,7 @@ func TestRoot_ReactionUpdate_OnOpenChat_ReadsReactions(t *testing.T) {
 	m, st := newRootWithOpenChat(t, mock) // chat 1 open and focused
 	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, UnreadReactionsCount: 1})
 
-	newM, cmd := m.Update(store.Event{
+	newM, cmd := applyEvent(t, m, st, store.Event{
 		Kind:            store.EventReactionsUpdate,
 		ChatID:          1,
 		MsgID:           500,
@@ -1966,7 +1966,7 @@ func TestRoot_OpenChat_ClearsUnreadReactionsOptimistically(t *testing.T) {
 func TestRoot_NewMention_BumpsIndicatorOnOtherChat(t *testing.T) {
 	m, st := newRootWithTwoChats(t)
 	// Chat 2 is not open; an incoming mention there bumps its indicator.
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind: store.EventNewMessage,
 		Message: store.Message{
 			ID: 500, ChatID: 2, Mentioned: true, IsOut: false,
@@ -2071,7 +2071,7 @@ func TestRoot_NewMessageEvent_AlreadyReadElsewhere(t *testing.T) {
 	m = newM.(ui.RootModel)
 
 	// EventReadInbox arrives first (gotd OtherUpdates before NewMessages)
-	newM, _ = m.Update(store.Event{
+	newM, _ = applyEvent(t, m, st, store.Event{
 		Kind:      store.EventReadInbox,
 		ChatID:    2,
 		ReadMaxID: 100,
@@ -2079,7 +2079,7 @@ func TestRoot_NewMessageEvent_AlreadyReadElsewhere(t *testing.T) {
 	m = newM.(ui.RootModel)
 
 	// EventNewMessage for a message already covered by the read pointer
-	newM, _ = m.Update(store.Event{
+	newM, _ = applyEvent(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 99, ChatID: 2, Text: "read elsewhere"},
 	})
@@ -2110,7 +2110,7 @@ func TestRoot_StartupCatchup_ServerReadClearsStaleBadge(t *testing.T) {
 
 	// Catch-up: new message (already read on another client) arrives before
 	// GetDialogs completes and before the read ack (which is dropped).
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
 		Message: store.Message{ID: 150, ChatID: 2, Text: "read elsewhere"},
 	})
@@ -2215,7 +2215,7 @@ func TestRoot_EventEditMessage_HiddenEdit_DoesNotMarkEdited(t *testing.T) {
 	// A hidden edit (edit_hide) reaches the root as EventEditMessage with a nil
 	// EditDate — e.g. a reaction bump. It must not flip the message to "edited"
 	// (issue #118).
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:    store.EventEditMessage,
 		Message: store.Message{ID: 10, ChatID: 1, Text: "original", EditDate: nil},
 	})
@@ -2237,7 +2237,7 @@ func TestRoot_EventEditMessage_HiddenEdit_AppliesReactions(t *testing.T) {
 	// (edit_hide) carrying the message's new reactions, not as a separate
 	// UpdateMessageReactions. The reactions must be applied so they appear live,
 	// while the message must still not be flipped to "edited" (#160, #118).
-	newM, _ := m.Update(store.Event{
+	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind: store.EventEditMessage,
 		Message: store.Message{
 			ID: 10, ChatID: 1, Text: "original", EditDate: nil,

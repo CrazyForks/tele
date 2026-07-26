@@ -138,7 +138,7 @@ func newMessageEvent(chatID int64, text string, out bool) store.Event {
 func TestInAppNotify_InactiveChat_ShowsToast(t *testing.T) {
 	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0 // no active chat
-	model, _ := m.Update(newMessageEvent(7, "hey there", false))
+	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey there", false))
 	rm := model.(RootModel)
 	if rm.toasts.Empty() {
 		t.Fatal("expected an in-app notify toast")
@@ -153,7 +153,7 @@ func TestInAppNotify_InactiveChat_ShowsToast(t *testing.T) {
 func TestInAppNotify_ClickOpensChat(t *testing.T) {
 	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0
-	model, _ := m.Update(newMessageEvent(7, "hi", false))
+	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hi", false))
 	rm := model.(RootModel)
 	rm.SettleToastsForTest()
 
@@ -190,7 +190,7 @@ func TestInAppNotify_ClickOpensChat(t *testing.T) {
 func TestInAppNotify_ActiveChat_NoToast(t *testing.T) {
 	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 7 // this chat is open
-	model, _ := m.Update(newMessageEvent(7, "hey", false))
+	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey", false))
 	if !model.(RootModel).toasts.Empty() {
 		t.Fatal("active chat must not notify")
 	}
@@ -199,7 +199,7 @@ func TestInAppNotify_ActiveChat_NoToast(t *testing.T) {
 func TestInAppNotify_Outgoing_NoToast(t *testing.T) {
 	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0
-	model, _ := m.Update(newMessageEvent(7, "sent by me", true))
+	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "sent by me", true))
 	if !model.(RootModel).toasts.Empty() {
 		t.Fatal("outgoing message must not notify")
 	}
@@ -208,7 +208,7 @@ func TestInAppNotify_Outgoing_NoToast(t *testing.T) {
 func TestInAppNotify_MutedChat_NoToast(t *testing.T) {
 	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice", IsMuted: true})
 	m.currentChatID = 0
-	model, _ := m.Update(newMessageEvent(7, "hey", false))
+	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey", false))
 	if !model.(RootModel).toasts.Empty() {
 		t.Fatal("muted chat must not notify")
 	}
@@ -224,7 +224,7 @@ func TestInAppNotify_StaleMessage_NoToast(t *testing.T) {
 			Date: time.Now().Add(-store.NotifyFreshnessWindow - time.Second),
 		},
 	}
-	model, _ := m.Update(evt)
+	model, _ := applyEventInternal(t, m, m.st, evt)
 	if !model.(RootModel).toasts.Empty() {
 		t.Fatal("stale catch-up message must not notify")
 	}
@@ -235,7 +235,7 @@ func TestInAppNotify_PreviewOff_HidesText(t *testing.T) {
 	m.currentChatID = 0
 	m.cfg = &config.Config{}
 	m.cfg.UI.NotificationPreview = false
-	model, _ := m.Update(newMessageEvent(7, "secret text", false))
+	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "secret text", false))
 	rm := model.(RootModel)
 	rm.SettleToastsForTest()
 	view := rm.View().Content

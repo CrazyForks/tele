@@ -32,6 +32,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   database with no arbiter, quietly overwriting each other's unread counts, read
   pointers and Telegram update state, which surfaced later as missed or
   duplicated messages. It never worked; now it says so (#188).
+- The Telegram connection, the update loop and the notification decision now sit
+  behind a single owner instead of being assembled inline at startup, and every
+  state change an incoming update causes goes through one place. Nothing behaves
+  differently and there is nothing to do: this is the groundwork for the
+  connection becoming its own process, so that a terminal window, a second
+  window and a command-line call can share one account without competing for the
+  session (#190).
 
 ### Fixed
 

@@ -2,7 +2,11 @@
 
 package app
 
-import "github.com/gen2brain/beeep"
+import (
+	"github.com/gen2brain/beeep"
+
+	"github.com/sorokin-vladimir/tele/internal/core"
+)
 
 // beeepNotifier posts a generic out-of-process desktop notification. It is the
 // fallback used when the terminal-native OSC path is unavailable. Excluded on
@@ -13,4 +17,4 @@ func (b beeepNotifier) Notify(title, body string) error {
 	return beeep.Notify(title, body, "")
 }
 
-func fallbackNotifier() Notifier { return beeepNotifier{} }
+func fallbackNotifier() core.Notifier { return beeepNotifier{} }

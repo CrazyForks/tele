@@ -5,172 +5,128 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
-func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
+// handleChange renders an applied domain change. It performs no mutation: the
+// store is already up to date by the time this runs.
+func (m RootModel) handleChange(chg state.Change) (RootModel, tea.Cmd) {
 	if m.st == nil {
 		return m, nil
 	}
-	switch msg.Kind {
-	case store.EventNewMessage:
-		// Unread and mention counts are account state and are updated without
-		// consulting the viewport (#189): the open chat clears them through the
-		// MarkRead path once the server confirms. Only presentation below — the
-		// row highlight and the toast — depends on which chat is open.
-		unreadChanged := store.ApplyIncomingMessage(m.st, msg.Message)
-		incomingOther := msg.Message.ChatID != m.currentChatID && !msg.Message.IsOut
+	switch chg.Kind {
+	case state.ChangeNewMessage:
+		incomingOther := chg.ChatID != m.currentChatID && !chg.Message.IsOut
 		m.chatList.SetChats(m.filteredChats())
 		// Folder unread counts only depend on per-chat unread; recompute solely
 		// when this message actually bumped a chat's unread count.
-		if m.folderBar != nil && unreadChanged {
+		if m.folderBar != nil && chg.UnreadChanged {
 			m.syncFolderBar()
 		}
 		// Flash the row of a non-open chat that just bumped to the top so the eye
 		// can follow the reorder (issue #39, second section).
 		var highlightCmd tea.Cmd
 		if incomingOther {
-			m.chatList.HighlightChat(msg.Message.ChatID)
+			m.chatList.HighlightChat(chg.ChatID)
 			m.chatHighlightSerial++
 			highlightCmd = chatHighlightFadeCmd(m.chatHighlightSerial)
 		}
 		// In-app notification: a fresh message in an inactive, unmuted chat pops a
 		// top-right toast (#59), gated identically to OS notifications.
 		var notifyCmd tea.Cmd
-		if incomingOther && store.Notifiable(m.st, msg.Message.ChatID, m.currentChatID, msg.Message.Date, time.Now()) {
-			notifyCmd = m.showInAppNotify(msg.Message)
+		if incomingOther && store.Notifiable(m.st, chg.ChatID, m.currentChatID, chg.Message.Date, time.Now()) {
+			notifyCmd = m.showInAppNotify(chg.Message)
 		}
-		if msg.Message.ChatID == m.currentChatID {
+		if chg.ChatID == m.currentChatID {
 			m.chat.SetMessages(m.st.Messages(m.currentChatID))
-			cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]store.Message{msg.Message})}
-			if m.focus == FocusChat && msg.Message.Mentioned {
-				cmds = append(cmds, m.readMentionsCmd(msg.Message.ChatID))
+			cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]store.Message{chg.Message})}
+			if m.focus == FocusChat && chg.Message.Mentioned {
+				cmds = append(cmds, m.readMentionsCmd(chg.ChatID))
 			}
 			return m, tea.Batch(cmds...)
 		}
 		return m, tea.Batch(highlightCmd, notifyCmd)
-	case store.EventReadInbox:
-		if m.st.UpdateChatReadMaxID(msg.ChatID, msg.ReadMaxID) {
-			if chat, ok := m.st.GetChat(msg.ChatID); ok {
-				m.chatList.SetChatUnread(msg.ChatID, chat.UnreadCount)
-			}
-			if m.folderBar != nil {
-				m.syncFolderBar()
-			}
+
+	case state.ChangeReadInbox:
+		if chat, ok := m.st.GetChat(chg.ChatID); ok {
+			m.chatList.SetChatUnread(chg.ChatID, chat.UnreadCount)
 		}
-	case store.EventReadOutbox:
-		m.st.UpdateChatOutboxReadMaxID(msg.ChatID, msg.ReadMaxID)
-		if msg.ChatID == m.currentChatID {
-			if chat, ok := m.st.GetChat(msg.ChatID); ok {
+		if m.folderBar != nil {
+			m.syncFolderBar()
+		}
+
+	case state.ChangeReadOutbox:
+		if chg.ChatID == m.currentChatID {
+			if chat, ok := m.st.GetChat(chg.ChatID); ok {
 				m.chat.SetOutboxReadMaxID(chat.ReadOutboxMaxID)
 			}
 		}
-	case store.EventEditMessage:
-		// A message was edited on another client. Update the stored text/edit
-		// date and re-render the open chat in place (no history reload). Keep
-		// scroll position, matching the reactions-update path.
-		//
-		// A nil EditDate means the converter dropped it as a hidden edit
-		// (Telegram edit_hide), e.g. a reaction bump: not a real content edit, so
-		// the message must not be flipped to "edited" (issue #118). But in 1:1
-		// chats an incoming reaction is delivered ONLY as this hidden edit (it
-		// carries the message's new reactions), not as a separate
-		// UpdateMessageReactions — so apply those reactions here, otherwise peer
-		// reactions never show live and only appear after a chat refresh (#160).
-		if msg.Message.EditDate == nil {
-			m.st.UpdateMessageReactions(msg.Message.ChatID, msg.Message.ID, msg.Message.Reactions)
-			if msg.Message.ChatID == m.currentChatID {
-				m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
-				if m.focus == FocusChat && msg.Message.HasUnreadReactions {
-					return m, m.readReactionsCmd(msg.Message.ChatID)
-				}
-				return m, nil
-			}
-			if msg.Message.HasUnreadReactions && m.st.ApplyUnreadReaction(msg.Message.ChatID, msg.Message.ID, true) {
-				m.chatList.SetChats(m.filteredChats())
+
+	case state.ChangeMessageEdited:
+		// A message was edited on another client: the stored text and edit date
+		// are already updated, so re-render the open chat in place (no history
+		// reload) and keep the scroll position.
+		if chg.ChatID == m.currentChatID {
+			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+		}
+
+	case state.ChangeMessageReactions:
+		if chg.ChatID == m.currentChatID {
+			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+			if m.focus == FocusChat && chg.ReactionsUnread {
+				return m, m.readReactionsCmd(chg.ChatID)
 			}
 			return m, nil
 		}
-		editDate := *msg.Message.EditDate
-		m.st.UpdateMessageText(msg.Message.ChatID, msg.Message.ID, msg.Message.Text, msg.Message.Entities, editDate)
-		if msg.Message.ChatID == m.currentChatID {
-			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
-		}
-	case store.EventDraftMessage:
-		// Draft changed on another device (or cleared server-side on send). Keep
-		// the store as the source of truth (#62). Reflect it live only when this
-		// chat is open and the user is not actively typing — otherwise we would
-		// clobber an in-progress local edit. For other chats, seed the session
-		// cache without overwriting a newer unsent local draft.
-		m.st.SetChatDraft(msg.ChatID, msg.Draft)
-		if msg.ChatID == m.currentChatID {
-			if !m.chat.ComposerFocused() {
-				m.chat.SetComposerValue(msg.Draft)
-			}
-		} else {
-			m.chat.SeedDraft(msg.ChatID, msg.Draft)
-		}
-	case store.EventReactionsUpdate:
-		m.st.UpdateMessageReactions(msg.ChatID, msg.MsgID, msg.Reactions)
-		if msg.ChatID == m.currentChatID {
-			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
-			if m.focus == FocusChat && msg.ReactionsUnread {
-				return m, m.readReactionsCmd(msg.ChatID)
-			}
-			return m, nil
-		}
-		if msg.ReactionsUnread && m.st.ApplyUnreadReaction(msg.ChatID, msg.MsgID, true) {
+		if chg.UnreadReactionChanged {
 			m.chatList.SetChats(m.filteredChats())
 		}
-	case store.EventDeleteMessages:
-		if msg.ChatID != 0 {
-			m.st.RemoveMessages(msg.ChatID, msg.MsgIDs)
+
+	case state.ChangeDraft:
+		// Reflect a synced draft live only when this chat is open and the user is
+		// not actively typing — otherwise we would clobber an in-progress local
+		// edit. For other chats, seed the session cache without overwriting a
+		// newer unsent local draft (#62).
+		if chg.ChatID == m.currentChatID {
+			if !m.chat.ComposerFocused() {
+				m.chat.SetComposerValue(chg.Draft)
+			}
 		} else {
-			// Non-channel delete: no peer context. Resolve each ID to its chat
-			// via the store index instead of scanning every chat (issue #72).
-			m.st.RemoveMessagesByID(msg.MsgIDs)
+			m.chat.SeedDraft(chg.ChatID, chg.Draft)
 		}
-		if msg.ChatID == 0 || msg.ChatID == m.currentChatID {
+
+	case state.ChangeMessagesDeleted:
+		if chg.ChatID == 0 || chg.ChatID == m.currentChatID {
 			m.chat.SetMessages(m.st.Messages(m.currentChatID))
 		}
 		m.chatList.SetChats(m.filteredChats())
-	case store.EventUserPresence:
-		// Presence cannot change unread counts, so the folder bar is never
-		// touched here. Skip all UI work when the online state did not flip —
-		// presence updates stream continuously for every online contact.
-		if !m.st.UpdateChatOnline(msg.ChatID, msg.Online) {
-			return m, nil
-		}
+
+	case state.ChangePresence:
 		m.chatList.SetChats(m.filteredChats())
-		if msg.ChatID == m.currentChatID {
-			if chat, ok := m.st.GetChat(msg.ChatID); ok {
+		if chg.ChatID == m.currentChatID {
+			if chat, ok := m.st.GetChat(chg.ChatID); ok {
 				m.chat.SetChat(&chat)
 			}
 		}
-	case store.EventMuteUpdate:
-		// Mute toggled on another device. Sync the store's single source of
-		// truth, then refresh the list (mute marker) and folder bar (ExcludeMuted
-		// folders depend on it). Skip all UI work when nothing actually changed.
-		chat, ok := m.st.GetChat(msg.ChatID)
-		if !ok || chat.IsMuted == msg.Muted {
-			return m, nil
-		}
-		m.st.SetChatMuted(msg.ChatID, msg.Muted)
+
+	case state.ChangeMute:
 		m.chatList.SetChats(m.filteredChats())
 		if m.folderBar != nil {
 			m.syncFolderBar()
 		}
-		if msg.ChatID == m.currentChatID {
-			if c, ok := m.st.GetChat(msg.ChatID); ok {
+		if chg.ChatID == m.currentChatID {
+			if c, ok := m.st.GetChat(chg.ChatID); ok {
 				m.chat.SetChat(&c)
 			}
 		}
-	case store.EventTyping:
-		if msg.ChatID != m.currentChatID {
+
+	case state.ChangeTyping:
+		if chg.ChatID != m.currentChatID {
 			return m, nil
 		}
-		label := msg.TypingAction.Label()
+		label := chg.Typing.Label()
 		if label == "" {
 			m.chat.ClearTypingLabel()
 			return m, nil

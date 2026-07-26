@@ -11,6 +11,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -334,9 +335,9 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.noticeTick(), noticeTickCmd()
-	// message operations (steps 1+2)
-	case store.Event:
-		return m.handleStoreEvent(msg)
+	// applied domain changes from the connection owner (#190)
+	case state.Change:
+		return m.handleChange(msg)
 	case screens.SendMsgRequest:
 		return m.handleSendMsg(msg)
 	case screens.EditSendRequest:
