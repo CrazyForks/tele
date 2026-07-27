@@ -47,6 +47,19 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   connection becoming its own process, so that a terminal window, a second
   window and a command-line call can share one account without competing for the
   session (#190).
+- Failures now explain themselves. Where the status bar used to print whatever
+  Telegram returned — `CHAT_SEND_MEDIA_FORBIDDEN`, `PEER_ID_INVALID` — it now
+  says "not allowed in this chat", "chat unavailable", "too fast, retry in 12m".
+  Every failure is classified once, at the point it leaves the Telegram layer,
+  so how loudly it is reported follows what actually went wrong rather than
+  which part of the app happened to catch it: the same rate limit used to be a
+  quiet note when marking a chat read and a warning when downloading a photo
+  (#191).
+- Actions that cannot succeed now fail immediately. A message to a chat that is
+  no longer reachable, or an action the chat forbids, used to be retried four
+  times with a growing pause — about seven and a half seconds of waiting before
+  the error appeared, for an answer that could not change. Only rate limits and
+  transient network failures are retried now (#191).
 
 ### Fixed
 
@@ -68,6 +81,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the "edited" label the client treated it as a text edit alone and threw the
   reactions away. Text and reactions arrive together and are now both applied
   (#199).
+- Cancelling a download no longer reports it as a failure. Quitting or
+  interrupting mid-download produced `download failed: context canceled`, an
+  error message in answer to your own keypress (#191).
 
 ## [1.9.1] - 2026-07-25
 

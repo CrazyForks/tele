@@ -80,7 +80,7 @@ func downloadPhotoCmd(ctx context.Context, client internaltg.Client, mc *mediaca
 			},
 		)
 		if err != nil {
-			return StatusErrMsg{Text: "photo download failed: " + err.Error(), Sev: components.SeverityWarning}
+			return errStatus("photo download", err)
 		}
 		if mc != nil {
 			if data := encodeCacheJPEG(img); data != nil {
@@ -220,12 +220,13 @@ func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer st
 	fullRef := ref
 	fullRef.ThumbSize = ref.FullThumbSize
 	return func() tea.Msg {
-		fail := func(text string) tea.Msg {
-			return fileDownloadDoneMsg{serial: serial, text: text, sev: components.SeverityWarning}
+		fail := func(action string, err error) tea.Msg {
+			text, sev, _ := errText(action, err)
+			return fileDownloadDoneMsg{serial: serial, text: text, sev: sev}
 		}
 		f, err := createUniqueDownloadFile(destDir, "photo_"+itoa64(ref.ID)+".jpg")
 		if err != nil {
-			return fail("download failed: " + err.Error())
+			return fail("download", err)
 		}
 		name := f.Name()
 
@@ -251,11 +252,11 @@ func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer st
 		if derr != nil {
 			_ = f.Close()
 			_ = os.Remove(name)
-			return fail("download failed: " + derr.Error())
+			return fail("download", derr)
 		}
 		if cerr := f.Close(); cerr != nil {
 			_ = os.Remove(name)
-			return fail("download failed: " + cerr.Error())
+			return fail("download", cerr)
 		}
 		done := fileDownloadDoneMsg{serial: serial, text: "Saved to " + name, sev: components.SeverityInfo, chatID: peer.ID, msgID: msgID}
 		if refreshed != nil {
@@ -275,12 +276,13 @@ func DownloadPhotoFileCmdForTest(c internaltg.Client, peer store.Peer, msgID int
 // openDocumentCmd's stream-to-disk + FILE_REFERENCE_EXPIRED retry.
 func downloadFileCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, destDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		fail := func(text string) tea.Msg {
-			return fileDownloadDoneMsg{serial: serial, text: text, sev: components.SeverityWarning}
+		fail := func(action string, err error) tea.Msg {
+			text, sev, _ := errText(action, err)
+			return fileDownloadDoneMsg{serial: serial, text: text, sev: sev}
 		}
 		f, err := createUniqueDownloadFile(destDir, ref.FileName)
 		if err != nil {
-			return fail("download failed: " + err.Error())
+			return fail("download", err)
 		}
 		name := f.Name()
 
@@ -299,11 +301,11 @@ func downloadFileCmd(ctx context.Context, client internaltg.Client, peer store.P
 		if derr != nil {
 			_ = f.Close()
 			_ = os.Remove(name)
-			return fail("download failed: " + derr.Error())
+			return fail("download", derr)
 		}
 		if cerr := f.Close(); cerr != nil {
 			_ = os.Remove(name)
-			return fail("download failed: " + cerr.Error())
+			return fail("download", cerr)
 		}
 		done := fileDownloadDoneMsg{serial: serial, text: "Saved to " + name, sev: components.SeverityInfo, chatID: peer.ID, msgID: msgID}
 		if refreshed != nil {
@@ -319,8 +321,9 @@ func downloadFileCmd(ctx context.Context, client internaltg.Client, peer store.P
 // download indicator identified by serial (and surface any error).
 func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		fail := func(text string) tea.Msg {
-			return documentOpenDoneMsg{serial: serial, errText: text, sev: components.SeverityWarning}
+		fail := func(action string, err error) tea.Msg {
+			text, sev, _ := errText(action, err)
+			return documentOpenDoneMsg{serial: serial, errText: text, sev: sev}
 		}
 		ext := filepath.Ext(ref.FileName)
 		if ext == "" {
@@ -328,7 +331,7 @@ func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.P
 		}
 		f, err := createTempMediaFile(tmpDir, ext)
 		if err != nil {
-			return fail("open file failed: " + err.Error())
+			return fail("open file", err)
 		}
 		name := f.Name()
 
@@ -350,11 +353,11 @@ func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.P
 		if derr != nil {
 			_ = f.Close()
 			_ = os.Remove(name)
-			return fail("open file failed: " + derr.Error())
+			return fail("open file", derr)
 		}
 		if cerr := f.Close(); cerr != nil {
 			_ = os.Remove(name)
-			return fail("open file failed: " + cerr.Error())
+			return fail("open file", cerr)
 		}
 		openPath(name)
 		done := documentOpenDoneMsg{serial: serial, chatID: peer.ID, msgID: msgID}
@@ -503,7 +506,7 @@ func downloadVoiceCmd(ctx context.Context, client internaltg.Client, peer store.
 			pickDocumentRef,
 		)
 		if err != nil {
-			return StatusErrMsg{Text: "voice download failed: " + err.Error(), Sev: components.SeverityWarning}
+			return errStatus("voice download", err)
 		}
 		if len(data) == 0 {
 			return nil
@@ -531,7 +534,7 @@ func downloadVideoThumbCmd(ctx context.Context, client internaltg.Client, peer s
 		)
 		if err != nil || img == nil {
 			if err != nil {
-				return StatusErrMsg{Text: "video thumb download failed: " + err.Error(), Sev: components.SeverityWarning}
+				return errStatus("video thumb download", err)
 			}
 			return nil
 		}
@@ -564,7 +567,7 @@ func downloadStickerCmd(ctx context.Context, client internaltg.Client, peer stor
 		)
 		if err != nil || img == nil {
 			if err != nil {
-				return StatusErrMsg{Text: "sticker download failed: " + err.Error(), Sev: components.SeverityWarning}
+				return errStatus("sticker download", err)
 			}
 			return nil
 		}
@@ -600,7 +603,7 @@ func downloadFullPhotoCmd(ctx context.Context, client internaltg.Client, peer st
 		)
 		if err != nil || img == nil {
 			if err != nil {
-				return StatusErrMsg{Text: "full photo download failed: " + err.Error(), Sev: components.SeverityWarning}
+				return errStatus("full photo download", err)
 			}
 			return nil
 		}

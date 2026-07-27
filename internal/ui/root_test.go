@@ -1429,7 +1429,8 @@ func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {
 	require.NotNil(t, cmd2)
 	se, ok := cmd2().(ui.StatusErrMsg)
 	require.True(t, ok, "restricted forward should surface a StatusErrMsg")
-	assert.Contains(t, se.Text, "restricted")
+	assert.Equal(t, "forward: not allowed in this chat", se.Text)
+	assert.Equal(t, components.SeverityWarning, se.Sev)
 }
 
 func TestRoot_ContextMenu_EscCloses(t *testing.T) {

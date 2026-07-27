@@ -28,7 +28,7 @@ func (m RootModel) markReadCmd() tea.Cmd {
 	chatID := chat.ID
 	return func() tea.Msg {
 		if err := client.MarkRead(ctx, peer, maxID); err != nil {
-			return StatusErrMsg{Text: "mark read failed: " + err.Error(), Sev: components.SeverityInfo}
+			return errStatus("mark read", err)
 		}
 		return markReadDoneMsg{chatID: chatID, maxID: maxID}
 	}
@@ -51,7 +51,7 @@ func (m RootModel) readReactionsCmd(chatID int64) tea.Cmd {
 	peer := chat.Peer
 	return func() tea.Msg {
 		if err := client.ReadReactions(ctx, peer); err != nil {
-			return StatusErrMsg{Text: "read reactions failed: " + err.Error(), Sev: components.SeverityInfo}
+			return errStatus("read reactions", err)
 		}
 		return readReactionsDoneMsg{chatID: chatID}
 	}
@@ -74,7 +74,7 @@ func (m RootModel) readMentionsCmd(chatID int64) tea.Cmd {
 	peer := chat.Peer
 	return func() tea.Msg {
 		if err := client.ReadMentions(ctx, peer); err != nil {
-			return StatusErrMsg{Text: "read mentions failed: " + err.Error(), Sev: components.SeverityInfo}
+			return errStatus("read mentions", err)
 		}
 		return readMentionsDoneMsg{chatID: chatID}
 	}

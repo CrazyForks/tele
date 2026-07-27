@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
-	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -39,9 +38,11 @@ type editMsgFailedMsg struct {
 }
 
 type forwardDoneMsg struct {
-	toTitle    string
-	restricted bool
-	failed     bool
+	toTitle string
+	// err is nil on success. It carries the domain kind, so the failure is
+	// rendered by the same path as every other error rather than by flags that
+	// have to be kept in step with it.
+	err error
 	// On success, bump the target chat in the list with this preview message.
 	bumpChatID int64
 	lastMsg    store.Message
@@ -391,6 +392,10 @@ func (m RootModel) handleFileDownloadDone(msg fileDownloadDoneMsg) (RootModel, t
 	if (msg.doc != nil || msg.photo != nil) && m.st != nil {
 		m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)
 	}
+	// A cancelled download has nothing to say; the indicator is already cleared.
+	if msg.text == "" {
+		return m, nil
+	}
 	serial := m.toasts.Add(components.ToastKindOf(msg.sev), msg.text)
 	d := durationFor(msg.sev)
 	return m, tea.Tick(d, func(time.Time) tea.Msg { return ClearStatusErrMsg{Serial: serial} })
@@ -401,6 +406,11 @@ func (m RootModel) handleFileDownloadDone(msg fileDownloadDoneMsg) (RootModel, t
 type retryChatLoadMsg struct{ chatID int64 }
 
 func (m RootModel) handleChatLoadErr(msg chatLoadErrMsg) (RootModel, tea.Cmd) {
+	// A cancelled load is not a failure and must not blank out the open chat
+	// with an empty error banner.
+	if msg.text == "" {
+		return m, nil
+	}
 	if msg.chatID == m.currentChatID {
 		m.chat.SetLoading(false)
 		m.chat.SetLoadError(msg.text)
@@ -429,7 +439,8 @@ func (m RootModel) retryChatLoadCmd(chatID int64) tea.Cmd {
 	return func() tea.Msg {
 		msgs, err := client.GetHistory(ctx, peer, 0, limit)
 		if err != nil {
-			return chatLoadErrMsg{chatID: chatID, text: "load history failed: " + err.Error()}
+			text, _, _ := errText("load history", err)
+			return chatLoadErrMsg{chatID: chatID, text: text}
 		}
 		return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
 	}
@@ -505,40 +516,31 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 	return m, func() tea.Msg {
 		if comment != "" {
 			if _, err := client.SendMessage(ctx, to, comment, 0, nil); err != nil {
-				return forwardDoneMsg{toTitle: toTitle, failed: true}
+				return forwardDoneMsg{toTitle: toTitle, err: err}
 			}
 		}
-		err := client.ForwardMessages(ctx, from, to, ids)
-		switch {
-		case err == nil:
-			return forwardDoneMsg{toTitle: toTitle, bumpChatID: to.ID, lastMsg: preview}
-		case telerr.Of(err) == telerr.Forbidden:
-			return forwardDoneMsg{toTitle: toTitle, restricted: true}
-		default:
-			return forwardDoneMsg{toTitle: toTitle, failed: true}
+		if err := client.ForwardMessages(ctx, from, to, ids); err != nil {
+			return forwardDoneMsg{toTitle: toTitle, err: err}
 		}
+		return forwardDoneMsg{toTitle: toTitle, bumpChatID: to.ID, lastMsg: preview}
 	}
 }
 
 // handleForwardDone turns a completed forward into a status message.
 func (m RootModel) handleForwardDone(msg forwardDoneMsg) (RootModel, tea.Cmd) {
-	switch {
-	case msg.restricted:
-		return m, func() tea.Msg {
-			return StatusErrMsg{Text: "forwarding restricted", Sev: components.SeverityWarning}
+	if msg.err != nil {
+		text, sev, ok := errText("forward", msg.err)
+		if !ok {
+			return m, nil
 		}
-	case msg.failed:
-		return m, func() tea.Msg {
-			return StatusErrMsg{Text: "forward failed", Sev: components.SeverityWarning}
-		}
-	default:
-		if msg.bumpChatID != 0 && m.st != nil {
-			m.st.BumpChatLastMessage(msg.bumpChatID, msg.lastMsg)
-			m.chatList.SetChats(m.filteredChats())
-		}
-		m.statusBar.SetStatus("Forwarded to " + msg.toTitle)
-		return m, nil
+		return m, func() tea.Msg { return StatusErrMsg{Text: text, Sev: sev} }
 	}
+	if msg.bumpChatID != 0 && m.st != nil {
+		m.st.BumpChatLastMessage(msg.bumpChatID, msg.lastMsg)
+		m.chatList.SetChats(m.filteredChats())
+	}
+	m.statusBar.SetStatus("Forwarded to " + msg.toTitle)
+	return m, nil
 }
 
 // activateReply sets reply state for msgID, switches to insert mode, and returns the FocusComposer cmd.

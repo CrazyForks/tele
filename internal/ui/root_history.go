@@ -104,7 +104,8 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			historyCmd := func() tea.Msg {
 				msgs, err := client.GetHistory(ctx, peer, 0, limit)
 				if err != nil {
-					return chatLoadErrMsg{chatID: chatID, text: "load history failed: " + err.Error()}
+					text, _, _ := errText("load history", err)
+					return chatLoadErrMsg{chatID: chatID, text: text}
 				}
 				return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
 			}
@@ -189,10 +190,11 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			m.loadingOlderChat = 0
 		}
 		if msg.err != nil {
-			return m.handleStatusErr(StatusErrMsg{
-				Text: "load history failed: " + msg.err.Error(),
-				Sev:  components.SeverityWarning,
-			})
+			text, sev, ok := errText("load history", msg.err)
+			if !ok {
+				return m, nil
+			}
+			return m.handleStatusErr(StatusErrMsg{Text: text, Sev: sev})
 		}
 		if m.st != nil && msg.chatID == m.currentChatID && len(msg.messages) > 0 {
 			existing := m.st.Messages(msg.chatID)
