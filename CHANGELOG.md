@@ -60,6 +60,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   times with a growing pause — about seven and a half seconds of waiting before
   the error appeared, for an answer that could not change. Only rate limits and
   transient network failures are retried now (#191).
+- A long rate limit is now reported instead of waited out. When Telegram asks
+  for a pause, tele sits it out silently only while the pauses for one action
+  add up to 45 seconds; beyond that it stops and tells you how long the wait
+  actually is. A FLOOD_WAIT of twelve minutes used to freeze the action for
+  twelve minutes with nothing on screen to explain it, and because each pause
+  also consumed a retry, a single action could sit through five of them in a row
+  (#201).
 
 ### Fixed
 
