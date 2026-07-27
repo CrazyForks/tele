@@ -4,14 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
-	"fmt"
 
 	"github.com/gotd/td/tg"
-	"github.com/gotd/td/tgerr"
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 // RefreshMessages re-fetches several messages in one round-trip and returns them
@@ -50,7 +48,7 @@ func (c *GotdClient) RefreshMessages(ctx context.Context, peer store.Peer, msgID
 		}
 		found := selectMessagesByIDs(parseHistory(result, peer.ID), msgIDs)
 		if len(found) == 0 {
-			return fmt.Errorf("refresh messages %v: none found", msgIDs)
+			return &telerr.Error{Kind: telerr.NotFound, Op: "refresh messages", Detail: "none found"}
 		}
 		out = found
 		return nil
@@ -66,7 +64,7 @@ func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID 
 	}
 	m, ok := selectMessageByID(msgs, msgID)
 	if !ok {
-		return store.Message{}, fmt.Errorf("refresh message %d: not found", msgID)
+		return store.Message{}, &telerr.Error{Kind: telerr.NotFound, Op: "refresh message", Detail: "not found"}
 	}
 	return m, nil
 }
@@ -194,10 +192,6 @@ func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, err
 	return realID, err
 }
 
-// ErrForwardRestricted is returned by ForwardMessages when the source chat has
-// content protection enabled (the server replies CHAT_FORWARDS_RESTRICTED).
-var ErrForwardRestricted = errors.New("forwarding restricted")
-
 // ForwardMessages forwards messages by ID from one peer to another via
 // messages.forwardMessages. No optimistic insert is performed: when the target
 // is the open chat, the message arrives through the normal live-update path.
@@ -218,9 +212,6 @@ func (c *GotdClient) ForwardMessages(ctx context.Context, from store.Peer, to st
 		}
 		_, err := api.MessagesForwardMessages(ctx, buildForwardRequest(peerToInput(from), peerToInput(to), ids, randomIDs))
 		if err != nil {
-			if isForwardRestrictedErr(err) {
-				return ErrForwardRestricted
-			}
 			c.log.Error("MessagesForwardMessages failed", zap.Error(err))
 			return err
 		}
@@ -235,10 +226,6 @@ func buildForwardRequest(fromPeer, toPeer tg.InputPeerClass, ids []int, randomID
 		ID:       ids,
 		RandomID: randomIDs,
 	}
-}
-
-func isForwardRestrictedErr(err error) bool {
-	return tgerr.Is(err, "CHAT_FORWARDS_RESTRICTED")
 }
 
 func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID int, entities []store.MessageEntity) *tg.MessagesSendMessageRequest {

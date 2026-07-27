@@ -2,13 +2,12 @@ package ui
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -513,7 +512,7 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 		switch {
 		case err == nil:
 			return forwardDoneMsg{toTitle: toTitle, bumpChatID: to.ID, lastMsg: preview}
-		case errors.Is(err, internaltg.ErrForwardRestricted):
+		case telerr.Of(err) == telerr.Forbidden:
 			return forwardDoneMsg{toTitle: toTitle, restricted: true}
 		default:
 			return forwardDoneMsg{toTitle: toTitle, failed: true}

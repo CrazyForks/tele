@@ -2,7 +2,6 @@ package tg
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
@@ -60,12 +60,13 @@ func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace boo
 }
 
 // acquireAPI returns the live API client under the read lock, or an error when
-// the client is not connected yet.
+// the client is not connected yet. The failure never reaches the middleware —
+// there is no RPC — so it is classified here.
 func (c *GotdClient) acquireAPI() (*tg.Client, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.api == nil {
-		return nil, fmt.Errorf("not connected")
+		return nil, &telerr.Error{Kind: telerr.Network, Op: "acquire api", Detail: "not connected", Transient: true}
 	}
 	return c.api, nil
 }
@@ -188,6 +189,9 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		// ConnectionStateReady on every (re)established primary connection, which
 		// is the reliable wake/reconnect signal the frozen idle timer is not.
 		OnConnectionState: resync.onConnectionState,
+		// Maps every RPC error onto the domain taxonomy exactly once, so tgerr
+		// never leaves this package (#191).
+		Middlewares: []telegram.Middleware{c.errorMiddleware()},
 	})
 
 	c.log.Debug("connecting to telegram")

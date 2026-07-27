@@ -14,8 +14,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/gotd/td/tg"
-	"github.com/gotd/td/tgerr"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -424,7 +424,7 @@ func TestDownloadPhotoCmd_RefreshesOnExpiredRef(t *testing.T) {
 		downloadPhotoFunc: func() (image.Image, error) {
 			calls++
 			if calls == 1 {
-				return nil, &tgerr.Error{Code: 400, Type: "FILE_REFERENCE_EXPIRED"}
+				return nil, &telerr.Error{Kind: telerr.StaleReference, Detail: "FILE_REFERENCE_EXPIRED"}
 			}
 			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 		},
@@ -1418,7 +1418,7 @@ func TestRoot_Forward_BumpsTargetChatToTop(t *testing.T) {
 }
 
 func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {
-	mock := &mockTGClient{forwardErr: internaltg.ErrForwardRestricted}
+	mock := &mockTGClient{forwardErr: &telerr.Error{Kind: telerr.Forbidden, Detail: "CHAT_FORWARDS_RESTRICTED"}}
 	m, _ := newRootWithOpenChat(t, mock)
 	target := store.Peer{ID: 999, Type: store.PeerUser}
 

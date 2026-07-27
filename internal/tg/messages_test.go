@@ -7,6 +7,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -292,13 +293,13 @@ func TestBuildForwardRequest_MapsPeersAndIDs(t *testing.T) {
 	assert.Equal(t, randomIDs, req.RandomID)
 }
 
-func TestIsForwardRestrictedErr(t *testing.T) {
-	restricted := &tgerr.Error{Code: 403, Type: "CHAT_FORWARDS_RESTRICTED"}
-	other := &tgerr.Error{Code: 400, Type: "MESSAGE_ID_INVALID"}
+func TestForwardMessages_RestrictedIsForbidden(t *testing.T) {
+	c := testClient()
+	restricted := c.mapError("messages.forwardMessages", &tgerr.Error{Code: 403, Type: "CHAT_FORWARDS_RESTRICTED"})
+	other := c.mapError("messages.forwardMessages", &tgerr.Error{Code: 400, Type: "MESSAGE_ID_INVALID"})
 
-	assert.True(t, isForwardRestrictedErr(restricted))
-	assert.False(t, isForwardRestrictedErr(other))
-	assert.False(t, isForwardRestrictedErr(nil))
+	assert.Equal(t, telerr.Forbidden, telerr.Of(restricted))
+	assert.Equal(t, telerr.NotFound, telerr.Of(other))
 }
 
 func TestBuildSendRequest_WithReply(t *testing.T) {

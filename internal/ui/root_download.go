@@ -16,6 +16,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -38,7 +39,7 @@ func downloadWithRefresh[T any, R any](
 	if err == nil {
 		return result, nil, nil
 	}
-	if !internaltg.IsFileReferenceExpired(err) {
+	if telerr.Of(err) != telerr.StaleReference {
 		return result, nil, err
 	}
 	msg, rerr := client.RefreshMessage(ctx, peer, msgID)

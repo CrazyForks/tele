@@ -12,9 +12,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/gotd/td/tgerr"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
@@ -160,7 +160,7 @@ func TestOpenDocumentCmd_TruncatesOnRetry(t *testing.T) {
 			if calls == 1 {
 				// Simulate a partial write before the reference expires.
 				_, _ = io.WriteString(dst, "stale-partial-bytes")
-				return &tgerr.Error{Code: 400, Type: "FILE_REFERENCE_EXPIRED"}
+				return &telerr.Error{Kind: telerr.StaleReference, Detail: "FILE_REFERENCE_EXPIRED"}
 			}
 			_, err := io.WriteString(dst, fresh)
 			return err

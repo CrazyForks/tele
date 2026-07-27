@@ -13,16 +13,10 @@ import (
 
 	"github.com/gotd/td/telegram/downloader"
 	gotdtg "github.com/gotd/td/tg"
-	"github.com/gotd/td/tgerr"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
-
-// IsFileReferenceExpired reports whether err is Telegram's FILE_REFERENCE_EXPIRED.
-// Kept here so the ui layer can detect it without importing gotd directly.
-func IsFileReferenceExpired(err error) bool {
-	return tgerr.Is(err, "FILE_REFERENCE_EXPIRED")
-}
 
 func (c *GotdClient) DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error) {
 	api, err := c.acquireAPI()
@@ -123,7 +117,7 @@ func (c *GotdClient) DownloadDocumentThumb(ctx context.Context, ref store.Docume
 		return nil, err
 	}
 	if ref.ThumbSize == "" {
-		return nil, fmt.Errorf("document %d has no thumbnail", ref.ID)
+		return nil, &telerr.Error{Kind: telerr.NotFound, Op: "download document thumb", Detail: "no thumbnail"}
 	}
 
 	loc := &gotdtg.InputDocumentFileLocation{
