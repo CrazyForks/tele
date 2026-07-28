@@ -1,36 +1,40 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"github.com/sorokin-vladimir/tele/internal/domain"
+)
 
 type Store interface {
-	GetChat(id int64) (Chat, bool)
-	SetChat(chat Chat)
-	Chats() []Chat
-	Messages(chatID int64) []Message
-	SetMessages(chatID int64, msgs []Message)
+	GetChat(id int64) (domain.Chat, bool)
+	SetChat(chat domain.Chat)
+	Chats() []domain.Chat
+	Messages(chatID int64) []domain.Message
+	SetMessages(chatID int64, msgs []domain.Message)
 	// LoadMessages loads a chat's persisted message tail into memory on first
 	// open (idempotent per chat). See issue #139.
 	LoadMessages(chatID int64)
-	AppendMessage(msg Message)
+	AppendMessage(msg domain.Message)
 	// BumpChatLastMessage updates a chat's last-message preview and ordering
 	// without appending to its message slice (e.g. a forward target).
-	BumpChatLastMessage(chatID int64, msg Message)
+	BumpChatLastMessage(chatID int64, msg domain.Message)
 	UpdateMessageID(chatID int64, oldID, newID int)
-	UpdateMessageText(chatID int64, msgID int, text string, entities []MessageEntity, editDate time.Time)
-	UpdateMessageReactions(chatID int64, msgID int, reactions []Reaction)
-	UpdateMessageMedia(chatID int64, msgID int, photo *PhotoRef, document *DocumentRef)
+	UpdateMessageText(chatID int64, msgID int, text string, entities []domain.MessageEntity, editDate time.Time)
+	UpdateMessageReactions(chatID int64, msgID int, reactions []domain.Reaction)
+	UpdateMessageMedia(chatID int64, msgID int, photo *domain.PhotoRef, document *domain.DocumentRef)
 	// UpdateLocalMediaProgress sets the upload fraction (0..1) on an optimistic
-	// outgoing message's LocalMedia, located by its (negative) sentinel ID.
+	// outgoing message's domain.LocalMedia, located by its (negative) sentinel ID.
 	UpdateLocalMediaProgress(sentinelID int, frac float64)
 	// MarkLocalMediaFailed marks an optimistic message's upload as failed.
 	MarkLocalMediaFailed(sentinelID int)
-	// ClearLocalMedia drops the LocalMedia from a message once the upload is
+	// ClearLocalMedia drops the domain.LocalMedia from a message once the upload is
 	// confirmed (the bubble then renders from the server-confirmed media).
 	ClearLocalMedia(sentinelID int)
 	// AdoptServerMedia replaces a just-sent message's media refs with the ones the
-	// server assigned (fetched via RefreshMessage) and clears LocalMedia, so the
+	// server assigned (fetched via RefreshMessage) and clears domain.LocalMedia, so the
 	// outgoing photo renders inline without waiting for a manual refresh.
-	AdoptServerMedia(chatID int64, msgID int, photo *PhotoRef, doc *DocumentRef, media *MediaRef)
+	AdoptServerMedia(chatID int64, msgID int, photo *domain.PhotoRef, doc *domain.DocumentRef, media *domain.MediaRef)
 	// SetGroupedID stamps Telegram's album key onto a message, so the parts of a
 	// just-sent album collapse into one album bubble.
 	SetGroupedID(chatID int64, msgID int, groupedID int64)
@@ -65,7 +69,7 @@ type Store interface {
 	// SetChatMentionsRead clears a chat's unread-mention count and its tracked
 	// message set (e.g. on open or readMentions completion).
 	SetChatMentionsRead(chatID int64)
-	FolderFilters() []FolderFilter
-	SetFolderFilters(filters []FolderFilter)
+	FolderFilters() []domain.FolderFilter
+	SetFolderFilters(filters []domain.FolderFilter)
 	ClearForNewAccount(ownerID int64)
 }

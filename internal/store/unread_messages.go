@@ -1,11 +1,13 @@
 package store
 
+import "github.com/sorokin-vladimir/tele/internal/domain"
+
 // recomputeUnreadLocked restores the unread invariant for c: the count is the
 // last server-authoritative baseline plus the inbound messages observed locally
-// above the read pointer. It is the only writer of Chat.UnreadCount inside the
+// above the read pointer. It is the only writer of domain.Chat.UnreadCount inside the
 // store, so the value can never drift the way a bare increment could. Caller
 // holds the lock.
-func (s *SQLiteStore) recomputeUnreadLocked(c *Chat) {
+func (s *SQLiteStore) recomputeUnreadLocked(c *domain.Chat) {
 	c.UnreadCount = s.baselineUnread[c.ID] + len(s.unreadMsgs[c.ID])
 }
 

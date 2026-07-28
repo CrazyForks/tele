@@ -8,12 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestApplyUnreadMessage_CountsFreshInboundID(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "A"})
+	s.SetChat(domain.Chat{ID: 1, Title: "A"})
 
 	assert.True(t, s.ApplyUnreadMessage(1, 100))
 	c, _ := s.GetChat(1)
@@ -28,7 +29,7 @@ func TestApplyUnreadMessage_CountsFreshInboundID(t *testing.T) {
 // twice would inflate what a CLI reports.
 func TestApplyUnreadMessage_SameIDCountsOnce(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1})
+	s.SetChat(domain.Chat{ID: 1})
 	require.True(t, s.ApplyUnreadMessage(1, 100))
 
 	assert.False(t, s.ApplyUnreadMessage(1, 100))
@@ -39,7 +40,7 @@ func TestApplyUnreadMessage_SameIDCountsOnce(t *testing.T) {
 // getDifference catch-up delivers messages already read on another client.
 func TestApplyUnreadMessage_AtOrBelowReadPointerIsNoop(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 100})
+	s.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 100})
 
 	assert.False(t, s.ApplyUnreadMessage(1, 100))
 	assert.False(t, s.ApplyUnreadMessage(1, 50))
@@ -60,10 +61,10 @@ func TestApplyUnreadMessage_UnknownChatNoop(t *testing.T) {
 // be added on top of a number that already includes those messages.
 func TestApplyUnreadMessage_SetChatRebasesAndDropsTracking(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1})
+	s.SetChat(domain.Chat{ID: 1})
 	require.True(t, s.ApplyUnreadMessage(1, 100))
 
-	s.SetChat(store.Chat{ID: 1, UnreadCount: 7})
+	s.SetChat(domain.Chat{ID: 1, UnreadCount: 7})
 	c, _ := s.GetChat(1)
 	assert.Equal(t, 7, c.UnreadCount)
 
@@ -75,7 +76,7 @@ func TestApplyUnreadMessage_SetChatRebasesAndDropsTracking(t *testing.T) {
 
 func TestApplyUnreadMessage_AddsOnTopOfServerBaseline(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, UnreadCount: 3, ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, UnreadCount: 3, ReadInboxMaxID: 10})
 
 	require.True(t, s.ApplyUnreadMessage(1, 11))
 	require.True(t, s.ApplyUnreadMessage(1, 12))
@@ -91,7 +92,7 @@ func TestApplyUnreadMessage_ResumesFromPersistedCountAfterReopen(t *testing.T) {
 
 	s, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
-	s.SetChat(store.Chat{ID: 1, Title: "A", UnreadCount: 4, ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, Title: "A", UnreadCount: 4, ReadInboxMaxID: 10})
 	require.NoError(t, s.Close())
 
 	s2, err := store.NewSQLite(path, log)
@@ -112,7 +113,7 @@ func TestApplyUnreadMessage_ResumesFromPersistedCountAfterReopen(t *testing.T) {
 // read event; the tracked set must survive instead.
 func TestUpdateChatReadMaxID_KeepsUnreadAbovePointerWithoutLoadedMessages(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 10})
 	require.True(t, s.ApplyUnreadMessage(1, 11))
 	require.True(t, s.ApplyUnreadMessage(1, 12))
 	require.True(t, s.ApplyUnreadMessage(1, 13))
@@ -128,7 +129,7 @@ func TestUpdateChatReadMaxID_KeepsUnreadAbovePointerWithoutLoadedMessages(t *tes
 
 func TestUpdateChatReadMaxID_ClearsCountWhenPointerPassesEverything(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 10})
 	require.True(t, s.ApplyUnreadMessage(1, 11))
 	require.True(t, s.ApplyUnreadMessage(1, 12))
 
@@ -141,7 +142,7 @@ func TestUpdateChatReadMaxID_ClearsCountWhenPointerPassesEverything(t *testing.T
 // being read stays out of the count.
 func TestUpdateChatReadMaxID_PrunedIDsDoNotCountAgain(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 10})
 	require.True(t, s.ApplyUnreadMessage(1, 11))
 	require.True(t, s.UpdateChatReadMaxID(1, 11))
 
@@ -154,7 +155,7 @@ func TestUpdateChatReadMaxID_PrunedIDsDoNotCountAgain(t *testing.T) {
 // identified by a number only, and some of them have now been read.
 func TestUpdateChatReadMaxID_DropsStaleServerBaseline(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, UnreadCount: 5, ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, UnreadCount: 5, ReadInboxMaxID: 10})
 	require.True(t, s.ApplyUnreadMessage(1, 20))
 	c, _ := s.GetChat(1)
 	require.Equal(t, 6, c.UnreadCount)
@@ -167,7 +168,7 @@ func TestUpdateChatReadMaxID_DropsStaleServerBaseline(t *testing.T) {
 
 func TestUpdateChatReadMaxID_NoAdvanceLeavesCountUntouched(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 10})
 	require.True(t, s.ApplyUnreadMessage(1, 11))
 
 	assert.False(t, s.UpdateChatReadMaxID(1, 10))

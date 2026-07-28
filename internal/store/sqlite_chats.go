@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
 )
 
@@ -18,7 +19,7 @@ func (s *SQLiteStore) loadChats() error {
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var c Chat
+		var c domain.Chat
 		var lastMsgJSON []byte
 		var pinned, isContact, isBot, isMuted, online, unreadMark, isArchived int
 		err := rows.Scan(
@@ -39,7 +40,7 @@ func (s *SQLiteStore) loadChats() error {
 		c.UnreadMark = unreadMark == 1
 		c.IsArchived = isArchived == 1
 		if len(lastMsgJSON) > 0 {
-			var m Message
+			var m domain.Message
 			if err := json.Unmarshal(lastMsgJSON, &m); err == nil {
 				c.LastMessage = &m
 			}
@@ -61,7 +62,7 @@ func boolInt(b bool) int {
 
 // persistChat writes (upserts) a single chat to SQLite. Logs errors; does not return them
 // because Store interface methods do not propagate errors.
-func (s *SQLiteStore) persistChat(c Chat) {
+func (s *SQLiteStore) persistChat(c domain.Chat) {
 	var lastMsgJSON []byte
 	if c.LastMessage != nil {
 		b, _ := json.Marshal(c.LastMessage)
@@ -86,17 +87,17 @@ func (s *SQLiteStore) persistChat(c Chat) {
 
 // SetChatMuted updates the mute flag for a chat and persists it.
 func (s *SQLiteStore) SetChatMuted(chatID int64, muted bool) {
-	s.setChatField(chatID, func(c *Chat) { c.IsMuted = muted })
+	s.setChatField(chatID, func(c *domain.Chat) { c.IsMuted = muted })
 }
 
 // SetChatUnreadMark updates the manual unread-mark flag and persists it.
 func (s *SQLiteStore) SetChatUnreadMark(chatID int64, mark bool) {
-	s.setChatField(chatID, func(c *Chat) { c.UnreadMark = mark })
+	s.setChatField(chatID, func(c *domain.Chat) { c.UnreadMark = mark })
 }
 
 // SetChatArchived updates the archived flag and persists it.
 func (s *SQLiteStore) SetChatArchived(chatID int64, archived bool) {
-	s.setChatField(chatID, func(c *Chat) { c.IsArchived = archived })
+	s.setChatField(chatID, func(c *domain.Chat) { c.IsArchived = archived })
 }
 
 // SetChatDraft updates the synced draft for a chat in memory only (#62). Drafts
@@ -116,7 +117,7 @@ func (s *SQLiteStore) SetChatDraft(chatID int64, text string) {
 // setChatField applies mutate to a chat under the lock and write-through
 // persists it. No-op when the chat is unknown. These flags do not affect
 // display order, so the sorted view is not invalidated.
-func (s *SQLiteStore) setChatField(chatID int64, mutate func(*Chat)) {
+func (s *SQLiteStore) setChatField(chatID int64, mutate func(*domain.Chat)) {
 	s.mu.Lock()
 	c, ok := s.chats[chatID]
 	if !ok {
@@ -129,14 +130,14 @@ func (s *SQLiteStore) setChatField(chatID int64, mutate func(*Chat)) {
 	s.persistChat(c)
 }
 
-func (s *SQLiteStore) GetChat(id int64) (Chat, bool) {
+func (s *SQLiteStore) GetChat(id int64) (domain.Chat, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	c, ok := s.chats[id]
 	return c, ok
 }
 
-func (s *SQLiteStore) SetChat(chat Chat) {
+func (s *SQLiteStore) SetChat(chat domain.Chat) {
 	s.mu.Lock()
 	s.chats[chat.ID] = chat
 	s.baselineUnread[chat.ID] = chat.UnreadCount // dialog-list count is authoritative
@@ -148,14 +149,14 @@ func (s *SQLiteStore) SetChat(chat Chat) {
 	s.persistChat(chat)
 }
 
-func (s *SQLiteStore) Chats() []Chat {
+func (s *SQLiteStore) Chats() []domain.Chat {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.orderDirty {
 		s.rebuildSortedIDsLocked()
 		s.orderDirty = false
 	}
-	out := make([]Chat, 0, len(s.sortedIDs))
+	out := make([]domain.Chat, 0, len(s.sortedIDs))
 	for _, id := range s.sortedIDs {
 		if c, ok := s.chats[id]; ok {
 			out = append(out, c)
@@ -180,7 +181,7 @@ func (s *SQLiteStore) rebuildSortedIDsLocked() {
 	s.sortedIDs = ids
 }
 
-func sqliteLastMsgTime(c Chat) time.Time {
+func sqliteLastMsgTime(c domain.Chat) time.Time {
 	if c.LastMessage == nil {
 		return time.Time{}
 	}

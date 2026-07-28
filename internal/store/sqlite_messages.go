@@ -5,25 +5,26 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
 )
 
-func (s *SQLiteStore) Messages(chatID int64) []Message {
+func (s *SQLiteStore) Messages(chatID int64) []domain.Message {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	msgs := s.messages[chatID]
 	if msgs == nil {
 		return nil
 	}
-	cp := make([]Message, len(msgs))
+	cp := make([]domain.Message, len(msgs))
 	copy(cp, msgs)
 	return cp
 }
 
-func (s *SQLiteStore) SetMessages(chatID int64, msgs []Message) {
+func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cp := make([]Message, len(msgs))
+	cp := make([]domain.Message, len(msgs))
 	copy(cp, msgs)
 
 	newIDs := make(map[int]struct{}, len(cp))
@@ -161,12 +162,12 @@ func (s *SQLiteStore) flushMessageRows(upserts []msgUpsert, deletes []msgDelete)
 // mergeMessagesByID unions a chat's on-disk tail (disk) with its in-memory
 // messages (mem), keeping the in-memory copy on an id collision (live updates
 // are fresher) and returning the result sorted by (date, id).
-func mergeMessagesByID(disk, mem []Message) []Message {
+func mergeMessagesByID(disk, mem []domain.Message) []domain.Message {
 	seen := make(map[int]struct{}, len(mem))
 	for _, m := range mem {
 		seen[m.ID] = struct{}{}
 	}
-	out := make([]Message, 0, len(disk)+len(mem))
+	out := make([]domain.Message, 0, len(disk)+len(mem))
 	for _, d := range disk {
 		if _, ok := seen[d.ID]; !ok {
 			out = append(out, d)
@@ -200,14 +201,14 @@ func (s *SQLiteStore) LoadMessages(chatID int64) {
 	}
 	defer func() { _ = rows.Close() }()
 
-	var disk []Message
+	var disk []domain.Message
 	for rows.Next() {
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
 			s.log.Error("scan message failed", zap.Int64("chat_id", chatID), zap.Error(err))
 			return
 		}
-		var m Message
+		var m domain.Message
 		if err := json.Unmarshal(data, &m); err != nil {
 			s.log.Error("unmarshal message failed", zap.Int64("chat_id", chatID), zap.Error(err))
 			continue
@@ -253,7 +254,7 @@ func (s *SQLiteStore) capMessagesLocked(chatID int64) {
 // surfaces a chat that just received an outgoing message sent from elsewhere
 // (e.g. a forward target), whose full message arrives later via the update
 // stream (or on next open). No-op if the chat is unknown.
-func (s *SQLiteStore) BumpChatLastMessage(chatID int64, msg Message) {
+func (s *SQLiteStore) BumpChatLastMessage(chatID int64, msg domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	chat, ok := s.chats[chatID]
@@ -267,7 +268,7 @@ func (s *SQLiteStore) BumpChatLastMessage(chatID int64, msg Message) {
 	s.markDirtyLocked(chatID)
 }
 
-func (s *SQLiteStore) AppendMessage(msg Message) {
+func (s *SQLiteStore) AppendMessage(msg domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.messages[msg.ChatID] = append(s.messages[msg.ChatID], msg)
@@ -302,10 +303,10 @@ func (s *SQLiteStore) UpdateMessageID(chatID int64, oldID, newID int) {
 	}
 }
 
-// localMediaByIDLocked returns a pointer to the LocalMedia of the message with
+// localMediaByIDLocked returns a pointer to the domain.LocalMedia of the message with
 // the given ID. Optimistic sentinel IDs are unique (negative) and the msgChat
 // index only covers shared-pts peers, so this scans all chats. Caller holds s.mu.
-func (s *SQLiteStore) localMediaByIDLocked(id int) *LocalMedia {
+func (s *SQLiteStore) localMediaByIDLocked(id int) *domain.LocalMedia {
 	for chatID := range s.messages {
 		for i := range s.messages[chatID] {
 			if s.messages[chatID][i].ID == id {
@@ -328,7 +329,7 @@ func (s *SQLiteStore) MarkLocalMediaFailed(sentinelID int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if lm := s.localMediaByIDLocked(sentinelID); lm != nil {
-		lm.UploadState = UploadFailed
+		lm.UploadState = domain.UploadFailed
 	}
 }
 
@@ -345,7 +346,7 @@ func (s *SQLiteStore) ClearLocalMedia(sentinelID int) {
 	}
 }
 
-func (s *SQLiteStore) AdoptServerMedia(chatID int64, msgID int, photo *PhotoRef, doc *DocumentRef, media *MediaRef) {
+func (s *SQLiteStore) AdoptServerMedia(chatID int64, msgID int, photo *domain.PhotoRef, doc *domain.DocumentRef, media *domain.MediaRef) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.messages[chatID] {
@@ -375,13 +376,13 @@ func (s *SQLiteStore) SetGroupedID(chatID int64, msgID int, groupedID int64) {
 // UpdateMessageText replaces a message's text and its entities together. They
 // must move as a unit: entity offsets address the text they were parsed from,
 // so keeping the old ones would leave them pointing at characters that changed.
-func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, entities []MessageEntity, editDate time.Time) {
+func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, entities []domain.MessageEntity, editDate time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.messages[chatID] {
 		if s.messages[chatID][i].ID == msgID {
 			s.messages[chatID][i].Text = text
-			cp := make([]MessageEntity, len(entities))
+			cp := make([]domain.MessageEntity, len(entities))
 			copy(cp, entities)
 			s.messages[chatID][i].Entities = cp
 			t := editDate
@@ -392,12 +393,12 @@ func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, en
 	}
 }
 
-func (s *SQLiteStore) UpdateMessageReactions(chatID int64, msgID int, reactions []Reaction) {
+func (s *SQLiteStore) UpdateMessageReactions(chatID int64, msgID int, reactions []domain.Reaction) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.messages[chatID] {
 		if s.messages[chatID][i].ID == msgID {
-			cp := make([]Reaction, len(reactions))
+			cp := make([]domain.Reaction, len(reactions))
 			copy(cp, reactions)
 			s.messages[chatID][i].Reactions = cp
 			s.markMsgDirtyLocked(chatID, msgID)
@@ -408,7 +409,7 @@ func (s *SQLiteStore) UpdateMessageReactions(chatID int64, msgID int, reactions 
 
 // UpdateMessageMedia replaces the photo/document refs of a cached message. A nil
 // ref leaves that field unchanged.
-func (s *SQLiteStore) UpdateMessageMedia(chatID int64, msgID int, photo *PhotoRef, document *DocumentRef) {
+func (s *SQLiteStore) UpdateMessageMedia(chatID int64, msgID int, photo *domain.PhotoRef, document *domain.DocumentRef) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.messages[chatID] {

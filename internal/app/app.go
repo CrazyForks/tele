@@ -124,6 +124,7 @@ func (a *App) Run() error {
 
 	// The owner holds the connection; this process also happens to render it.
 	tgErr := make(chan error, 1)
+	a.owner.SetContext(ctx)
 	go func() { tgErr <- a.owner.Start(ctx) }()
 	go a.owner.RunUpdates(ctx)
 
@@ -196,14 +197,14 @@ func (a *App) Run() error {
 		}()
 	}()
 
-	// Bridge: applied domain changes → bubbletea
+	// Bridge: projection deltas → bubbletea
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case chg := <-a.owner.Changes():
-				prog.Send(chg)
+			case d := <-a.owner.Deltas():
+				prog.Send(d)
 			}
 		}
 	}()

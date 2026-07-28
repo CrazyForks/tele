@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	_ "modernc.org/sqlite"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -29,10 +30,10 @@ func TestSQLite_SetChat_PersistsSurvivesReopen(t *testing.T) {
 
 	s, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
-	s.SetChat(store.Chat{
+	s.SetChat(domain.Chat{
 		ID:    42,
 		Title: "Hello",
-		Peer:  store.Peer{ID: 42, Type: store.PeerUser, AccessHash: 999},
+		Peer:  domain.Peer{ID: 42, Type: domain.PeerUser, AccessHash: 999},
 	})
 	_ = s.Close()
 
@@ -54,11 +55,11 @@ func TestSQLite_LastMessage_PersistsSurvivesReopen(t *testing.T) {
 	now := time.Unix(1700000000, 0).UTC()
 	s, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
-	s.SetChat(store.Chat{
+	s.SetChat(domain.Chat{
 		ID:    1,
 		Title: "C",
-		Peer:  store.Peer{ID: 1, Type: store.PeerUser},
-		LastMessage: &store.Message{
+		Peer:  domain.Peer{ID: 1, Type: domain.PeerUser},
+		LastMessage: &domain.Message{
 			ID:     55,
 			ChatID: 1,
 			Text:   "hey",
@@ -84,7 +85,7 @@ func TestSQLite_FolderFilters_PersistsSurvivesReopen(t *testing.T) {
 	path := filepath.Join(dir, "state.db")
 	log := zap.NewNop()
 
-	filters := []store.FolderFilter{
+	filters := []domain.FolderFilter{
 		{ID: 1, Title: "Work", Emoji: "💼", Groups: true},
 		{ID: 2, Title: "Personal", Contacts: true, ExcludeMuted: true},
 	}
@@ -116,9 +117,9 @@ func TestSQLite_FolderFilters_EmptyWhenNotSet(t *testing.T) {
 func TestSQLite_Chats_OrderMatchesMemory(t *testing.T) {
 	s := newTestSQLite(t)
 	now := time.Now()
-	s.SetChat(store.Chat{ID: 1, Title: "A", LastMessage: &store.Message{Date: now.Add(-1 * time.Minute)}})
-	s.SetChat(store.Chat{ID: 2, Title: "B", LastMessage: &store.Message{Date: now}})
-	s.SetChat(store.Chat{ID: 3, Title: "Pinned", Pinned: true})
+	s.SetChat(domain.Chat{ID: 1, Title: "A", LastMessage: &domain.Message{Date: now.Add(-1 * time.Minute)}})
+	s.SetChat(domain.Chat{ID: 2, Title: "B", LastMessage: &domain.Message{Date: now}})
+	s.SetChat(domain.Chat{ID: 3, Title: "Pinned", Pinned: true})
 
 	chats := s.Chats()
 	require.Len(t, chats, 3)
@@ -130,22 +131,22 @@ func TestSQLite_Chats_OrderMatchesMemory(t *testing.T) {
 func TestSQLite_Chats_ReordersAfterAppendMessage(t *testing.T) {
 	s := newTestSQLite(t)
 	now := time.Now()
-	s.SetChat(store.Chat{ID: 1, Title: "A", LastMessage: &store.Message{Date: now}})
-	s.SetChat(store.Chat{ID: 2, Title: "B", LastMessage: &store.Message{Date: now.Add(-1 * time.Hour)}})
+	s.SetChat(domain.Chat{ID: 1, Title: "A", LastMessage: &domain.Message{Date: now}})
+	s.SetChat(domain.Chat{ID: 2, Title: "B", LastMessage: &domain.Message{Date: now.Add(-1 * time.Hour)}})
 
 	// A is newest, so it leads initially.
 	require.Equal(t, int64(1), s.Chats()[0].ID)
 
 	// A newer message in B must move it to the top on the next read.
-	s.AppendMessage(store.Message{ID: 9, ChatID: 2, Date: now.Add(1 * time.Hour)})
+	s.AppendMessage(domain.Message{ID: 9, ChatID: 2, Date: now.Add(1 * time.Hour)})
 	assert.Equal(t, int64(2), s.Chats()[0].ID)
 }
 
 func TestSQLite_Chats_ReflectsFreshUnreadAndOnlineWithoutReorder(t *testing.T) {
 	s := newTestSQLite(t)
 	now := time.Now()
-	s.SetChat(store.Chat{ID: 1, Title: "A", LastMessage: &store.Message{Date: now}})
-	s.SetChat(store.Chat{ID: 2, Title: "B", LastMessage: &store.Message{Date: now.Add(-1 * time.Hour)}})
+	s.SetChat(domain.Chat{ID: 1, Title: "A", LastMessage: &domain.Message{Date: now}})
+	s.SetChat(domain.Chat{ID: 2, Title: "B", LastMessage: &domain.Message{Date: now.Add(-1 * time.Hour)}})
 
 	// Prime the order cache.
 	require.Equal(t, int64(1), s.Chats()[0].ID)
@@ -163,10 +164,10 @@ func TestSQLite_Chats_ReflectsFreshUnreadAndOnlineWithoutReorder(t *testing.T) {
 
 func TestSQLite_RemoveMessagesByID_TargetsOwningChat(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
-	s.SetChat(store.Chat{ID: 2, Peer: store.Peer{ID: 2, Type: store.PeerUser}})
-	s.SetMessages(1, []store.Message{{ID: 5, ChatID: 1}})
-	s.SetMessages(2, []store.Message{{ID: 6, ChatID: 2}})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
+	s.SetChat(domain.Chat{ID: 2, Peer: domain.Peer{ID: 2, Type: domain.PeerUser}})
+	s.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1}})
+	s.SetMessages(2, []domain.Message{{ID: 6, ChatID: 2}})
 
 	affected := s.RemoveMessagesByID([]int{5})
 
@@ -179,8 +180,8 @@ func TestSQLite_RemoveMessagesByID_IgnoresChannelMessages(t *testing.T) {
 	s := newTestSQLite(t)
 	// Channel messages live in a per-peer ID space and are deleted with an
 	// explicit ChatID, so they are never indexed for the ChatID==0 path.
-	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerChannel}})
-	s.SetMessages(1, []store.Message{{ID: 5, ChatID: 1}})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerChannel}})
+	s.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1}})
 
 	affected := s.RemoveMessagesByID([]int{5})
 
@@ -190,10 +191,10 @@ func TestSQLite_RemoveMessagesByID_IgnoresChannelMessages(t *testing.T) {
 
 func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	const total = store.MaxMessagesPerChat + 100
 	for i := 1; i <= total; i++ {
-		s.AppendMessage(store.Message{ID: i, ChatID: 1})
+		s.AppendMessage(domain.Message{ID: i, ChatID: 1})
 	}
 	msgs := s.Messages(1)
 	require.Len(t, msgs, store.MaxMessagesPerChat)
@@ -207,9 +208,9 @@ func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
 func TestSQLite_SetMessages_CapsHistory(t *testing.T) {
 	s := newTestSQLite(t)
 	const total = store.MaxMessagesPerChat + 100
-	msgs := make([]store.Message, total)
+	msgs := make([]domain.Message, total)
 	for i := range msgs {
-		msgs[i] = store.Message{ID: i + 1, ChatID: 1}
+		msgs[i] = domain.Message{ID: i + 1, ChatID: 1}
 	}
 	s.SetMessages(1, msgs)
 	got := s.Messages(1)
@@ -236,7 +237,7 @@ func persistedOnline(t *testing.T, s *store.SQLiteStore, id int64) int {
 
 func TestSQLite_WriteBehind_ReadStateFlushedOnFlush(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}, ReadInboxMaxID: 5})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, ReadInboxMaxID: 5})
 
 	// Read-state advance is write-behind: in memory immediately, on disk only
 	// after a flush.
@@ -251,7 +252,7 @@ func TestSQLite_WriteBehind_ReadStateFlushedOnFlush(t *testing.T) {
 
 func TestSQLite_WriteBehind_OnlineNeverPersisted(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 
 	require.True(t, s.UpdateChatOnline(1, true))
 	got, _ := s.GetChat(1)
@@ -268,7 +269,7 @@ func TestSQLite_WriteBehind_FlushesOnClose(t *testing.T) {
 
 	s, err := store.NewSQLite(path, log)
 	require.NoError(t, err)
-	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}, ReadInboxMaxID: 5})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, ReadInboxMaxID: 5})
 	require.True(t, s.UpdateChatReadMaxID(1, 42))
 	require.NoError(t, s.Close()) // must flush pending write-behind state
 
@@ -282,7 +283,7 @@ func TestSQLite_WriteBehind_FlushesOnClose(t *testing.T) {
 
 func TestSQLite_SetChatDraft_UpdatesInMemory(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 
 	s.SetChatDraft(1, "unsent draft")
 	got, ok := s.GetChat(1)
@@ -303,13 +304,13 @@ func TestSQLite_SetChatDraft_UnknownChatNoOp(t *testing.T) {
 
 func TestSQLite_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice"})
 	assert.True(t, s.UpdateChatOnline(1, true))
 }
 
 func TestSQLite_UpdateChatOnline_ReturnsFalseWhenUnchanged(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Title: "Alice", Online: true})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice", Online: true})
 	assert.False(t, s.UpdateChatOnline(1, true))
 }
 
@@ -320,13 +321,13 @@ func TestSQLite_UpdateChatOnline_ReturnsFalseWhenMissing(t *testing.T) {
 
 func TestSQLite_UpdateChatReadMaxID_ReturnsTrueWhenAdvanced(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 5})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 5})
 	assert.True(t, s.UpdateChatReadMaxID(1, 10))
 }
 
 func TestSQLite_UpdateChatReadMaxID_ReturnsFalseWhenNotAdvanced(t *testing.T) {
 	s := newTestSQLite(t)
-	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 10})
 	assert.False(t, s.UpdateChatReadMaxID(1, 10))
 }
 
@@ -341,7 +342,7 @@ func TestSQLite_UnreadMarkAndArchived_Persist(t *testing.T) {
 
 	s, err := store.NewSQLite(path, zap.NewNop())
 	require.NoError(t, err)
-	s.SetChat(store.Chat{ID: 42, Title: "Bob", UnreadMark: true, IsArchived: true})
+	s.SetChat(domain.Chat{ID: 42, Title: "Bob", UnreadMark: true, IsArchived: true})
 	require.NoError(t, s.Close())
 
 	s2, err := store.NewSQLite(path, zap.NewNop())
@@ -390,7 +391,7 @@ func TestSQLite_UnreadReactionsCount_Persist(t *testing.T) {
 
 	s, err := store.NewSQLite(path, zap.NewNop())
 	require.NoError(t, err)
-	s.SetChat(store.Chat{ID: 42, Title: "Bob", UnreadReactionsCount: 3})
+	s.SetChat(domain.Chat{ID: 42, Title: "Bob", UnreadReactionsCount: 3})
 	require.NoError(t, s.Close())
 
 	s2, err := store.NewSQLite(path, zap.NewNop())
@@ -407,7 +408,7 @@ func TestSQLite_UnreadMentionsCount_Persist(t *testing.T) {
 
 	s, err := store.NewSQLite(path, zap.NewNop())
 	require.NoError(t, err)
-	s.SetChat(store.Chat{ID: 42, Title: "Bob", UnreadMentionsCount: 3})
+	s.SetChat(domain.Chat{ID: 42, Title: "Bob", UnreadMentionsCount: 3})
 	require.NoError(t, s.Close())
 
 	s2, err := store.NewSQLite(path, zap.NewNop())
@@ -420,7 +421,7 @@ func TestSQLite_UnreadMentionsCount_Persist(t *testing.T) {
 
 func TestSQLite_ChatStateMutators(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "A"})
+	s.SetChat(domain.Chat{ID: 1, Title: "A"})
 
 	s.SetChatMuted(1, true)
 	s.SetChatUnreadMark(1, true)

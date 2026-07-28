@@ -7,12 +7,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/core/state"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 func TestApplyReadInbox_AdvancesAndReportsChange(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 5})
+	st.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 5})
 
 	chg, ok := s.ApplyReadInbox(1, 10)
 
@@ -27,7 +27,7 @@ func TestApplyReadInbox_AdvancesAndReportsChange(t *testing.T) {
 // is woken. This is the gate internal/ui/root_store_events.go:54 performs today.
 func TestApplyReadInbox_NoAdvanceIsNoop(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 10})
+	st.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 10})
 
 	_, ok := s.ApplyReadInbox(1, 10)
 
@@ -38,7 +38,7 @@ func TestApplyReadInbox_NoAdvanceIsNoop(t *testing.T) {
 
 func TestApplyReadOutbox_AdvancesAndReportsChange(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, ReadOutboxMaxID: 5})
+	st.SetChat(domain.Chat{ID: 1, ReadOutboxMaxID: 5})
 
 	chg, ok := s.ApplyReadOutbox(1, 10)
 
@@ -50,7 +50,7 @@ func TestApplyReadOutbox_AdvancesAndReportsChange(t *testing.T) {
 
 func TestApplyReadOutbox_NoAdvanceIsNoop(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, ReadOutboxMaxID: 10})
+	st.SetChat(domain.Chat{ID: 1, ReadOutboxMaxID: 10})
 
 	_, ok := s.ApplyReadOutbox(1, 10)
 
@@ -59,7 +59,7 @@ func TestApplyReadOutbox_NoAdvanceIsNoop(t *testing.T) {
 
 func TestApplyPresence_FlipReportsChange(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
+	st.SetChat(domain.Chat{ID: 1})
 
 	chg, ok := s.ApplyPresence(1, true)
 
@@ -74,7 +74,7 @@ func TestApplyPresence_FlipReportsChange(t *testing.T) {
 // state must cost nothing downstream.
 func TestApplyPresence_SameStateIsNoop(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, Online: true})
+	st.SetChat(domain.Chat{ID: 1, Online: true})
 
 	_, ok := s.ApplyPresence(1, true)
 
@@ -83,7 +83,7 @@ func TestApplyPresence_SameStateIsNoop(t *testing.T) {
 
 func TestApplyMute_FlipReportsChange(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
+	st.SetChat(domain.Chat{ID: 1})
 
 	chg, ok := s.ApplyMute(1, true)
 
@@ -96,7 +96,7 @@ func TestApplyMute_FlipReportsChange(t *testing.T) {
 
 func TestApplyMute_SameStateIsNoop(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, IsMuted: true})
+	st.SetChat(domain.Chat{ID: 1, IsMuted: true})
 
 	_, ok := s.ApplyMute(1, true)
 
@@ -113,7 +113,7 @@ func TestApplyMute_UnknownChatIsNoop(t *testing.T) {
 
 func TestApplyDraft_StoresAndReportsChange(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
+	st.SetChat(domain.Chat{ID: 1})
 
 	chg, ok := s.ApplyDraft(1, "hello")
 
@@ -128,10 +128,10 @@ func TestApplyDraft_StoresAndReportsChange(t *testing.T) {
 func TestApplyTyping_IsEphemeralPassThrough(t *testing.T) {
 	s, _ := newState(t)
 
-	chg, ok := s.ApplyTyping(1, store.TypingActionTyping)
+	chg, ok := s.ApplyTyping(1, domain.TypingActionTyping)
 
 	require.True(t, ok)
 	assert.Equal(t, state.ChangeTyping, chg.Kind)
 	assert.Equal(t, int64(1), chg.ChatID)
-	assert.Equal(t, store.TypingActionTyping, chg.Typing)
+	assert.Equal(t, domain.TypingActionTyping, chg.Typing)
 }

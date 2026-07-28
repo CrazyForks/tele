@@ -97,3 +97,14 @@ func (s *State) ApplyDelete(chatID int64, msgIDs []int) (Change, bool) {
 	s.commit(c)
 	return c, true
 }
+
+// ApplyHistory replaces a chat's stored messages with a fetched page. The
+// caller merges the page with what is already held (see core.MergeOlder); state
+// stores what it is given and publishes one change, so the chat:<id> projection
+// rebuilds through the same path as every other change.
+func (s *State) ApplyHistory(chatID int64, msgs []domain.Message) (Change, bool) {
+	s.st.SetMessages(chatID, msgs)
+	c := Change{Kind: ChangeHistory, ChatID: chatID}
+	s.commit(c)
+	return c, true
+}

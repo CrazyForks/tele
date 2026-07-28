@@ -5,12 +5,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestApplyUnreadMention_Idempotent(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "A"})
+	s.SetChat(domain.Chat{ID: 1, Title: "A"})
 
 	assert.True(t, s.ApplyUnreadMention(1, 100, true))
 	c, _ := s.GetChat(1)
@@ -29,7 +30,7 @@ func TestApplyUnreadMention_Idempotent(t *testing.T) {
 
 func TestApplyUnreadMention_ClearDecrementsFloorZero(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1})
+	s.SetChat(domain.Chat{ID: 1})
 	s.ApplyUnreadMention(1, 100, true)
 
 	assert.True(t, s.ApplyUnreadMention(1, 100, false))
@@ -49,7 +50,7 @@ func TestApplyUnreadMention_UnknownChatNoop(t *testing.T) {
 
 func TestSetChatMentionsRead_ClearsCountAndSet(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, UnreadMentionsCount: 3})
+	s.SetChat(domain.Chat{ID: 1, UnreadMentionsCount: 3})
 	s.ApplyUnreadMention(1, 100, true) // count 4, tracked {100}
 
 	s.SetChatMentionsRead(1)
@@ -64,11 +65,11 @@ func TestSetChatMentionsRead_ClearsCountAndSet(t *testing.T) {
 
 func TestSetChat_ResetsMentionTracking(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1})
+	s.SetChat(domain.Chat{ID: 1})
 	s.ApplyUnreadMention(1, 100, true)
 
 	// Dialog refresh overwrites the chat with a fresh server count.
-	s.SetChat(store.Chat{ID: 1, UnreadMentionsCount: 5})
+	s.SetChat(domain.Chat{ID: 1, UnreadMentionsCount: 5})
 
 	// Tracked set was cleared by SetChat, so re-adding 100 increments to 6.
 	assert.True(t, s.ApplyUnreadMention(1, 100, true))

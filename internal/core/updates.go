@@ -19,8 +19,8 @@ func (o *Owner) Start(ctx context.Context) error {
 	})
 }
 
-// RunUpdates applies incoming Telegram events to domain state, makes the
-// notification decision, and publishes the resulting change to the client.
+// RunUpdates applies incoming Telegram events to domain state and makes the
+// notification decision. Publishing is the commit listener's job, not this loop's.
 func (o *Owner) RunUpdates(ctx context.Context) {
 	for {
 		select {
@@ -28,16 +28,10 @@ func (o *Owner) RunUpdates(ctx context.Context) {
 			return
 		case evt := <-o.events:
 			o.log.Debug("incoming update", zap.Int("kind", int(evt.Kind)))
-			chg, ok := state.Apply(o.state, evt)
+			// Applying commits, and the owner's commit listener publishes the
+			// resulting deltas. Nothing is forwarded from here.
+			state.Apply(o.state, evt)
 			maybeNotify(o.notifier, o.state.Store(), evt, atomic.LoadInt64(&o.currentChatID), o.cfg.UI.NotificationPreview)
-			if !ok {
-				continue
-			}
-			select {
-			case o.changes <- chg:
-			case <-ctx.Done():
-				return
-			}
 		}
 	}
 }

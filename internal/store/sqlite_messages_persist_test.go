@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,8 +23,8 @@ func TestSQLite_Messages_PersistAndReloadAfterReopen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 
 	s := openStore(t, path)
-	s.SetChat(store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}})
-	s.SetMessages(7, []store.Message{
+	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
+	s.SetMessages(7, []domain.Message{
 		{ID: 1, ChatID: 7, Text: "hello", Date: time.Unix(1000, 0)},
 		{ID: 2, ChatID: 7, Text: "world", Date: time.Unix(2000, 0)},
 	})
@@ -43,8 +44,8 @@ func TestSQLite_AppendMessage_PersistsSurvivesReopen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 
 	s := openStore(t, path)
-	s.SetChat(store.Chat{ID: 9, Peer: store.Peer{ID: 9, Type: store.PeerUser}})
-	s.AppendMessage(store.Message{ID: 5, ChatID: 9, Text: "appended", Date: time.Unix(3000, 0)})
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "appended", Date: time.Unix(3000, 0)})
 	require.NoError(t, s.Close())
 
 	s2 := openStore(t, path)
@@ -60,11 +61,11 @@ func TestSQLite_CapTrim_DeletesOldestOnDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 
 	s := openStore(t, path)
-	s.SetChat(store.Chat{ID: 3, Peer: store.Peer{ID: 3, Type: store.PeerUser}})
+	s.SetChat(domain.Chat{ID: 3, Peer: domain.Peer{ID: 3, Type: domain.PeerUser}})
 	// One past the cap so the oldest (id 1) is trimmed.
-	msgs := make([]store.Message, 0, store.MaxMessagesPerChat+1)
+	msgs := make([]domain.Message, 0, store.MaxMessagesPerChat+1)
 	for i := 1; i <= store.MaxMessagesPerChat+1; i++ {
-		msgs = append(msgs, store.Message{ID: i, ChatID: 3, Date: time.Unix(int64(i), 0)})
+		msgs = append(msgs, domain.Message{ID: i, ChatID: 3, Date: time.Unix(int64(i), 0)})
 	}
 	s.SetMessages(3, msgs)
 	require.NoError(t, s.Close())
@@ -83,17 +84,17 @@ func TestSQLite_MessageEdit_PersistsSurvivesReopen(t *testing.T) {
 
 	// Seed and persist the original message.
 	s := openStore(t, path)
-	s.SetChat(store.Chat{ID: 4, Peer: store.Peer{ID: 4, Type: store.PeerUser}})
-	s.SetMessages(4, []store.Message{{ID: 1, ChatID: 4, Text: "before", Date: time.Unix(10, 0)}})
+	s.SetChat(domain.Chat{ID: 4, Peer: domain.Peer{ID: 4, Type: domain.PeerUser}})
+	s.SetMessages(4, []domain.Message{{ID: 1, ChatID: 4, Text: "before", Date: time.Unix(10, 0)}})
 	require.NoError(t, s.Close())
 
 	// Reopen so the message is disk-loaded and clean (not already dirty), then
 	// edit it — this only persists if the edit ops mark the message dirty.
 	s2 := openStore(t, path)
-	s2.SetChat(store.Chat{ID: 4, Peer: store.Peer{ID: 4, Type: store.PeerUser}})
+	s2.SetChat(domain.Chat{ID: 4, Peer: domain.Peer{ID: 4, Type: domain.PeerUser}})
 	s2.LoadMessages(4)
 	s2.UpdateMessageText(4, 1, "after", nil, time.Unix(20, 0))
-	s2.UpdateMessageReactions(4, 1, []store.Reaction{{Emoji: "👍", Count: 2}})
+	s2.UpdateMessageReactions(4, 1, []domain.Reaction{{Emoji: "👍", Count: 2}})
 	require.NoError(t, s2.Close())
 
 	s3 := openStore(t, path)
@@ -112,10 +113,10 @@ func TestSQLite_UpdateMessageID_MovesRowOnDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 
 	s := openStore(t, path)
-	s.SetChat(store.Chat{ID: 6, Peer: store.Peer{ID: 6, Type: store.PeerUser}})
+	s.SetChat(domain.Chat{ID: 6, Peer: domain.Peer{ID: 6, Type: domain.PeerUser}})
 	// Positive ids only: negative sentinels are never persisted, so exercise the
 	// id-change path with two real ids.
-	s.SetMessages(6, []store.Message{{ID: 100, ChatID: 6, Text: "m", Date: time.Unix(1, 0)}})
+	s.SetMessages(6, []domain.Message{{ID: 100, ChatID: 6, Text: "m", Date: time.Unix(1, 0)}})
 	s.UpdateMessageID(6, 100, 200)
 	require.NoError(t, s.Close())
 
@@ -133,8 +134,8 @@ func TestSQLite_RemoveMessage_DeletesOnDisk(t *testing.T) {
 
 	// Seed two messages and persist them.
 	s := openStore(t, path)
-	s.SetChat(store.Chat{ID: 8, Peer: store.Peer{ID: 8, Type: store.PeerUser}})
-	s.SetMessages(8, []store.Message{
+	s.SetChat(domain.Chat{ID: 8, Peer: domain.Peer{ID: 8, Type: domain.PeerUser}})
+	s.SetMessages(8, []domain.Message{
 		{ID: 1, ChatID: 8, Text: "keep", Date: time.Unix(1, 0)},
 		{ID: 2, ChatID: 8, Text: "drop", Date: time.Unix(2, 0)},
 	})
@@ -142,7 +143,7 @@ func TestSQLite_RemoveMessage_DeletesOnDisk(t *testing.T) {
 
 	// Reopen so both are disk-loaded and clean, then remove one.
 	s2 := openStore(t, path)
-	s2.SetChat(store.Chat{ID: 8, Peer: store.Peer{ID: 8, Type: store.PeerUser}})
+	s2.SetChat(domain.Chat{ID: 8, Peer: domain.Peer{ID: 8, Type: domain.PeerUser}})
 	s2.LoadMessages(8)
 	s2.RemoveMessage(8, 2)
 	require.NoError(t, s2.Close())

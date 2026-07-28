@@ -1,6 +1,10 @@
 package state
 
-import "github.com/sorokin-vladimir/tele/internal/store"
+import (
+	"sync"
+
+	"github.com/sorokin-vladimir/tele/internal/store"
+)
 
 // State is the domain state of the account. Every mutation on the update path
 // goes through one of its operations, and every operation funnels through
@@ -10,8 +14,9 @@ import "github.com/sorokin-vladimir/tele/internal/store"
 // ApplyIncoming, not AppendMessageAndBumpUnread. Callers describe events; the
 // state decides what that means.
 type State struct {
-	st          store.Store
-	subscribers []chan<- Change
+	st        store.Store
+	mu        sync.RWMutex
+	listeners []func(Change)
 }
 
 func New(st store.Store) *State {
@@ -23,17 +28,29 @@ func New(st store.Store) *State {
 // commit and the change stream.
 func (s *State) Store() store.Store { return s.st }
 
-// Subscribe registers ch to receive every committed Change. Used by the owner
-// to publish to its clients.
-func (s *State) Subscribe(ch chan<- Change) {
-	s.subscribers = append(s.subscribers, ch)
+// OnChange registers fn to run for every committed Change. The owner registers
+// the one that rebuilds projections.
+//
+// A callback rather than a channel: a mutation can originate on any goroutine —
+// the update loop, a history backfill — and a channel would either need a
+// drainer running before the first mutation or would block the mutator when the
+// buffer filled. A callback has neither failure mode, and the work behind it
+// (rebuild the subscribed windows, drop into a buffered delta channel) never
+// blocks.
+func (s *State) OnChange(fn func(Change)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.listeners = append(s.listeners, fn)
 }
 
 // commit is the single chokepoint every mutation passes through. Persistence is
-// already handled write-through by the store, so today commit only publishes;
-// it exists so that projections (#194) have one place to hook.
+// already handled write-through by the store, so commit only publishes; it is
+// the one place projections hook into.
 func (s *State) commit(c Change) {
-	for _, ch := range s.subscribers {
-		ch <- c
+	s.mu.RLock()
+	listeners := s.listeners
+	s.mu.RUnlock()
+	for _, fn := range listeners {
+		fn(c)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -20,11 +21,11 @@ func newFileStore(t *testing.T) *SQLiteStore {
 func TestMarkMsgDirty_SkipsOptimisticNegativeID(t *testing.T) {
 	s := newFileStore(t)
 	defer func() { _ = s.Close() }()
-	s.SetChat(Chat{ID: 1, Peer: Peer{ID: 1, Type: PeerUser}})
+	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 
 	// An optimistic outgoing message with a negative sentinel id, plus a progress
 	// tick — neither should be queued for persistence.
-	s.AppendMessage(Message{ID: -100, ChatID: 1, Text: "sending", Date: time.Unix(1, 0)})
+	s.AppendMessage(domain.Message{ID: -100, ChatID: 1, Text: "sending", Date: time.Unix(1, 0)})
 	s.UpdateLocalMediaProgress(-100, 0.5)
 
 	s.mu.Lock()
@@ -38,8 +39,8 @@ func TestLoadMessages_DoesNotQueueWrites(t *testing.T) {
 
 	s, err := NewSQLite(path, zap.NewNop())
 	require.NoError(t, err)
-	s.SetChat(Chat{ID: 2, Peer: Peer{ID: 2, Type: PeerUser}})
-	s.SetMessages(2, []Message{{ID: 1, ChatID: 2, Text: "hi", Date: time.Unix(1, 0)}})
+	s.SetChat(domain.Chat{ID: 2, Peer: domain.Peer{ID: 2, Type: domain.PeerUser}})
+	s.SetMessages(2, []domain.Message{{ID: 1, ChatID: 2, Text: "hi", Date: time.Unix(1, 0)}})
 	require.NoError(t, s.Close())
 
 	s2, err := NewSQLite(path, zap.NewNop())

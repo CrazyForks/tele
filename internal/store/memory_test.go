@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,9 +12,9 @@ import (
 
 func TestMemory_LocalMediaUploadLifecycle(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{
+	s.AppendMessage(domain.Message{
 		ID: -1, ChatID: 7, IsOut: true,
-		LocalMedia: &store.LocalMedia{Path: "/tmp/a.jpg", Kind: store.MediaPhoto},
+		LocalMedia: &domain.LocalMedia{Path: "/tmp/a.jpg", Kind: domain.MediaPhoto},
 	})
 
 	s.UpdateLocalMediaProgress(-1, 0.5)
@@ -25,7 +26,7 @@ func TestMemory_LocalMediaUploadLifecycle(t *testing.T) {
 	s.MarkLocalMediaFailed(-1)
 	got = s.Messages(7)
 	require.NotNil(t, got[0].LocalMedia)
-	assert.Equal(t, store.UploadFailed, got[0].LocalMedia.UploadState)
+	assert.Equal(t, domain.UploadFailed, got[0].LocalMedia.UploadState)
 
 	s.ClearLocalMedia(-1)
 	got = s.Messages(7)
@@ -34,28 +35,28 @@ func TestMemory_LocalMediaUploadLifecycle(t *testing.T) {
 
 func TestMemory_AdoptServerMedia(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}})
-	s.AppendMessage(store.Message{
+	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
+	s.AppendMessage(domain.Message{
 		ID: 4242, ChatID: 7, IsOut: true,
-		LocalMedia: &store.LocalMedia{Path: "/tmp/a.jpg", Kind: store.MediaPhoto},
+		LocalMedia: &domain.LocalMedia{Path: "/tmp/a.jpg", Kind: domain.MediaPhoto},
 	})
 
-	s.AdoptServerMedia(7, 4242, &store.PhotoRef{ID: 9}, nil, &store.MediaRef{Kind: store.MediaPhoto})
+	s.AdoptServerMedia(7, 4242, &domain.PhotoRef{ID: 9}, nil, &domain.MediaRef{Kind: domain.MediaPhoto})
 	got := s.Messages(7)
 	require.Len(t, got, 1)
-	assert.Nil(t, got[0].LocalMedia, "LocalMedia must be cleared")
+	assert.Nil(t, got[0].LocalMedia, "domain.LocalMedia must be cleared")
 	require.NotNil(t, got[0].Photo)
 	assert.Equal(t, int64(9), got[0].Photo.ID)
 	require.NotNil(t, got[0].Media)
-	assert.Equal(t, store.MediaPhoto, got[0].Media.Kind)
+	assert.Equal(t, domain.MediaPhoto, got[0].Media.Kind)
 }
 
 func TestMemory_UpdateMessageMedia(t *testing.T) {
 	s := store.NewMemory()
-	s.SetMessages(7, []store.Message{
-		{ID: 100, ChatID: 7, Photo: &store.PhotoRef{ID: 1, FileReference: []byte("old")}},
+	s.SetMessages(7, []domain.Message{
+		{ID: 100, ChatID: 7, Photo: &domain.PhotoRef{ID: 1, FileReference: []byte("old")}},
 	})
-	fresh := &store.PhotoRef{ID: 1, FileReference: []byte("new")}
+	fresh := &domain.PhotoRef{ID: 1, FileReference: []byte("new")}
 	s.UpdateMessageMedia(7, 100, fresh, nil)
 	got := s.Messages(7)
 	require.Len(t, got, 1)
@@ -65,7 +66,7 @@ func TestMemory_UpdateMessageMedia(t *testing.T) {
 
 func TestMemory_SetGetChat(t *testing.T) {
 	s := store.NewMemory()
-	chat := store.Chat{ID: 42, Title: "Test"}
+	chat := domain.Chat{ID: 42, Title: "Test"}
 	s.SetChat(chat)
 	got, ok := s.GetChat(42)
 	assert.True(t, ok)
@@ -80,15 +81,15 @@ func TestMemory_GetChat_Missing(t *testing.T) {
 
 func TestMemory_Chats_ReturnsAll(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "A"})
-	s.SetChat(store.Chat{ID: 2, Title: "B"})
+	s.SetChat(domain.Chat{ID: 1, Title: "A"})
+	s.SetChat(domain.Chat{ID: 2, Title: "B"})
 	assert.Len(t, s.Chats(), 2)
 }
 
 func TestMemory_SetGetMessages(t *testing.T) {
 	s := store.NewMemory()
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 10, Text: "hello", Date: now},
 		{ID: 2, ChatID: 10, Text: "world", Date: now},
 	}
@@ -99,15 +100,15 @@ func TestMemory_SetGetMessages(t *testing.T) {
 
 func TestMemory_AppendMessage(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "a"})
-	s.AppendMessage(store.Message{ID: 2, ChatID: 5, Text: "b"})
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "a"})
+	s.AppendMessage(domain.Message{ID: 2, ChatID: 5, Text: "b"})
 	assert.Len(t, s.Messages(5), 2)
 }
 
 func TestMemory_AppendMessage_UpdatesLastMessage(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 5, Title: "Chat"})
-	msg := store.Message{ID: 10, ChatID: 5, Text: "hello"}
+	s.SetChat(domain.Chat{ID: 5, Title: "domain.Chat"})
+	msg := domain.Message{ID: 10, ChatID: 5, Text: "hello"}
 	s.AppendMessage(msg)
 	chat, ok := s.GetChat(5)
 	assert.True(t, ok)
@@ -115,7 +116,7 @@ func TestMemory_AppendMessage_UpdatesLastMessage(t *testing.T) {
 	assert.Equal(t, 10, chat.LastMessage.ID)
 	assert.Equal(t, "hello", chat.LastMessage.Text)
 	// Second append must replace LastMessage
-	msg2 := store.Message{ID: 11, ChatID: 5, Text: "world"}
+	msg2 := domain.Message{ID: 11, ChatID: 5, Text: "world"}
 	s.AppendMessage(msg2)
 	chat, ok = s.GetChat(5)
 	assert.True(t, ok)
@@ -127,13 +128,13 @@ func TestMemory_AppendMessage_SkipsLastMessageWhenChatMissing(t *testing.T) {
 	s := store.NewMemory()
 	// chat 99 is not in store — must not panic
 	assert.NotPanics(t, func() {
-		s.AppendMessage(store.Message{ID: 1, ChatID: 99, Text: "orphan"})
+		s.AppendMessage(domain.Message{ID: 1, ChatID: 99, Text: "orphan"})
 	})
 }
 
 func TestMemory_UpdateMessageID(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: -1, ChatID: 5, Text: "pending"})
+	s.AppendMessage(domain.Message{ID: -1, ChatID: 5, Text: "pending"})
 	s.UpdateMessageID(5, -1, 100)
 	msgs := s.Messages(5)
 	require.Len(t, msgs, 1)
@@ -142,7 +143,7 @@ func TestMemory_UpdateMessageID(t *testing.T) {
 
 func TestMemory_UpdateMessageID_NoopWhenMissing(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "msg"})
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "msg"})
 	assert.NotPanics(t, func() {
 		s.UpdateMessageID(5, 999, 100)
 	})
@@ -153,7 +154,7 @@ func TestMemory_UpdateMessageID_NoopWhenMissing(t *testing.T) {
 func TestMemory_UpdateMessageText(t *testing.T) {
 	s := store.NewMemory()
 	now := time.Now()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "original"})
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "original"})
 	s.UpdateMessageText(5, 1, "edited", nil, now)
 	msgs := s.Messages(5)
 	require.Len(t, msgs, 1)
@@ -163,9 +164,9 @@ func TestMemory_UpdateMessageText(t *testing.T) {
 
 func TestMemory_UpdateMessageText_ReplacesEntities(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{
+	s.AppendMessage(domain.Message{
 		ID: 1, ChatID: 5, Text: "смотри https://example.com",
-		Entities: []store.MessageEntity{{Type: "url", Offset: 7, Length: 19}},
+		Entities: []domain.MessageEntity{{Type: "url", Offset: 7, Length: 19}},
 	})
 	s.UpdateMessageText(5, 1, "привет", nil, time.Now())
 	msgs := s.Messages(5)
@@ -178,8 +179,8 @@ func TestMemory_UpdateMessageText_ReplacesEntities(t *testing.T) {
 
 func TestMemory_UpdateMessageText_SetsNewEntities(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "old"})
-	ents := []store.MessageEntity{{Type: "bold", Offset: 0, Length: 5}}
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "old"})
+	ents := []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 5}}
 	s.UpdateMessageText(5, 1, "новый", ents, time.Now())
 	msgs := s.Messages(5)
 	require.Len(t, msgs, 1)
@@ -188,7 +189,7 @@ func TestMemory_UpdateMessageText_SetsNewEntities(t *testing.T) {
 
 func TestMemory_UpdateMessageText_NoopWhenMissing(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "msg"})
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "msg"})
 	assert.NotPanics(t, func() {
 		s.UpdateMessageText(5, 999, "x", nil, time.Now())
 	})
@@ -198,8 +199,8 @@ func TestMemory_UpdateMessageText_NoopWhenMissing(t *testing.T) {
 
 func TestMemory_RemoveMessage(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: -1, ChatID: 5, Text: "sentinel"})
-	s.AppendMessage(store.Message{ID: 2, ChatID: 5, Text: "other"})
+	s.AppendMessage(domain.Message{ID: -1, ChatID: 5, Text: "sentinel"})
+	s.AppendMessage(domain.Message{ID: 2, ChatID: 5, Text: "other"})
 	s.RemoveMessage(5, -1)
 	msgs := s.Messages(5)
 	require.Len(t, msgs, 1)
@@ -208,7 +209,7 @@ func TestMemory_RemoveMessage(t *testing.T) {
 
 func TestMemory_RemoveMessage_NoopWhenMissing(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "msg"})
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "msg"})
 	assert.NotPanics(t, func() {
 		s.RemoveMessage(5, 999)
 	})
@@ -218,7 +219,7 @@ func TestMemory_RemoveMessage_NoopWhenMissing(t *testing.T) {
 func TestMemory_RemoveMessages_RemovesMatchingIDs(t *testing.T) {
 	s := store.NewMemory()
 	now := time.Now()
-	s.SetMessages(10, []store.Message{
+	s.SetMessages(10, []domain.Message{
 		{ID: 1, ChatID: 10, Text: "a", Date: now},
 		{ID: 2, ChatID: 10, Text: "b", Date: now},
 		{ID: 3, ChatID: 10, Text: "c", Date: now},
@@ -237,8 +238,8 @@ func TestMemory_RemoveMessages_NoopWhenEmpty(t *testing.T) {
 
 func TestMemory_UpdateMessageReactions_SetsReactions(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "hi"})
-	reactions := []store.Reaction{
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "hi"})
+	reactions := []domain.Reaction{
 		{Emoji: "❤️", Count: 3, IsChosen: true},
 		{Emoji: "👍", Count: 1, IsChosen: false},
 	}
@@ -250,9 +251,9 @@ func TestMemory_UpdateMessageReactions_SetsReactions(t *testing.T) {
 
 func TestMemory_UpdateMessageReactions_NoopWhenMissing(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "hi"})
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "hi"})
 	assert.NotPanics(t, func() {
-		s.UpdateMessageReactions(5, 999, []store.Reaction{{Emoji: "👍", Count: 1}})
+		s.UpdateMessageReactions(5, 999, []domain.Reaction{{Emoji: "👍", Count: 1}})
 	})
 	msgs := s.Messages(5)
 	assert.Empty(t, msgs[0].Reactions)
@@ -260,7 +261,7 @@ func TestMemory_UpdateMessageReactions_NoopWhenMissing(t *testing.T) {
 
 func TestMemory_UpdateChatOnline_SetsOnline(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice"})
 	s.UpdateChatOnline(1, true)
 	chat, ok := s.GetChat(1)
 	assert.True(t, ok)
@@ -269,7 +270,7 @@ func TestMemory_UpdateChatOnline_SetsOnline(t *testing.T) {
 
 func TestMemory_UpdateChatOnline_SetsOffline(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "Alice", Online: true})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice", Online: true})
 	s.UpdateChatOnline(1, false)
 	chat, ok := s.GetChat(1)
 	assert.True(t, ok)
@@ -285,13 +286,13 @@ func TestMemory_UpdateChatOnline_NoopWhenMissing(t *testing.T) {
 
 func TestMemory_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice"})
 	assert.True(t, s.UpdateChatOnline(1, true))
 }
 
 func TestMemory_UpdateChatOnline_ReturnsFalseWhenUnchanged(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "Alice", Online: true})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice", Online: true})
 	assert.False(t, s.UpdateChatOnline(1, true))
 }
 
@@ -302,13 +303,13 @@ func TestMemory_UpdateChatOnline_ReturnsFalseWhenMissing(t *testing.T) {
 
 func TestMemory_UpdateChatReadMaxID_ReturnsTrueWhenAdvanced(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 5})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 5})
 	assert.True(t, s.UpdateChatReadMaxID(1, 10))
 }
 
 func TestMemory_UpdateChatReadMaxID_ReturnsFalseWhenNotAdvanced(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 10})
+	s.SetChat(domain.Chat{ID: 1, Title: "Alice", ReadInboxMaxID: 10})
 	assert.False(t, s.UpdateChatReadMaxID(1, 10))
 }
 
@@ -319,10 +320,10 @@ func TestMemory_UpdateChatReadMaxID_ReturnsFalseWhenMissing(t *testing.T) {
 
 func TestMemory_UpdateMessageReactions_ReplacesExisting(t *testing.T) {
 	s := store.NewMemory()
-	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "hi",
-		Reactions: []store.Reaction{{Emoji: "👍", Count: 2}},
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "hi",
+		Reactions: []domain.Reaction{{Emoji: "👍", Count: 2}},
 	})
-	s.UpdateMessageReactions(5, 1, []store.Reaction{{Emoji: "❤️", Count: 1}})
+	s.UpdateMessageReactions(5, 1, []domain.Reaction{{Emoji: "❤️", Count: 1}})
 	msgs := s.Messages(5)
 	require.Len(t, msgs[0].Reactions, 1)
 	assert.Equal(t, "❤️", msgs[0].Reactions[0].Emoji)
@@ -335,7 +336,7 @@ func TestMemory_FolderFilters_EmptyInitially(t *testing.T) {
 
 func TestMemory_FolderFilters_SetAndGet(t *testing.T) {
 	s := store.NewMemory()
-	filters := []store.FolderFilter{
+	filters := []domain.FolderFilter{
 		{ID: 1, Title: "Work", Groups: true},
 		{ID: 2, Title: "Personal", Contacts: true},
 	}
@@ -348,8 +349,8 @@ func TestMemory_FolderFilters_SetAndGet(t *testing.T) {
 
 func TestMemory_FolderFilters_Replace(t *testing.T) {
 	s := store.NewMemory()
-	s.SetFolderFilters([]store.FolderFilter{{ID: 1, Title: "Old"}})
-	s.SetFolderFilters([]store.FolderFilter{{ID: 2, Title: "New"}})
+	s.SetFolderFilters([]domain.FolderFilter{{ID: 1, Title: "Old"}})
+	s.SetFolderFilters([]domain.FolderFilter{{ID: 2, Title: "New"}})
 	got := s.FolderFilters()
 	require.Len(t, got, 1)
 	assert.Equal(t, "New", got[0].Title)
@@ -357,8 +358,8 @@ func TestMemory_FolderFilters_Replace(t *testing.T) {
 
 func TestMemory_SetGroupedID(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}})
-	s.AppendMessage(store.Message{ID: 4242, ChatID: 7, IsOut: true})
+	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
+	s.AppendMessage(domain.Message{ID: 4242, ChatID: 7, IsOut: true})
 
 	s.SetGroupedID(7, 4242, 999)
 
@@ -369,8 +370,8 @@ func TestMemory_SetGroupedID(t *testing.T) {
 
 func TestMemory_SetGroupedID_UnknownMessageIsNoop(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}})
-	s.AppendMessage(store.Message{ID: 1, ChatID: 7})
+	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
+	s.AppendMessage(domain.Message{ID: 1, ChatID: 7})
 
 	s.SetGroupedID(7, 999, 5)
 

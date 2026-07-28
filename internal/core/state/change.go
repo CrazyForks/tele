@@ -26,6 +26,10 @@ const (
 	// straight through. In the projection model the typing label belongs to
 	// chat:<id> alongside the message window and the draft.
 	ChangeTyping
+	// ChangeHistory reports that a chat's stored history was replaced by a
+	// fetched page. It is how a backfill re-enters state so the chat:<id>
+	// projection rebuilds from the same place every other change does.
+	ChangeHistory
 )
 
 // Change describes one applied difference in domain state, carrying what a

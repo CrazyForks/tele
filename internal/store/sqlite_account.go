@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
 )
 
@@ -29,8 +30,8 @@ func (s *SQLiteStore) ClearForNewAccount(ownerID int64) {
 	s.log.Info("account changed, clearing store", zap.Int64("old", storedID), zap.Int64("new", ownerID))
 
 	s.mu.Lock()
-	s.chats = make(map[int64]Chat)
-	s.messages = make(map[int64][]Message)
+	s.chats = make(map[int64]domain.Chat)
+	s.messages = make(map[int64][]domain.Message)
 	s.unreadReactionMsgs = make(map[int64]map[int]struct{})
 	s.unreadMentionMsgs = make(map[int64]map[int]struct{})
 	s.msgChat = make(map[int]int64)

@@ -5,12 +5,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestApplyUnreadReaction_Idempotent(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, Title: "A"})
+	s.SetChat(domain.Chat{ID: 1, Title: "A"})
 
 	assert.True(t, s.ApplyUnreadReaction(1, 100, true))
 	c, _ := s.GetChat(1)
@@ -29,7 +30,7 @@ func TestApplyUnreadReaction_Idempotent(t *testing.T) {
 
 func TestApplyUnreadReaction_ClearDecrementsFloorZero(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1})
+	s.SetChat(domain.Chat{ID: 1})
 	s.ApplyUnreadReaction(1, 100, true)
 
 	assert.True(t, s.ApplyUnreadReaction(1, 100, false))
@@ -49,7 +50,7 @@ func TestApplyUnreadReaction_UnknownChatNoop(t *testing.T) {
 
 func TestSetChatReactionsRead_ClearsCountAndSet(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1, UnreadReactionsCount: 3})
+	s.SetChat(domain.Chat{ID: 1, UnreadReactionsCount: 3})
 	s.ApplyUnreadReaction(1, 100, true) // count 4, tracked {100}
 
 	s.SetChatReactionsRead(1)
@@ -64,11 +65,11 @@ func TestSetChatReactionsRead_ClearsCountAndSet(t *testing.T) {
 
 func TestSetChat_ResetsReactionTracking(t *testing.T) {
 	s := store.NewMemory()
-	s.SetChat(store.Chat{ID: 1})
+	s.SetChat(domain.Chat{ID: 1})
 	s.ApplyUnreadReaction(1, 100, true)
 
 	// Dialog refresh overwrites the chat with a fresh server count.
-	s.SetChat(store.Chat{ID: 1, UnreadReactionsCount: 5})
+	s.SetChat(domain.Chat{ID: 1, UnreadReactionsCount: 5})
 
 	// Tracked set was cleared by SetChat, so re-adding 100 increments to 6.
 	assert.True(t, s.ApplyUnreadReaction(1, 100, true))

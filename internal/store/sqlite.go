@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
 	_ "modernc.org/sqlite"
 )
@@ -79,11 +80,11 @@ const persistFlushInterval = 2 * time.Second
 
 // SQLiteStore is a write-through Store backed by a SQLite file.
 // Reads are served from an in-memory map; every chat write also persists to disk.
-// Message operations are in-memory only.
+// domain.Message operations are in-memory only.
 type SQLiteStore struct {
 	mu       sync.RWMutex
-	chats    map[int64]Chat
-	messages map[int64][]Message
+	chats    map[int64]domain.Chat
+	messages map[int64][]domain.Message
 	// unreadReactionMsgs tracks, per chat, the message IDs observed this session
 	// to carry unread reactions. Keeps ApplyUnreadReaction idempotent so repeated
 	// updates for one message do not double-count. Session-only: the dialog list
@@ -140,8 +141,8 @@ type SQLiteStore struct {
 // sharedPtsBox reports whether a peer's messages live in the account's common
 // pts update box (private chats and basic groups), where message IDs are
 // globally unique. Channels and supergroups have their own per-peer ID space.
-func sharedPtsBox(p Peer) bool {
-	return p.Type == PeerUser || p.Type == PeerGroup
+func sharedPtsBox(p domain.Peer) bool {
+	return p.Type == domain.PeerUser || p.Type == domain.PeerGroup
 }
 
 // NewSQLite opens (or creates) the SQLite file at path and returns a ready store.
@@ -178,8 +179,8 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		return nil, err
 	}
 	s := &SQLiteStore{
-		chats:              make(map[int64]Chat),
-		messages:           make(map[int64][]Message),
+		chats:              make(map[int64]domain.Chat),
+		messages:           make(map[int64][]domain.Message),
 		unreadReactionMsgs: make(map[int64]map[int]struct{}),
 		unreadMentionMsgs:  make(map[int64]map[int]struct{}),
 		baselineUnread:     make(map[int64]int),
@@ -223,7 +224,7 @@ func (s *SQLiteStore) runFlusher() {
 // are taken under the lock; the disk writes run without it.
 func (s *SQLiteStore) Flush() {
 	s.mu.Lock()
-	pending := make([]Chat, 0, len(s.dirtyPersist))
+	pending := make([]domain.Chat, 0, len(s.dirtyPersist))
 	for id := range s.dirtyPersist {
 		if c, ok := s.chats[id]; ok {
 			pending = append(pending, c)

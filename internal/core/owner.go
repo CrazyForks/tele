@@ -2,11 +2,13 @@ package core
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -34,9 +36,24 @@ type Owner struct {
 	authFlow *internaltg.AuthFlow
 
 	events   <-chan store.Event
-	changes  chan state.Change
+	deltas   chan project.Delta
+	registry *project.Registry
 	readyCh  chan struct{}
 	onAuthFn func(userID int64, username string)
+
+	// historyLimit is how many messages one backfill fetches, from config.
+	historyLimit int
+
+	// ctx bounds the owner's background work (history backfill). It is stored
+	// rather than passed because that work is started by a subscription, which
+	// has no call context of its own and outlives it either way.
+	ctx context.Context
+
+	// fetching guards one in-flight history fetch per subscription: rapid
+	// scroll-up would otherwise fire several identical fetches whose duplicate
+	// chunks stack into a repeating date range (issue #120).
+	fetchMu  sync.Mutex
+	fetching map[project.SubID]bool
 
 	// currentChatID is the chat a client currently has open, consulted only by
 	// the notification decision. #192 replaces this with a reported focus.
@@ -45,23 +62,30 @@ type Owner struct {
 
 func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection, n Notifier) *Owner {
 	o := &Owner{
-		cfg:      cfg,
-		log:      log,
-		state:    st,
-		client:   client,
-		notifier: n,
-		authFlow: internaltg.NewAuthFlow(),
-		changes:  make(chan state.Change, 64),
-		readyCh:  make(chan struct{}),
+		cfg:          cfg,
+		log:          log,
+		state:        st,
+		client:       client,
+		notifier:     n,
+		authFlow:     internaltg.NewAuthFlow(),
+		deltas:       make(chan project.Delta, 256),
+		registry:     project.NewRegistry(st.Store()),
+		readyCh:      make(chan struct{}),
+		historyLimit: cfg.UI.HistoryLimit,
+		ctx:          context.Background(),
+		fetching:     make(map[project.SubID]bool),
 	}
 	if client != nil {
 		o.events = client.Updates()
 	}
+	// Every committed mutation rebuilds the subscribed projections, wherever it
+	// originated: the update loop, a history backfill, or a command.
+	st.OnChange(o.publishChange)
 	return o
 }
 
-// Changes publishes every applied domain change to the attached client.
-func (o *Owner) Changes() <-chan state.Change { return o.changes }
+// SetContext bounds the owner's background work. Call before Start.
+func (o *Owner) SetContext(ctx context.Context) { o.ctx = ctx }
 
 // AuthFlow is the login conversation the client drives on the owner's behalf.
 func (o *Owner) AuthFlow() *internaltg.AuthFlow { return o.authFlow }

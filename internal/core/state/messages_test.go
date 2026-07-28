@@ -166,3 +166,37 @@ func TestApplyDelete_WithoutChatIDResolvesThroughStore(t *testing.T) {
 	assert.Equal(t, int64(0), chg.ChatID)
 	assert.Empty(t, st.Messages(1))
 }
+
+// ApplyHistory is how a fetched page of history enters state: the owner merges
+// it with what is already stored and commits the result, so projections rebuild
+// from one place rather than from a client's reply handler.
+func TestApplyHistory_StoresTheWindowAndPublishesOneChange(t *testing.T) {
+	s, st := newState(t)
+	var seen []state.Change
+	s.OnChange(func(c state.Change) { seen = append(seen, c) })
+	st.SetChat(domain.Chat{ID: 1})
+
+	chg, ok := s.ApplyHistory(1, []domain.Message{
+		{ID: 1, ChatID: 1, Date: time.Unix(1, 0)},
+		{ID: 2, ChatID: 1, Date: time.Unix(2, 0)},
+	})
+
+	require.True(t, ok)
+	assert.Equal(t, state.ChangeHistory, chg.Kind)
+	assert.Equal(t, int64(1), chg.ChatID)
+	assert.Len(t, st.Messages(1), 2)
+	assert.Len(t, seen, 1)
+}
+
+func TestApplyHistory_ReplacesTheStoredMessages(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	s.ApplyHistory(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(5, 0)}})
+
+	s.ApplyHistory(1, []domain.Message{
+		{ID: 4, ChatID: 1, Date: time.Unix(4, 0)},
+		{ID: 5, ChatID: 1, Date: time.Unix(5, 0)},
+	})
+
+	assert.Len(t, st.Messages(1), 2, "the caller merges; state stores what it is given")
+}
