@@ -1,0 +1,178 @@
+package project_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
+)
+
+// msgs builds n messages with ids 1..n, oldest first — the order Messages()
+// returns (store/sqlite_messages.go sorts by date then id).
+func msgs(n int) []domain.Message {
+	out := make([]domain.Message, 0, n)
+	base := time.Unix(1000, 0)
+	for i := 1; i <= n; i++ {
+		out = append(out, domain.Message{
+			ID:     i,
+			ChatID: 1,
+			Date:   base.Add(time.Duration(i) * time.Minute),
+		})
+	}
+	return out
+}
+
+func readerWith(chat domain.Chat, m []domain.Message) *fakeReader {
+	return &fakeReader{
+		chats: []domain.Chat{chat},
+		msgs:  map[int64][]domain.Message{chat.ID: m},
+	}
+}
+
+func ids(m []domain.Message) []int {
+	out := make([]int, 0, len(m))
+	for _, x := range m {
+		out = append(out, x.ID)
+	}
+	return out
+}
+
+func TestBuildChat_NewestAnchorTakesTheTail(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1}, msgs(10))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 3, After: 0,
+	})
+
+	assert.Equal(t, []int{7, 8, 9, 10}, ids(got.Messages),
+		"Before counts messages above the anchor; the anchor is carried on top of it")
+	assert.Equal(t, 10, got.AnchorMsgID)
+	assert.True(t, got.HasOlder)
+	assert.False(t, got.HasNewer, "the newest message is in the window")
+}
+
+func TestBuildChat_FirstUnreadAnchorKeepsContextAbove(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}, msgs(10))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2, After: 5,
+	})
+
+	assert.Equal(t, 7, got.AnchorMsgID, "first unread is the first id above ReadInboxMaxID")
+	assert.Equal(t, []int{5, 6, 7, 8, 9, 10}, ids(got.Messages),
+		"Before messages above the anchor, the anchor itself, and up to After below")
+	assert.True(t, got.HasOlder)
+	assert.False(t, got.HasNewer)
+}
+
+func TestBuildChat_FirstUnreadWithNoUnreadBehavesAsNewest(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1, UnreadCount: 0, ReadInboxMaxID: 10}, msgs(10))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2, After: 5,
+	})
+
+	assert.Equal(t, 10, got.AnchorMsgID)
+	assert.Equal(t, []int{8, 9, 10}, ids(got.Messages))
+}
+
+func TestBuildChat_FirstUnreadWithReadPointerPastEverythingStoredIsNewest(t *testing.T) {
+	// UnreadCount claims unread, but every stored message is at or below the read
+	// pointer: the unread messages have not been fetched yet.
+	r := readerWith(domain.Chat{ID: 1, UnreadCount: 3, ReadInboxMaxID: 10}, msgs(10))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
+	})
+
+	assert.Equal(t, 10, got.AnchorMsgID)
+}
+
+func TestBuildChat_MessageAnchorIsSymmetric(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1}, msgs(10))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorMessage, MsgID: 5}, Before: 2, After: 2,
+	})
+
+	assert.Equal(t, 5, got.AnchorMsgID)
+	assert.Equal(t, []int{3, 4, 5, 6, 7}, ids(got.Messages))
+	assert.True(t, got.HasOlder)
+	assert.True(t, got.HasNewer, "messages exist below the window")
+}
+
+func TestBuildChat_MessageAnchorNotInStoreYieldsEmptyWindow(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1}, msgs(10))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorMessage, MsgID: 99}, Before: 2, After: 2,
+	})
+
+	assert.Empty(t, got.Messages, "the core backfills, then rebuilds — the builder does not guess")
+	assert.Equal(t, 99, got.AnchorMsgID)
+	assert.False(t, got.HasOlder,
+		"HasOlder reports what the store holds outside the window, not what Telegram might have")
+}
+
+func TestBuildChat_ClampsAtBothEnds(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1}, msgs(3))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 50, After: 50,
+	})
+
+	assert.Equal(t, []int{1, 2, 3}, ids(got.Messages))
+	assert.False(t, got.HasOlder, "clamped at the start")
+	assert.False(t, got.HasNewer, "clamped at the end")
+}
+
+func TestBuildChat_EmptyChat(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1}, nil)
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
+	})
+
+	assert.Empty(t, got.Messages)
+	assert.False(t, got.HasOlder)
+	assert.False(t, got.HasNewer)
+	assert.Zero(t, got.AnchorMsgID)
+}
+
+func TestBuildChat_CarriesTheHeaderTheChatPaneRenders(t *testing.T) {
+	c := domain.Chat{
+		ID:              1,
+		Title:           "Ada",
+		Peer:            domain.Peer{ID: 1, Type: domain.PeerUser},
+		Online:          true,
+		ReadInboxMaxID:  4,
+		ReadOutboxMaxID: 2,
+		Draft:           "wip",
+	}
+	r := readerWith(c, msgs(5))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 2,
+	})
+
+	assert.Equal(t, "Ada", got.Title)
+	assert.True(t, got.IsUser)
+	assert.True(t, got.Online, "the presence dot in root_view.go is per-chat state")
+	assert.Equal(t, 4, got.ReadInboxMaxID)
+	assert.Equal(t, 2, got.ReadOutboxMaxID)
+	assert.Equal(t, "wip", got.Draft)
+}
+
+func TestBuildChat_UnknownChat(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1}, msgs(3))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 77, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 10,
+	})
+
+	assert.Empty(t, got.Messages)
+	assert.Equal(t, int64(77), got.ChatID)
+}

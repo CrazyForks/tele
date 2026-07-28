@@ -1,0 +1,52 @@
+// Package project turns domain state into the windowed, view-shaped data a
+// client subscribes to. Builders are pure functions of (reader, window), and
+// deltas are computed by diffing successive contents rather than by mapping
+// change kinds, so a change no window contains costs nothing.
+package project
+
+// SubID identifies one live subscription.
+type SubID int
+
+// Window is what a subscription looks at. The implementations are
+// ChatListWindow and ChatWindow.
+type Window interface{ isWindow() }
+
+// ChatListWindow is a slice of the ordered, folder-filtered chat list. Folder 0
+// is All Chats; domain.ArchiveFolderID is the Archive virtual folder.
+type ChatListWindow struct {
+	Folder int
+	Offset int
+	Limit  int
+}
+
+func (ChatListWindow) isWindow() {}
+
+// AnchorKind names what a chat window is positioned on. Every hard case in the
+// UI is one of these three: opening a chat (Newest), opening one with unread
+// (FirstUnread, which needs context above the separator), and jumping to a
+// quoted message (Message, which needs context on both sides).
+type AnchorKind int
+
+const (
+	AnchorNewest AnchorKind = iota
+	AnchorFirstUnread
+	AnchorMessage
+)
+
+type Anchor struct {
+	Kind  AnchorKind
+	MsgID int // AnchorMessage only
+}
+
+// ChatWindow is a range of one chat's history around an anchor. Before and
+// After rather than a single limit, because the anchor is not always at an edge.
+// They count messages either side of the anchor, which is always carried on top
+// of them: a window is at most Before+After+1 messages.
+type ChatWindow struct {
+	ChatID int64
+	Anchor Anchor
+	Before int
+	After  int
+}
+
+func (ChatWindow) isWindow() {}
