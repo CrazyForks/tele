@@ -25,8 +25,7 @@ const storePkg = "github.com/sorokin-vladimir/tele/internal/store"
 // UI file reaches the store through. When #198 deletes that field, every
 // remaining m.st call site stops compiling, which is the point.
 var storeImportAllowlist = map[string]string{
-	"root.go":              "#193, #195, #196, #198 — optimistic writes still go through m.st",
-	"root_store_events.go": "#192 — store.Notifiable is the shared notification gate",
+	"root.go": "#193, #195, #196, #198 — optimistic writes still go through m.st",
 }
 
 func TestUIDoesNotImportStore(t *testing.T) {

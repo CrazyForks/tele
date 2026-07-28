@@ -78,7 +78,7 @@ func TestOpenChat_ClearsGifFrames(t *testing.T) {
 
 	// Switching chats must drop decoded frames so the memory is released and
 	// does not accumulate across chats.
-	nm, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}}})
+	nm, _ := m.Update(screens.OpenChatMsg{ChatID: 9})
 	rm := nm.(RootModel)
 	assert.Empty(t, rm.gifFrames, "switching chats must clear the gif frame cache")
 }

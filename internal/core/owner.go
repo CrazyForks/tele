@@ -37,6 +37,7 @@ type Owner struct {
 
 	events   <-chan store.Event
 	deltas   chan project.Delta
+	incoming chan Incoming
 	registry *project.Registry
 	readyCh  chan struct{}
 	onAuthFn func(userID int64, username string)
@@ -69,6 +70,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		notifier:     n,
 		authFlow:     internaltg.NewAuthFlow(),
 		deltas:       make(chan project.Delta, 256),
+		incoming:     make(chan Incoming, 32),
 		registry:     project.NewRegistry(st.Store()),
 		readyCh:      make(chan struct{}),
 		historyLimit: cfg.UI.HistoryLimit,

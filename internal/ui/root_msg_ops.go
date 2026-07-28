@@ -422,29 +422,8 @@ func (m RootModel) handleChatLoadErr(msg chatLoadErrMsg) (RootModel, tea.Cmd) {
 	})
 }
 
-// retryChatLoadCmd re-issues the history fetch for chatID, looking the peer up
-// from the store. Returns nil when the store/client or chat is unavailable.
-func (m RootModel) retryChatLoadCmd(chatID int64) tea.Cmd {
-	if m.st == nil || m.tgClient == nil {
-		return nil
-	}
-	chat, ok := m.st.GetChat(chatID)
-	if !ok {
-		return nil
-	}
-	ctx := m.ctx
-	client := m.tgClient
-	peer := chat.Peer
-	limit := m.historyLimit
-	return func() tea.Msg {
-		msgs, err := client.GetHistory(ctx, peer, 0, limit)
-		if err != nil {
-			text, _, _ := errText("load history", err)
-			return chatLoadErrMsg{chatID: chatID, text: text}
-		}
-		return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
-	}
-}
+// retryChatLoadCmd is gone: retrying a failed chat load is a resubscribe, which
+// the model does directly. See the retryChatLoadMsg case in root.go.
 
 // openReactionPicker opens the reaction picker for msgID, pre-selecting the
 // already-chosen emoji (if any). No-op when there is no store or no message.
@@ -537,7 +516,6 @@ func (m RootModel) handleForwardDone(msg forwardDoneMsg) (RootModel, tea.Cmd) {
 	}
 	if msg.bumpChatID != 0 && m.st != nil {
 		m.st.BumpChatLastMessage(msg.bumpChatID, msg.lastMsg)
-		m.chatList.SetChats(m.filteredChats())
 	}
 	m.statusBar.SetStatus("Forwarded to " + msg.toTitle)
 	return m, nil

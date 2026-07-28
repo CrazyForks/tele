@@ -183,8 +183,8 @@ func TestInAppNotify_ClickOpensChat(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected OpenChatMsg, got %T", cmd())
 	}
-	if open.Chat.ID != 7 {
-		t.Fatalf("open chat ID = %d, want 7", open.Chat.ID)
+	if open.ChatID != 7 {
+		t.Fatalf("open chat ID = %d, want 7", open.ChatID)
 	}
 }
 

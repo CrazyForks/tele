@@ -22,9 +22,7 @@ func rootOnOpenChatWithMsg(t *testing.T, msgID int) RootModel {
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ScreenMain)
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
-		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
-	}})
+	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
 	m = newM.(RootModel)
 	newM, _ = applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
 		Message: domain.Message{ID: msgID, ChatID: 1, Text: "target", Date: time.Now()}})
@@ -85,9 +83,7 @@ func TestRoot_IncomingMsg_NoHighlightForOpenChat(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ScreenMain)
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
-		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
-	}})
+	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
 	m = newM.(RootModel)
 
 	newM, _ = applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,

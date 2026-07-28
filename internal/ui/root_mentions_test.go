@@ -19,10 +19,10 @@ func newRootOnGroupChat(t *testing.T, mc *mockTGClient) (ui.RootModel, store.Sto
 	st := store.NewMemory()
 	chat := domain.Chat{ID: 5, Title: "Group", Peer: domain.Peer{ID: 5, Type: domain.PeerSuperGroup}}
 	st.SetChat(chat)
-	m := ui.NewRootModel(mc, st, 50, false).WithScreen(ui.ScreenMain)
+	m := newRoot(mc, st, 50, false).WithScreen(ui.ScreenMain)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(ui.RootModel)
-	nm, cmd := m.Update(screens.OpenChatMsg{Chat: chat})
+	nm, cmd := m.Update(screens.OpenChatMsg{ChatID: chat.ID, Title: chat.Title})
 	m = nm.(ui.RootModel)
 	return deliver(t, m, cmd), st
 }

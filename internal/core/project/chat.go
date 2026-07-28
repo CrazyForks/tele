@@ -8,9 +8,12 @@ import "github.com/sorokin-vladimir/tele/internal/domain"
 // #193 adds the outbox entries for this chat here, alongside the window: the
 // durable outbox replaces the client-side optimistic sentinel messages.
 type ChatContents struct {
-	ChatID          int64
-	Title           string
-	IsUser          bool
+	ChatID int64
+	Title  string
+	IsUser bool
+	// IsGroup covers groups and channels: the message list shows sender names
+	// there and not in a 1:1 chat.
+	IsGroup         bool
 	Online          bool
 	Messages        []domain.Message
 	AnchorMsgID     int
@@ -37,6 +40,7 @@ func BuildChat(r Reader, w ChatWindow) ChatContents {
 	if ok {
 		out.Title = chat.Title
 		out.IsUser = chat.Peer.IsUser()
+		out.IsGroup = chat.Peer.IsGroup() || chat.Peer.IsChannel()
 		out.Online = chat.Online
 		out.ReadInboxMaxID = chat.ReadInboxMaxID
 		out.ReadOutboxMaxID = chat.ReadOutboxMaxID

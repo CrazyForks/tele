@@ -20,7 +20,7 @@ func newSizedRoot(t *testing.T, w, h int) RootModel {
 		st.SetChat(domain.Chat{ID: i, Peer: domain.Peer{ID: i, Type: domain.PeerUser}, Title: "chat"})
 	}
 	m := NewRootModel(nil, st, 50, false).WithScreen(ScreenMain)
-	m.chatList.SetChats(st.Chats())
+	m.chatList.SetWindow(0, len(st.Chats()), rowsOf(st.Chats()))
 	next, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return next.(RootModel)
 }

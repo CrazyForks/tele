@@ -134,7 +134,7 @@ func (a *App) Run() error {
 		a.log.Warn("keybindings: " + w)
 	}
 	root := ui.NewRootModel(a.owner.Telegram(), a.st, a.cfg.UI.HistoryLimit, a.verbose)
-	root = root.WithContext(ctx).WithConfig(a.cfg).WithKeyMap(km)
+	root = root.WithContext(ctx).WithConfig(a.cfg).WithKeyMap(km).WithOwner(a.owner)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
 	root.SetOnChatOpen(func(id int64) {
 		a.owner.SetCurrentChat(id)
@@ -205,6 +205,8 @@ func (a *App) Run() error {
 				return
 			case d := <-a.owner.Deltas():
 				prog.Send(d)
+			case in := <-a.owner.Incoming():
+				prog.Send(in)
 			}
 		}
 	}()

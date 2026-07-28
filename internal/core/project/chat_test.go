@@ -160,6 +160,7 @@ func TestBuildChat_CarriesTheHeaderTheChatPaneRenders(t *testing.T) {
 
 	assert.Equal(t, "Ada", got.Title)
 	assert.True(t, got.IsUser)
+	assert.False(t, got.IsGroup)
 	assert.True(t, got.Online, "the presence dot in root_view.go is per-chat state")
 	assert.Equal(t, 4, got.ReadInboxMaxID)
 	assert.Equal(t, 2, got.ReadOutboxMaxID)
@@ -175,4 +176,27 @@ func TestBuildChat_UnknownChat(t *testing.T) {
 
 	assert.Empty(t, got.Messages)
 	assert.Equal(t, int64(77), got.ChatID)
+}
+
+func TestBuildChat_GroupAndChannelAreGroups(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		typ  domain.PeerType
+		want bool
+	}{
+		{"user", domain.PeerUser, false},
+		{"group", domain.PeerGroup, true},
+		{"supergroup", domain.PeerSuperGroup, true},
+		{"channel", domain.PeerChannel, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := readerWith(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: tc.typ}}, msgs(2))
+
+			got := project.BuildChat(r, project.ChatWindow{
+				ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
+			})
+
+			assert.Equal(t, tc.want, got.IsGroup, "the message list shows sender names only in groups")
+		})
+	}
 }

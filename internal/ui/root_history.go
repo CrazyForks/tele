@@ -3,71 +3,37 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
-
-// prependOlder merges an older history chunk in front of the existing messages,
-// dropping any chunk entries whose IDs already appear in existing. Duplicate
-// in-flight loads (issue #120) or overlapping server pages would otherwise seed
-// duplicate messages into the store that the message list rebuilds from.
-func prependOlder(older, existing []domain.Message) []domain.Message {
-	if len(existing) == 0 {
-		return older
-	}
-	seen := make(map[int]struct{}, len(existing))
-	for _, m := range existing {
-		seen[m.ID] = struct{}{}
-	}
-	combined := make([]domain.Message, 0, len(older)+len(existing))
-	for _, m := range older {
-		if _, dup := seen[m.ID]; dup {
-			continue
-		}
-		combined = append(combined, m)
-	}
-	return append(combined, existing...)
-}
 
 // updateNetworkMsg handles messages that involve async data loading (history, media, read state).
 func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case screens.OpenChatMsg:
 		m.searchModel = nil
-		if msg.Chat.ID == m.currentChatID {
+		if msg.ChatID == m.currentChatID {
 			result, cmd := m.focusPane(FocusChat)
 			return result.(RootModel), cmd
 		}
 		// Persist the chat we are leaving as a Telegram draft before switching
 		// (#62). Captured here while currentChatID still points at the old chat.
 		draftFlush := m.flushCurrentDraftCmd()
-		m.currentChatID = msg.Chat.ID
+		m.currentChatID = msg.ChatID
 		m.stopGifAnim()
 		// Drop decoded GIF frames from the previous chat; they are large (up to
 		// gifMaxFrames RGBA images each) and otherwise accumulate for the whole
 		// session. They re-decode on demand if a GIF is selected again.
 		clear(m.gifFrames)
-		m.chatList.SetActiveByID(msg.Chat.ID)
+		m.chatList.SetActiveByID(msg.ChatID)
 		if m.onChatOpen != nil {
-			m.onChatOpen(msg.Chat.ID)
-		}
-		// Seed the incoming chat's composer from its server-known draft, unless a
-		// newer local draft is already cached for it (SeedDraft does not clobber).
-		if m.st != nil {
-			if c, ok := m.st.GetChat(msg.Chat.ID); ok {
-				m.chat.SeedDraft(msg.Chat.Peer.ID, c.Draft)
-			}
+			m.onChatOpen(msg.ChatID)
 		}
 		m.chat.ClearPendingAction()
-		m.chat.SetChat(&msg.Chat)
-		if m.st != nil {
-			// Populate the store's in-memory tail from disk on first open so the
-			// chat paints its cached history instantly; the network GetHistory
-			// below reconciles it moments later. See issue #139.
-			m.st.LoadMessages(msg.Chat.ID)
-			m.chat.SetMessages(m.st.Messages(msg.Chat.ID))
-		}
+		// Paint the title immediately; everything else arrives on the
+		// subscription's first delta, which is always a full Reset.
+		m.chat.SetHeader(screens.ChatHeader{ChatID: msg.ChatID, Title: msg.Title})
+		m.chat.SetLoading(true)
 		m.chat.SetKnownImages(m.imageCache)
 		m.focus = FocusChat
 		m.chatList.SetFocused(false)
@@ -76,133 +42,40 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// Drop the previous chat's placements; reconcile (after this update)
 		// transmits the now-visible images.
 		m.requestKittyReset()
-		// Clear unread reactions and mentions optimistically on open and
-		// reconcile server-side.
-		var reactionsCmd, mentionsCmd tea.Cmd
-		if m.st != nil {
-			if c, ok := m.st.GetChat(msg.Chat.ID); ok {
-				if c.UnreadReactionsCount > 0 {
-					m.st.SetChatReactionsRead(c.ID)
-					reactionsCmd = m.readReactionsCmd(c.ID)
-				}
-				if c.UnreadMentionsCount > 0 {
-					m.st.SetChatMentionsRead(c.ID)
-					mentionsCmd = m.readMentionsCmd(c.ID)
-				}
-				if reactionsCmd != nil || mentionsCmd != nil {
-					m.chatList.SetChats(m.filteredChats())
-				}
-			}
-		}
-		if m.tgClient != nil {
-			m.chat.SetLoading(true)
-			ctx := m.ctx
-			client := m.tgClient
-			peer := msg.Chat.Peer
-			chatID := msg.Chat.ID
-			limit := m.historyLimit
-			historyCmd := func() tea.Msg {
-				msgs, err := client.GetHistory(ctx, peer, 0, limit)
-				if err != nil {
-					text, _, _ := errText("load history", err)
-					return chatLoadErrMsg{chatID: chatID, text: text}
-				}
-				return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
-			}
-			return m, tea.Batch(draftFlush, historyCmd, reactionsCmd, mentionsCmd)
-		}
-		return m, tea.Batch(draftFlush, reactionsCmd, mentionsCmd)
 
-	case ChatHistoryMsg:
-		if m.st != nil {
-			m.st.SetMessages(msg.ChatID, msg.Messages)
-			if msg.ChatID == m.currentChatID {
-				if chat, ok := m.st.GetChat(msg.ChatID); ok {
-					m.chat.SetInboxReadMaxID(chat.ReadInboxMaxID)
-				}
-				m.chat.SetMessages(m.st.Messages(msg.ChatID))
-				m.chat.SetLoading(false)
-				m.chat.SetLoadError("")
-				if chat, ok := m.st.GetChat(msg.ChatID); ok && chat.UnreadCount > 0 {
-					m.chat.ScrollToFirstUnread(chat.ReadInboxMaxID)
-				}
-			}
-		}
-		// A chat may open with a GIF already selected (newest message) and its
-		// thumbnail already cached from a prior visit; start its animation here
-		// since no key event will.
-		nm, gifCmd := m.ensureGifAnimForSelection()
-		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(msg.Messages), gifCmd)
+		reactionsCmd, mentionsCmd := m.clearChatBadgesOnOpen(msg.ChatID)
+		m.subscribeChat(msg.ChatID, msg.Peer)
+		return m, tea.Batch(draftFlush, reactionsCmd, mentionsCmd)
 
 	case markReadDoneMsg:
 		if m.st != nil {
 			m.st.UpdateChatReadMaxID(msg.chatID, msg.maxID)
-			if chat, ok := m.st.GetChat(msg.chatID); ok {
-				m.chatList.SetChatUnread(msg.chatID, chat.UnreadCount)
-			}
+			m.refreshProjections()
 		}
 		return m, nil
 
 	case readReactionsDoneMsg:
 		if m.st != nil {
 			m.st.SetChatReactionsRead(msg.chatID)
-			m.chatList.SetChats(m.filteredChats())
+			m.refreshProjections()
 		}
 		return m, nil
 
 	case readMentionsDoneMsg:
 		if m.st != nil {
 			m.st.SetChatMentionsRead(msg.chatID)
-			m.chatList.SetChats(m.filteredChats())
+			m.refreshProjections()
 		}
 		return m, nil
 
 	case screens.LoadMoreMsg:
-		if m.st == nil || m.tgClient == nil {
+		// Reaching the top of the window asks the owner to widen it. Whether the
+		// extra messages come from the store or from Telegram is the owner's
+		// business, and one fetch per subscription is in flight at a time (#120).
+		if msg.ChatID != m.currentChatID {
 			return m, nil
 		}
-		// One in-flight "load older" fetch per chat. Without this guard, rapid
-		// scroll-up fires several identical fetches whose duplicate chunks stack
-		// into a repeating date-range ring (issue #120).
-		if m.loadingOlderChat == msg.ChatID {
-			return m, nil
-		}
-		chat, ok := m.st.GetChat(msg.ChatID)
-		if !ok {
-			return m, nil
-		}
-		m.loadingOlderChat = msg.ChatID
-		ctx := m.ctx
-		client := m.tgClient
-		peer := chat.Peer
-		offsetID := msg.OffsetID
-		limit := m.historyLimit
-		chatID := msg.ChatID
-		return m, func() tea.Msg {
-			msgs, err := client.GetHistory(ctx, peer, offsetID, limit)
-			return historyChunkMsg{chatID: chatID, messages: msgs, err: err}
-		}
-
-	case historyChunkMsg:
-		// Clear the in-flight guard for this chat regardless of outcome (error,
-		// empty, or success) so subsequent scroll-up can load again.
-		if msg.chatID == m.loadingOlderChat {
-			m.loadingOlderChat = 0
-		}
-		if msg.err != nil {
-			text, sev, ok := errText("load history", msg.err)
-			if !ok {
-				return m, nil
-			}
-			return m.handleStatusErr(StatusErrMsg{Text: text, Sev: sev})
-		}
-		if m.st != nil && msg.chatID == m.currentChatID && len(msg.messages) > 0 {
-			existing := m.st.Messages(msg.chatID)
-			combined := prependOlder(msg.messages, existing)
-			m.st.SetMessages(msg.chatID, combined)
-			m.chat.PrependMessages(msg.messages) // dedups + preserves viewport position
-			return m, m.pendingDownloadCmds(msg.messages)
-		}
+		m.widenChatWindow()
 		return m, nil
 
 	case PhotoReadyMsg:

@@ -172,3 +172,51 @@ func TestBuildChatList_FolderCountsSkipAllChatsAndArchive(t *testing.T) {
 	assert.NotContains(t, got.Folders.Unread, domain.ArchiveFolderID, "Archive shows no count")
 	assert.False(t, got.Folders.ArchivePresent)
 }
+
+// A custom folder lists archived chats when its rules match them, so its badge
+// must count their unread too. Ported from ui.computeFolderUnreads' tests when
+// the computation moved here.
+func TestBuildChatList_FolderCountsIncludeArchivedOnACategoryMatch(t *testing.T) {
+	r := &fakeReader{
+		chats: []domain.Chat{
+			{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerGroup}, IsArchived: true, UnreadCount: 2},
+			{ID: 2, Peer: domain.Peer{ID: 2, Type: domain.PeerGroup}, UnreadCount: 3},
+		},
+		filters: []domain.FolderFilter{{ID: 7, Title: "Groups", Groups: true}},
+	}
+
+	got := project.BuildChatList(r, project.ChatListWindow{Limit: 10})
+
+	assert.Equal(t, 2, got.Folders.Unread[7], "an archived group is in the folder, so it is in the badge")
+	assert.NotContains(t, got.Folders.Unread, domain.ArchiveFolderID)
+}
+
+func TestBuildChatList_CustomFolderIncludesAnArchivedChatByCategory(t *testing.T) {
+	r := &fakeReader{
+		chats: []domain.Chat{
+			{ID: 1, Title: "Normal", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}},
+			{ID: 2, Title: "Archived", Peer: domain.Peer{ID: 2, Type: domain.PeerGroup}, IsArchived: true},
+		},
+		filters: []domain.FolderFilter{{ID: 7, Title: "Groups", Groups: true}},
+	}
+
+	got := project.BuildChatList(r, project.ChatListWindow{Folder: 7, Limit: 10})
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(2), got.Rows[0].ID)
+}
+
+func TestBuildChatList_CustomFolderIncludesAnArchivedExplicitPeer(t *testing.T) {
+	r := &fakeReader{
+		chats: []domain.Chat{
+			{ID: 1, Title: "Normal", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}},
+			{ID: 2, Title: "Archived", Peer: domain.Peer{ID: 2, Type: domain.PeerChannel}, IsArchived: true},
+		},
+		filters: []domain.FolderFilter{{ID: 7, Title: "News", IncludePeers: []int64{2}}},
+	}
+
+	got := project.BuildChatList(r, project.ChatListWindow{Folder: 7, Limit: 10})
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(2), got.Rows[0].ID)
+}

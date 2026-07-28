@@ -7,13 +7,29 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 )
 
-type OpenChatMsg struct{ Chat domain.Chat }
+// OpenChatMsg asks the root model to open a chat. It carries an id and a title
+// rather than a domain.Chat: a client holds no peer, and the chat's header
+// arrives on the chat:<id> projection once the subscription lands. The title is
+// here only so the pane has something to draw during that gap.
+type OpenChatMsg struct {
+	ChatID int64
+	Title  string
+	// Peer addresses outgoing commands for a chat the owner does not hold: a
+	// contact found by search that has never been messaged has no dialog and no
+	// history, so nothing but a send can address it. Zero when the owner knows
+	// the chat, which is every chat opened from the list.
+	//
+	// TRANSITIONAL (#198): when commands become owner API members addressed by
+	// chat id, this goes.
+	Peer domain.Peer
+}
 
 // ForwardToChatRequest is emitted by the forward-mode chat picker when the user
 // confirms a target chat. The source peer is resolved by the root model.
@@ -81,24 +97,24 @@ func formatMentions(count int) string {
 // single space and omitted when empty: the dim mute marker, the pink
 // unread-reaction glyph, the blue unread-mention glyph, then the unread token
 // (numeric badge, or a manual-unread dot when marked unread with no real count).
-func rowIndicators(c domain.Chat) string {
+func rowIndicators(c project.ChatRow) string {
 	var unread string
 	switch {
-	case c.UnreadCount > 0:
-		unread = formatUnread(c.UnreadCount)
+	case c.Unread > 0:
+		unread = formatUnread(c.Unread)
 	case c.UnreadMark:
 		unread = "[•]"
 	}
 	var reaction string
-	if c.UnreadReactionsCount > 0 {
-		reaction = reactionStyle.Render(formatReactions(c.UnreadReactionsCount))
+	if c.Reactions > 0 {
+		reaction = reactionStyle.Render(formatReactions(c.Reactions))
 	}
 	var mention string
-	if c.UnreadMentionsCount > 0 {
-		mention = mentionStyle.Render(formatMentions(c.UnreadMentionsCount))
+	if c.Mentions > 0 {
+		mention = mentionStyle.Render(formatMentions(c.Mentions))
 	}
 	var muted string
-	if c.IsMuted {
+	if c.Muted {
 		muted = mutedStyle.Render("×")
 	}
 	parts := make([]string, 0, 4)
@@ -110,10 +126,22 @@ func rowIndicators(c domain.Chat) string {
 	return strings.Join(parts, " ")
 }
 
+// ChatListModel renders a window onto the chat list rather than the whole list:
+// the core owns order and filtering, and hands over a slice around what is on
+// screen. cursor indexes the whole list, so it stays meaningful when the window
+// moves under it.
 type ChatListModel struct {
-	chats             []domain.Chat
-	cursor            int
-	activeIdx         int
+	rows   []project.ChatRow
+	offset int // index of rows[0] in the whole filtered list
+	total  int // length of the whole filtered list
+	cursor int // index into the whole list, not into rows
+	// reqOffset/reqLimit are the last window asked for, so a repeated request
+	// for the same window is silent. Zero limit means nothing asked for yet.
+	reqOffset int
+	reqLimit  int
+	// activeID is the open chat, held by id rather than index so it survives a
+	// window that no longer contains it.
+	activeID          int64
 	width             int
 	height            int
 	focused           bool
@@ -122,7 +150,7 @@ type ChatListModel struct {
 
 	// highlightChatID is the chat currently flashed because a new incoming
 	// message bumped it to the top; highlightStep counts down to 0 (none).
-	// Tracked by id so the highlight survives SetChats reorders.
+	// Tracked by id so the highlight survives a window reset.
 	highlightChatID int64
 	highlightStep   int
 }
@@ -137,35 +165,110 @@ func (m *ChatListModel) TickSpinner() { m.spinner.Tick() }
 // IsLoadingChats reports whether the chat list is still showing its
 // "Loading chats..." spinner (no chats received yet), matching View. Drives the
 // spinner tick loop (issue #147).
-func (m *ChatListModel) IsLoadingChats() bool { return len(m.chats) == 0 }
+func (m *ChatListModel) IsLoadingChats() bool { return m.total == 0 }
 
-func (m *ChatListModel) SetChats(chats []domain.Chat) {
-	var cursorID int64
-	if m.cursor < len(m.chats) {
-		cursorID = m.chats[m.cursor].ID
-	}
-	var activeID int64
-	if m.activeIdx < len(m.chats) {
-		activeID = m.chats[m.activeIdx].ID
+// SetWindow replaces the window with the contents of a chatlist Reset delta.
+// The cursor is re-bound to the chat it was on, which is what makes a Reset —
+// emitted on every reorder — non-disruptive.
+func (m *ChatListModel) SetWindow(offset, total int, rows []project.ChatRow) {
+	cursorID := int64(0)
+	if r, ok := m.rowAt(m.cursor); ok {
+		cursorID = r.ID
 	}
 
-	m.chats = chats
+	m.rows = rows
+	m.offset = offset
+	m.total = total
 
 	m.cursor = 0
-	for i, c := range m.chats {
-		if c.ID == cursorID {
-			m.cursor = i
+	for i, r := range rows {
+		if r.ID == cursorID {
+			m.cursor = offset + i
 			break
 		}
 	}
+	m.clampCursor()
+}
 
-	m.activeIdx = 0
-	for i, c := range m.chats {
-		if c.ID == activeID {
-			m.activeIdx = i
-			break
+// SetRow replaces one row in place, from a chatlist Row delta. The row is found
+// by id: a Row is only emitted while the window's order is unchanged, so the id
+// is unambiguous and no index travels on the wire.
+func (m *ChatListModel) SetRow(row project.ChatRow) {
+	for i := range m.rows {
+		if m.rows[i].ID == row.ID {
+			m.rows[i] = row
+			return
 		}
 	}
+}
+
+// rowAt returns the row at a whole-list index, translating through the window.
+// ok is false when the index falls outside the window the core has sent.
+func (m *ChatListModel) rowAt(i int) (project.ChatRow, bool) {
+	j := i - m.offset
+	if j < 0 || j >= len(m.rows) {
+		return project.ChatRow{}, false
+	}
+	return m.rows[j], true
+}
+
+// viewStart is the whole-list index of the first visible row. It is the single
+// definition of the scroll position: View, ScrollInfo, CursorViewportRow and
+// ChatAtViewportRow all derive from it, because four copies of this arithmetic
+// is how a click lands on the wrong chat.
+func (m *ChatListModel) viewStart() int {
+	if m.height <= 0 {
+		return 0
+	}
+	start := m.cursor - m.height + 1
+	if start < 0 {
+		start = 0
+	}
+	if max := m.total - m.height; start > max {
+		if max < 0 {
+			max = 0
+		}
+		start = max
+	}
+	return start
+}
+
+func (m *ChatListModel) clampCursor() {
+	if m.total == 0 {
+		m.cursor = 0
+		return
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= m.total {
+		m.cursor = m.total - 1
+	}
+}
+
+// WindowRequest reports the window the model wants for its current scroll
+// position: the visible rows plus one screen of overscan either side, so
+// ordinary scrolling never waits on a round trip. changed is false when this is
+// the window it last asked for, which keeps a quiet list quiet.
+//
+// It compares against the last request rather than against the window it holds,
+// because at the end of the list the core legitimately returns fewer rows than
+// asked for and a held-window comparison would ask again forever.
+func (m *ChatListModel) WindowRequest() (offset, limit int, changed bool) {
+	h := m.height
+	if h <= 0 {
+		h = 1
+	}
+	offset = m.viewStart() - h
+	if offset < 0 {
+		offset = 0
+	}
+	limit = 3 * h
+	if offset == m.reqOffset && limit == m.reqLimit {
+		return offset, limit, false
+	}
+	m.reqOffset, m.reqLimit = offset, limit
+	return offset, limit, true
 }
 
 // HighlightChat starts a fade highlight on the chat-list row for the given id.
@@ -198,8 +301,8 @@ func (m *ChatListModel) HighlightStep() int { return m.highlightStep }
 // styleTitle applies the fade-accent foreground to a row's (already truncated)
 // title while that row is the active highlight target. The focused-cursor row
 // keeps its selection background instead, so it is left unstyled here.
-func (m *ChatListModel) styleTitle(i int, truncated string) string {
-	if m.highlightStep <= 0 || m.chats[i].ID != m.highlightChatID {
+func (m *ChatListModel) styleTitle(i int, id int64, truncated string) string {
+	if m.highlightStep <= 0 || id != m.highlightChatID {
 		return truncated
 	}
 	if i == m.cursor && m.focused {
@@ -213,40 +316,48 @@ func (m *ChatListModel) styleTitle(i int, truncated string) string {
 // row highlight picks the accent tone suited to the theme.
 func (m *ChatListModel) SetDarkBackground(isDark bool) { m.hasDarkBackground = isDark }
 
-func (m *ChatListModel) Cursor() int          { return m.cursor }
-func (m *ChatListModel) ActiveIdx() int       { return m.activeIdx }
-func (m *ChatListModel) Chats() []domain.Chat { return m.chats }
+func (m *ChatListModel) Cursor() int { return m.cursor }
 
+// Rows returns the window's rows. For assertions and for the mouse mapping;
+// callers must not assume it is the whole list.
+func (m *ChatListModel) Rows() []project.ChatRow { return m.rows }
+
+// Total is the length of the whole filtered list, which the window is a slice of.
+func (m *ChatListModel) Total() int { return m.total }
+
+// ActiveIdx is the whole-list index of the open chat, or -1 when it is outside
+// the window (or no chat is open).
+func (m *ChatListModel) ActiveIdx() int {
+	if m.activeID == 0 {
+		return -1
+	}
+	for i, r := range m.rows {
+		if r.ID == m.activeID {
+			return m.offset + i
+		}
+	}
+	return -1
+}
+
+// SetActiveByID marks a chat as the open one and moves the cursor onto it when
+// the window holds it.
 func (m *ChatListModel) SetActiveByID(id int64) {
-	for i, c := range m.chats {
-		if c.ID == id {
-			m.activeIdx = i
-			m.cursor = i
-			return
-		}
-	}
+	m.activeID = id
+	m.SetCursorByID(id)
 }
 
-func (m *ChatListModel) SetChatUnread(chatID int64, count int) {
-	for i := range m.chats {
-		if m.chats[i].ID == chatID {
-			m.chats[i].UnreadCount = count
-			return
-		}
+// SelectedChat returns the open chat's row, when the window holds it.
+func (m *ChatListModel) SelectedChat() (project.ChatRow, bool) {
+	if idx := m.ActiveIdx(); idx >= 0 {
+		return m.rowAt(idx)
 	}
-}
-
-func (m *ChatListModel) SelectedChat() (domain.Chat, bool) {
-	if len(m.chats) == 0 || m.activeIdx >= len(m.chats) {
-		return domain.Chat{}, false
-	}
-	return m.chats[m.activeIdx], true
+	return project.ChatRow{}, false
 }
 
 func (m *ChatListModel) SetCursorByID(id int64) {
-	for i, c := range m.chats {
-		if c.ID == id {
-			m.cursor = i
+	for i, r := range m.rows {
+		if r.ID == id {
+			m.cursor = m.offset + i
 			return
 		}
 	}
@@ -260,81 +371,72 @@ func (m *ChatListModel) SetSize(width, height int) {
 	m.height = height
 }
 
-// CursorChat returns the chat currently under the cursor.
-func (m *ChatListModel) CursorChat() (domain.Chat, bool) {
-	if m.cursor < 0 || m.cursor >= len(m.chats) {
-		return domain.Chat{}, false
-	}
-	return m.chats[m.cursor], true
-}
+// CursorChat returns the row currently under the cursor.
+func (m *ChatListModel) CursorChat() (project.ChatRow, bool) { return m.rowAt(m.cursor) }
 
 // Height returns the pane's content height in rows.
 func (m *ChatListModel) Height() int { return m.height }
 
-// ScrollInfo reports the chat list's scroll position for the pane scrollbar.
-// Offset mirrors the scroll math in View / CursorViewportRow.
+// ScrollInfo reports the chat list's scroll position for the pane scrollbar. It
+// reflects the whole list, not the window: the scrollbar is the user's sense of
+// how much account there is.
 func (m *ChatListModel) ScrollInfo() components.ScrollInfo {
 	if m.height <= 0 {
-		return components.ScrollInfo{Total: len(m.chats), Visible: len(m.chats), Offset: 0}
+		return components.ScrollInfo{Total: m.total, Visible: m.total, Offset: 0}
 	}
-	start := 0
-	if m.cursor >= m.height {
-		start = m.cursor - m.height + 1
-	}
-	return components.ScrollInfo{Total: len(m.chats), Visible: m.height, Offset: start}
+	return components.ScrollInfo{Total: m.total, Visible: m.height, Offset: m.viewStart()}
 }
 
-// CursorViewportRow returns the cursor's row index within the visible
-// viewport, accounting for scroll. It mirrors the scroll math in View.
+// CursorViewportRow returns the cursor's row index within the visible viewport.
 func (m *ChatListModel) CursorViewportRow() int {
-	visible := m.height
-	if visible <= 0 {
+	if m.height <= 0 {
 		return m.cursor
 	}
-	start := 0
-	if m.cursor >= visible {
-		start = m.cursor - visible + 1
-	}
-	return m.cursor - start
+	return m.cursor - m.viewStart()
 }
 
-// SetCursor moves the selection cursor to i, clamped to the valid range. It is
-// a no-op when the list is empty.
+// SetCursor moves the selection cursor to a whole-list index, clamped. It is a
+// no-op when the list is empty.
 func (m *ChatListModel) SetCursor(i int) {
-	if len(m.chats) == 0 {
+	if m.total == 0 {
 		return
 	}
-	if i < 0 {
-		i = 0
-	}
-	if i >= len(m.chats) {
-		i = len(m.chats) - 1
-	}
 	m.cursor = i
+	m.clampCursor()
 }
 
-// ChatIndexAtViewportRow maps a content row (0-based, within the visible
-// viewport) to a chat index, mirroring the scroll math in View: each chat
-// occupies exactly one row and the viewport starts at
-// start = max(0, cursor-visible+1). ok is false when the row is empty
-// (past the last visible chat or negative).
+// ChatAtViewportRow maps a content row (0-based, within the visible viewport) to
+// a chat row. ok is false when the viewport row holds no chat: past the end of
+// the list, or inside a window the core has not sent yet.
+func (m *ChatListModel) ChatAtViewportRow(row int) (project.ChatRow, bool) {
+	if row < 0 || m.total == 0 {
+		return project.ChatRow{}, false
+	}
+	visible := m.height
+	if visible <= 0 {
+		visible = m.total
+	}
+	if row >= visible {
+		return project.ChatRow{}, false
+	}
+	return m.rowAt(m.viewStart() + row)
+}
+
+// ChatIndexAtViewportRow maps a viewport row to a whole-list index, for callers
+// that move the cursor rather than read the row.
 func (m *ChatListModel) ChatIndexAtViewportRow(row int) (int, bool) {
-	if row < 0 || len(m.chats) == 0 {
+	if row < 0 || m.total == 0 {
 		return 0, false
 	}
 	visible := m.height
 	if visible <= 0 {
-		visible = len(m.chats)
+		visible = m.total
 	}
 	if row >= visible {
 		return 0, false
 	}
-	start := 0
-	if m.cursor >= visible {
-		start = m.cursor - visible + 1
-	}
-	idx := start + row
-	if idx >= len(m.chats) {
+	idx := m.viewStart() + row
+	if idx >= m.total {
 		return 0, false
 	}
 	return idx, true
@@ -347,7 +449,7 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 	case keys.ActionMsg:
 		switch msg.Action {
 		case keys.ActionDown:
-			if m.cursor < len(m.chats)-1 {
+			if m.cursor < m.total-1 {
 				m.cursor++
 			}
 		case keys.ActionUp:
@@ -357,8 +459,8 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		case keys.ActionGoTop:
 			m.cursor = 0
 		case keys.ActionGoBottom:
-			if len(m.chats) > 0 {
-				m.cursor = len(m.chats) - 1
+			if m.total > 0 {
+				m.cursor = m.total - 1
 			}
 		case keys.ActionScrollHalfDown:
 			step := m.height * 2 / 3
@@ -366,23 +468,18 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				step = 1
 			}
 			m.cursor += step
-			if m.cursor >= len(m.chats) {
-				m.cursor = len(m.chats) - 1
-			}
+			m.clampCursor()
 		case keys.ActionScrollHalfUp:
 			step := m.height * 2 / 3
 			if step < 1 {
 				step = 1
 			}
 			m.cursor -= step
-			if m.cursor < 0 {
-				m.cursor = 0
-			}
+			m.clampCursor()
 		case keys.ActionConfirm:
-			if len(m.chats) > 0 {
-				m.activeIdx = m.cursor
-				chat := m.chats[m.cursor]
-				return m, func() tea.Msg { return OpenChatMsg{Chat: chat} }
+			if row, ok := m.rowAt(m.cursor); ok {
+				m.activeID = row.ID
+				return m, func() tea.Msg { return OpenChatMsg{ChatID: row.ID, Title: row.Title} }
 			}
 		}
 	}
@@ -390,20 +487,17 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 }
 
 func (m *ChatListModel) View() string {
-	if len(m.chats) == 0 {
+	if m.total == 0 {
 		return m.spinner.View() + " Loading chats..."
 	}
 	visible := m.height
 	if visible <= 0 {
-		visible = len(m.chats)
+		visible = m.total
 	}
-	start := 0
-	if m.cursor >= visible {
-		start = m.cursor - visible + 1
-	}
+	start := m.viewStart()
 	end := start + visible
-	if end > len(m.chats) {
-		end = len(m.chats)
+	if end > m.total {
+		end = m.total
 	}
 
 	w := m.width
@@ -417,18 +511,26 @@ func (m *ChatListModel) View() string {
 		inner = 1
 	}
 
+	activeIdx := m.ActiveIdx()
 	lines := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
-		badge := rowIndicators(m.chats[i])
-		title := m.chats[i].Title
+		row, ok := m.rowAt(i)
+		if !ok {
+			// Inside the viewport but outside the window the core has sent. The
+			// overscan in WindowRequest makes this unreachable in ordinary
+			// scrolling; it shows as a blank row rather than a wrong one.
+			lines = append(lines, "")
+			continue
+		}
+		badge := rowIndicators(row)
 
 		prefix := "    "
-		if i == m.activeIdx {
+		if i == activeIdx {
 			prefix = "▶   "
 		}
-		if m.chats[i].Peer.IsUser() && m.chats[i].Online {
+		if row.IsUser && row.Online {
 			dot := onlineDotStyle.Render("●")
-			if i == m.activeIdx {
+			if i == activeIdx {
 				prefix = "▶ " + dot + " "
 			} else {
 				prefix = "  " + dot + " "
@@ -437,9 +539,9 @@ func (m *ChatListModel) View() string {
 
 		var content string
 		if badge == "" {
-			trunc := runewidth.Truncate(title, inner, "…")
+			trunc := runewidth.Truncate(row.Title, inner, "…")
 			lw := lipgloss.Width(trunc)
-			content = m.styleTitle(i, trunc)
+			content = m.styleTitle(i, row.ID, trunc)
 			if lw < inner {
 				content += strings.Repeat(" ", inner-lw)
 			}
@@ -449,13 +551,13 @@ func (m *ChatListModel) View() string {
 			if maxTitleW < 0 {
 				maxTitleW = 0
 			}
-			truncTitle := runewidth.Truncate(title, maxTitleW, "…")
+			truncTitle := runewidth.Truncate(row.Title, maxTitleW, "…")
 			titleW := lipgloss.Width(truncTitle)
 			pad := inner - titleW - badgeW
 			if pad < 0 {
 				pad = 0
 			}
-			content = m.styleTitle(i, truncTitle) + strings.Repeat(" ", pad) + badge
+			content = m.styleTitle(i, row.ID, truncTitle) + strings.Repeat(" ", pad) + badge
 		}
 
 		line := prefix + content
@@ -463,7 +565,7 @@ func (m *ChatListModel) View() string {
 		style := normalChatStyle
 		if i == m.cursor && m.focused {
 			style = selectedChatStyle
-		} else if i == m.activeIdx {
+		} else if i == activeIdx {
 			style = activeChatStyle
 		}
 		lines = append(lines, style.Inline(true).Render(line))

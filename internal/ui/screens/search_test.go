@@ -224,7 +224,7 @@ func TestSearch_CursorSpansBothSections(t *testing.T) {
 	require.NotNil(t, cmd)
 	open, ok := cmd().(screens.OpenChatMsg)
 	require.True(t, ok)
-	assert.Equal(t, int64(99), open.Chat.ID)
+	assert.Equal(t, int64(99), open.ChatID)
 }
 
 func TestSearch_EnterOnNewContactOpensChat(t *testing.T) {
@@ -236,8 +236,9 @@ func TestSearch_EnterOnNewContactOpensChat(t *testing.T) {
 	require.NotNil(t, cmd)
 	open, ok := cmd().(screens.OpenChatMsg)
 	require.True(t, ok)
-	assert.Equal(t, int64(99), open.Chat.ID)
-	assert.Equal(t, int64(7), open.Chat.Peer.AccessHash)
+	assert.Equal(t, int64(99), open.ChatID)
+	assert.Equal(t, int64(7), open.Peer.AccessHash,
+		"a contact with no dialog can only be addressed by the peer the search returned")
 }
 
 func TestSearch_LongListIsWindowed(t *testing.T) {
@@ -380,7 +381,7 @@ func TestSearch_EnterEmitsOpenChatMsg(t *testing.T) {
 	msg := cmd()
 	oc, ok := msg.(screens.OpenChatMsg)
 	require.True(t, ok)
-	assert.Equal(t, int64(1), oc.Chat.ID)
+	assert.Equal(t, int64(1), oc.ChatID)
 }
 
 func TestSearch_EscEmitsCloseSearchMsg(t *testing.T) {

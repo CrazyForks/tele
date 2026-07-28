@@ -48,7 +48,11 @@ type LoadMoreMsg struct {
 }
 
 type ChatModel struct {
-	chat            *domain.Chat
+	// header is the open chat's rendered state, from the chat:<id> projection.
+	// A zero ChatID means no chat is open.
+	header ChatHeader
+	// peer addresses outgoing commands. TRANSITIONAL (#198), see SetPeer.
+	peer            domain.Peer
 	msgList         *components.MessageList
 	composer        *components.Composer
 	width           int
@@ -106,7 +110,7 @@ func (m *ChatModel) IsLoading() bool { return m.loading }
 // no chat open and no buffered messages, matching View's logo branch. Drives the
 // logo tick loop (issue #147).
 func (m *ChatModel) ShowingLogo() bool {
-	return !m.loading && m.loadErr == "" && m.chat == nil && m.msgList.Count() == 0
+	return !m.loading && m.loadErr == "" && m.header.ChatID == 0 && m.msgList.Count() == 0
 }
 
 // SetLoadError shows an inline error in the chat pane (e.g. when history fails
@@ -119,39 +123,62 @@ func (m *ChatModel) TickSpinner() { m.spinner.Tick() }
 // TickLogo advances the chat-pane idle logo. Called by root on LogoTickMsg.
 func (m *ChatModel) TickLogo() { m.logo.Tick() }
 
-func (m *ChatModel) SetChat(chat *domain.Chat) {
-	var oldID, newID int64
-	if m.chat != nil {
-		oldID = m.chat.Peer.ID
-	}
-	if chat != nil {
-		newID = chat.Peer.ID
-	}
-	// A switch to a different peer (including close → newID==0) flushes the
-	// outgoing draft and restores the incoming one. Re-setting the same chat
-	// (a data refresh, e.g. presence) must leave the composer untouched so it
-	// does not clobber text the user is currently typing (#62).
-	peerChanged := newID != oldID
-	if peerChanged {
-		m.saveDraft(oldID, m.composer.Value())
+// ChatHeader is the per-chat state the pane renders around the message window.
+// It comes from the chat:<id> projection, so the pane holds no domain chat and
+// reads no store.
+type ChatHeader struct {
+	ChatID          int64
+	Title           string
+	IsUser          bool
+	IsGroup         bool
+	Online          bool
+	ReadOutboxMaxID int
+}
+
+// SetHeader applies the projection's per-chat state. A switch to a different
+// chat flushes the outgoing draft and restores the incoming one; re-applying the
+// same chat (a data refresh, e.g. presence) leaves the composer untouched so it
+// cannot clobber text the user is currently typing (#62).
+func (m *ChatModel) SetHeader(h ChatHeader) {
+	changed := h.ChatID != m.header.ChatID
+	if changed {
+		m.saveDraft(m.header.ChatID, m.composer.Value())
+		m.typingBase = ""
+		m.lastTypingAt = time.Time{}
 	}
 
-	m.typingBase = ""
-	m.lastTypingAt = time.Time{}
-	m.chat = chat
-	if chat != nil {
-		m.msgList.SetIsGroup(chat.Peer.IsGroup() || chat.Peer.IsChannel())
-		m.msgList.SetOutboxReadMaxID(chat.ReadOutboxMaxID)
-	} else {
-		m.msgList.SetIsGroup(false)
-		m.msgList.SetOutboxReadMaxID(0)
-	}
+	m.header = h
+	m.msgList.SetIsGroup(h.IsGroup)
+	m.msgList.SetOutboxReadMaxID(h.ReadOutboxMaxID)
 
-	if peerChanged {
-		m.composer.SetValue(m.drafts[newID])
+	if changed {
+		m.composer.SetValue(m.drafts[h.ChatID])
 		m.syncMsgListHeight()
 	}
 }
+
+// Close clears the pane when no chat is open.
+func (m *ChatModel) Close() {
+	m.saveDraft(m.header.ChatID, m.composer.Value())
+	m.header = ChatHeader{}
+	m.peer = domain.Peer{}
+	m.typingBase = ""
+	m.lastTypingAt = time.Time{}
+	m.msgList.SetIsGroup(false)
+	m.msgList.SetOutboxReadMaxID(0)
+	m.composer.SetValue("")
+	m.syncMsgListHeight()
+}
+
+// PeerOnline reports the open chat's presence, for the pane-title dot.
+func (m *ChatModel) PeerOnline() bool { return m.header.IsUser && m.header.Online }
+
+// SetPeer records the peer the pane's outgoing requests carry.
+//
+// TRANSITIONAL (#198): commands still travel as peers rather than chat ids, so
+// the composer needs one to address a send or a typing notice. When commands
+// become owner API members this goes, and with it the pane's last domain type.
+func (m *ChatModel) SetPeer(p domain.Peer) { m.peer = p }
 
 // SeedDraft pre-loads a server-known draft for a chat into the session cache,
 // but only when the session has no draft of its own for that peer — a newer
@@ -224,10 +251,10 @@ func (m *ChatModel) ApplyComposerMention(member domain.ChatMember) { m.composer.
 
 // CurrentPeer returns the open chat's peer (zero value when no chat is open).
 func (m *ChatModel) CurrentPeer() domain.Peer {
-	if m.chat == nil {
+	if m.header.ChatID == 0 {
 		return domain.Peer{}
 	}
-	return m.chat.Peer
+	return m.peer
 }
 func (m *ChatModel) SelectedMessageID() int { return m.msgList.SelectedMessageID() }
 func (m *ChatModel) SelectedMessageText() (string, bool) {
@@ -477,10 +504,10 @@ func (m *ChatModel) syncMsgListHeight() {
 }
 
 func (m *ChatModel) Title() string {
-	if m.chat == nil {
+	if m.header.ChatID == 0 {
 		return "(no chat)"
 	}
-	return m.chat.Title
+	return m.header.Title
 }
 
 func (m *ChatModel) Init() tea.Cmd { return m.composer.Init() }
@@ -497,8 +524,8 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.refreshPlaceholder()
 				m.composer.Blur()
 				m.msgList.SetShowIndicator(true)
-				if !m.lastTypingAt.IsZero() && m.chat != nil {
-					peer := m.chat.Peer
+				if !m.lastTypingAt.IsZero() && m.header.ChatID != 0 {
+					peer := m.peer
 					m.lastTypingAt = time.Time{}
 					return m, func() tea.Msg {
 						return SetTypingRequest{Peer: peer, Action: domain.TypingActionCancel}
@@ -513,15 +540,15 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		case keys.ActionUp:
 			atTop := m.msgList.AtTop()
 			m.msgList.ScrollUp()
-			if atTop && m.chat != nil && m.msgList.Count() > 0 {
-				chatID := m.chat.ID
+			if atTop && m.header.ChatID != 0 && m.msgList.Count() > 0 {
+				chatID := m.header.ChatID
 				offsetID := m.msgList.OldestID()
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
 		case keys.ActionGoTop:
 			m.msgList.ScrollToTop()
-			if m.chat != nil && m.msgList.Count() > 0 {
-				chatID := m.chat.ID
+			if m.header.ChatID != 0 && m.msgList.Count() > 0 {
+				chatID := m.header.ChatID
 				offsetID := m.msgList.OldestID()
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
@@ -539,15 +566,15 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				n = 1
 			}
 			m.msgList.ScrollUpBy(n)
-			if m.msgList.AtTop() && m.chat != nil && m.msgList.Count() > 0 {
-				chatID := m.chat.ID
+			if m.msgList.AtTop() && m.header.ChatID != 0 && m.msgList.Count() > 0 {
+				chatID := m.header.ChatID
 				offsetID := m.msgList.OldestID()
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
 		case keys.ActionCursorUp:
 			atOldest := m.msgList.CursorUp()
-			if atOldest && m.chat != nil && m.msgList.Count() > 0 {
-				chatID := m.chat.ID
+			if atOldest && m.header.ChatID != 0 && m.msgList.Count() > 0 {
+				chatID := m.header.ChatID
 				offsetID := m.msgList.OldestID()
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
@@ -595,10 +622,10 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.composer.ClearAttachment()
 				m.syncMsgListHeight()
 				m.lastTypingAt = time.Time{}
-				if m.chat == nil {
+				if m.header.ChatID == 0 {
 					return m, nil
 				}
-				peer := m.chat.Peer
+				peer := m.peer
 				return m, func() tea.Msg {
 					return SendMediaRequest{Peer: peer, Caption: caption, ReplyToMsgID: replyID, Entities: entities}
 				}
@@ -616,8 +643,8 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.composer.Reset()
 				m.syncMsgListHeight()
 				m.lastTypingAt = time.Time{}
-				if m.chat != nil && text != "" {
-					peer := m.chat.Peer
+				if m.header.ChatID != 0 && text != "" {
+					peer := m.peer
 					var sendCmd tea.Cmd
 					if editID != 0 {
 						sendCmd = func() tea.Msg {
@@ -641,8 +668,8 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			newC, cmd := m.composer.Update(msg)
 			m.composer = newC
 			m.syncMsgListHeight()
-			if m.chat != nil && time.Since(m.lastTypingAt) >= 4*time.Second {
-				peer := m.chat.Peer
+			if m.header.ChatID != 0 && time.Since(m.lastTypingAt) >= 4*time.Second {
+				peer := m.peer
 				m.lastTypingAt = time.Now()
 				typingCmd := func() tea.Msg {
 					return SetTypingRequest{Peer: peer, Action: domain.TypingActionTyping}
@@ -675,7 +702,7 @@ func (m *ChatModel) View() string {
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
 		return lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center, style.Render(m.loadErr))
 	}
-	if m.chat == nil && m.msgList.Count() == 0 {
+	if m.header.ChatID == 0 && m.msgList.Count() == 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.logo.View())
 	}
 	return m.msgList.View() + "\n" + m.composer.View()

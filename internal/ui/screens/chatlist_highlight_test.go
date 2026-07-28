@@ -30,7 +30,7 @@ func stripANSIChatlist(s string) string {
 
 func TestChatList_HighlightChat_SetsState(t *testing.T) {
 	m := screens.NewChatListModel()
-	m.SetChats(makeTestChats())
+	setChats(m, makeTestChats())
 	m.HighlightChat(2)
 	assert.Equal(t, int64(2), m.HighlightedChatID())
 	assert.Equal(t, components.HighlightInitialStep, m.HighlightStep())
@@ -38,7 +38,7 @@ func TestChatList_HighlightChat_SetsState(t *testing.T) {
 
 func TestChatList_StepChatHighlight_CountsDownAndClears(t *testing.T) {
 	m := screens.NewChatListModel()
-	m.SetChats(makeTestChats())
+	setChats(m, makeTestChats())
 	m.HighlightChat(2)
 	for i := components.HighlightInitialStep; i > 1; i-- {
 		assert.True(t, m.StepChatHighlight())
@@ -51,10 +51,10 @@ func TestChatList_StepChatHighlight_CountsDownAndClears(t *testing.T) {
 func TestChatList_Highlight_SurvivesReorderByID(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats(makeTestChats()) // Alice(1), Bob(2), Charlie(3)
+	setChats(m, makeTestChats()) // Alice(1), Bob(2), Charlie(3)
 	m.HighlightChat(2)
 	// Reorder: Bob bubbles to top. Highlight tracks chat 2 by id.
-	m.SetChats([]domain.Chat{
+	setChats(m, []domain.Chat{
 		{ID: 2, Title: "Bob"},
 		{ID: 1, Title: "Alice"},
 		{ID: 3, Title: "Charlie"},
@@ -66,7 +66,7 @@ func TestChatList_Highlight_SurvivesReorderByID(t *testing.T) {
 func TestChatList_View_HighlightChangesRowStyling(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats(makeTestChats())
+	setChats(m, makeTestChats())
 	plain := m.View()
 
 	m.HighlightChat(2)
@@ -81,7 +81,7 @@ func TestChatList_View_HighlightChangesRowStyling(t *testing.T) {
 func TestChatList_View_NoHighlightOnFocusedCursorRow(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats(makeTestChats())
+	setChats(m, makeTestChats())
 	m.SetFocused(true) // cursor at row 0 (Alice, id 1) by default
 	plain := m.View()
 

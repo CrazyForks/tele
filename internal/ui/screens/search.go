@@ -312,7 +312,10 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 			peer := chat.Peer
 			return m, func() tea.Msg { return ForwardToChatRequest{ToPeer: peer, MsgID: msgID} }
 		}
-		return m, func() tea.Msg { return OpenChatMsg{Chat: chat} }
+		// A search hit may be a contact with no dialog, which the owner does not
+		// hold, so the peer travels along to address a first message.
+		chatID, title, peer := chat.ID, chat.Title, chat.Peer
+		return m, func() tea.Msg { return OpenChatMsg{ChatID: chatID, Title: title, Peer: peer} }
 	case tea.KeyBackspace:
 		if len(m.query) > 0 {
 			runes := []rune(m.query)

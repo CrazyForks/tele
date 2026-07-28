@@ -170,14 +170,22 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if action == keys.ActionOpenContextMenu {
-			if chat, ok := m.chatList.CursorChat(); ok && m.st != nil {
-				m.chatMenu = components.NewChatContextMenu(chat, m.st.FolderFilters(), m.keyMap)
+			// The menu's actions address a peer, so it still needs the domain
+			// chat. TRANSITIONAL (#198): commands move to the owner API and the
+			// menu will address a chat id like everything else.
+			if row, ok := m.chatList.CursorChat(); ok && m.st != nil {
+				if chat, found := m.st.GetChat(row.ID); found {
+					m.chatMenu = components.NewChatContextMenu(chat, m.st.FolderFilters(), m.keyMap)
+				}
 			}
 			return m, nil
 		}
 		if action != keys.ActionNone {
 			newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})
 			m.chatList = newPane.(*screens.ChatListModel)
+			// The cursor may have moved toward an edge of the window the client
+			// holds; ask for the next one before it gets there.
+			m.syncChatListWindow()
 			return m, cmd
 		}
 		return m, nil
@@ -202,10 +210,15 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Persist the draft of the chat being closed before tearing it down (#62).
 		draftFlush := m.flushCurrentDraftCmd()
 		m.chat.ClearPendingAction()
-		m.chat.SetChat(nil)
+		m.chat.Close()
 		m.chat.SetMessages(nil)
+		m.chatMsgs = nil
 		m.currentChatID = 0
 		m.chatList.SetActiveByID(0)
+		if m.owner != nil && m.chatSub != 0 {
+			m.owner.Unsubscribe(m.chatSub)
+			m.chatSub = 0
+		}
 		result, cmd := m.focusPane(FocusChatList)
 		return result, tea.Batch(draftFlush, cmd)
 	}

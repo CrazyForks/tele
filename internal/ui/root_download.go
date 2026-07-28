@@ -117,11 +117,6 @@ func DownloadPhotoCmdCachedForTest(c internaltg.Client, mc *mediacache.Cache, pe
 	return downloadPhotoCmd(context.Background(), c, mc, peer, msgID, ref)
 }
 
-// HistoryChunkMsgForTest builds a historyChunkMsg for tests.
-func HistoryChunkMsgForTest(chatID int64, msgs []domain.Message) tea.Msg {
-	return historyChunkMsg{chatID: chatID, messages: msgs}
-}
-
 // refreshedBatch emits both the ready image and the store-update message after a
 // successful refresh+retry.
 func refreshedBatch(ready, refreshed tea.Msg) tea.Msg {

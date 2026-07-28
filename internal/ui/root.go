@@ -11,7 +11,8 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
-	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/core"
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/notices"
@@ -59,15 +60,24 @@ type RootModel struct {
 	matcher           *keys.Matcher
 	tgClient          internaltg.Client
 	st                store.Store
-	currentChatID     int64
-	// loadingOlderChat is the chat ID with an in-flight "load older history"
-	// fetch, or 0 when none. It gates duplicate LoadMore requests: rapid
-	// scroll-up would otherwise fire several identical fetches whose chunks stack
-	// into a repeating date-range "ring" (issue #120).
-	loadingOlderChat int64
-	historyLimit     int
-	verbose          bool
-	cfg              *config.Config
+	owner             Owner
+	// chatListSub is the chatlist subscription; chatSub is the open chat's.
+	// Zero means not subscribed.
+	chatListSub project.SubID
+	chatSub     project.SubID
+	// chatWindow is the open chat's current window, kept so a scroll can widen
+	// it rather than describe a delta. chatMsgs is the window's contents, which
+	// the client maintains from the deltas because the pane renders from a whole
+	// slice rather than applying edits itself.
+	chatWindow project.ChatWindow
+	chatMsgs   []domain.Message
+	// activeFolder is the folder the chatlist window is filtered by, kept so a
+	// window move can repeat it. 0 is All Chats.
+	activeFolder  int
+	currentChatID int64
+	historyLimit  int
+	verbose       bool
+	cfg           *config.Config
 	// Pending one-time startup notices (#197). The head of the queue is shown
 	// above every screen, including login; noticeLeft counts down whole seconds
 	// of blocked dismissal.
@@ -109,7 +119,6 @@ type RootModel struct {
 	mentionPopup      *components.MentionPopup
 	mentionMembers    map[int64][]domain.ChatMember
 	folderBar         *screens.FoldersModel
-	activeFilter      *domain.FolderFilter
 	logo              components.LogoLoader
 	typingSerial      int
 	// msgHighlightSerial guards the jump-to message-highlight fade loop so a
@@ -190,9 +199,16 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 func (m RootModel) CurrentScreen() Screen            { return m.screen }
 func (m RootModel) CurrentFocus() Focus              { return m.focus }
 func (m RootModel) ChatList() *screens.ChatListModel { return m.chatList }
-func (m RootModel) Chat() *screens.ChatModel         { return m.chat }
-func (m RootModel) VimMode() keys.VimMode            { return m.vimState.Mode }
-func (m RootModel) HasFolders() bool                 { return m.folderBar != nil && m.folderBar.HasFolders() }
+
+// Owner returns the attached connection owner, nil when none is. Tests drive the
+// model through a stand-in and need to reach it.
+func (m RootModel) Owner() Owner { return m.owner }
+
+// CurrentChatID is the chat the client has open, 0 when none.
+func (m RootModel) CurrentChatID() int64     { return m.currentChatID }
+func (m RootModel) Chat() *screens.ChatModel { return m.chat }
+func (m RootModel) VimMode() keys.VimMode    { return m.vimState.Mode }
+func (m RootModel) HasFolders() bool         { return m.folderBar != nil && m.folderBar.HasFolders() }
 
 // WithScreen returns a copy with the given screen set (used in tests and app init).
 func (m RootModel) WithScreen(s Screen) RootModel {
@@ -336,9 +352,11 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.noticeTick(), noticeTickCmd()
-	// applied domain changes from the connection owner (#190)
-	case state.Change:
-		return m.handleChange(msg)
+	// projection deltas and events from the connection owner (#194)
+	case project.Delta:
+		return m.handleDelta(msg)
+	case core.Incoming:
+		return m.handleIncoming(msg)
 	case screens.SendMsgRequest:
 		return m.handleSendMsg(msg)
 	case screens.EditSendRequest:
@@ -465,14 +483,18 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clicking a notify toast dismisses it and opens the target chat via the
 		// existing open path.
 		m.toasts.Dismiss(msg.serial)
-		chat := msg.chat
-		return m, func() tea.Msg { return screens.OpenChatMsg{Chat: chat} }
+		chatID, title := msg.chatID, msg.title
+		return m, func() tea.Msg { return screens.OpenChatMsg{ChatID: chatID, Title: title} }
 	case chatLoadErrMsg:
 		return m.handleChatLoadErr(msg)
 	case retryChatLoadMsg:
+		// Retrying is resubscribing: the subscription's first delta is a full
+		// Reset, and the owner refills the window from Telegram if the store
+		// still falls short.
 		m.chat.SetLoading(true)
 		m.chat.SetLoadError("")
-		return m, m.retryChatLoadCmd(msg.chatID)
+		m.subscribeChat(msg.chatID, domain.Peer{})
+		return m, nil
 	case mediaRefRefreshedMsg:
 		if m.st != nil {
 			m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)
@@ -480,9 +502,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	// network/data messages
 	case screens.OpenChatMsg,
-		ChatHistoryMsg,
 		screens.LoadMoreMsg,
-		historyChunkMsg,
 		markReadDoneMsg,
 		PhotoReadyMsg,
 		FullPhotoReadyMsg,

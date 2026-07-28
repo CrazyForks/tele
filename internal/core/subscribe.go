@@ -32,6 +32,14 @@ func (o *Owner) MoveWindow(id project.SubID, w project.Window) {
 
 func (o *Owner) Unsubscribe(id project.SubID) { o.registry.Unsubscribe(id) }
 
+// Refresh rebuilds every subscription against current state.
+//
+// TRANSITIONAL (#193, #195, #196, #198): a client still performs some optimistic
+// writes straight through the store, which bypasses commit and therefore
+// publishes nothing. Those call sites ask for a rebuild explicitly. When every
+// mutation goes through the owner, this goes.
+func (o *Owner) Refresh() { o.publish(o.registry.Refresh()) }
+
 // maybeBackfill fetches from Telegram when a chat window asked for more history
 // than the store holds, so a client never has to know where data comes from.
 func (o *Owner) maybeBackfill(id project.SubID, w project.Window) {

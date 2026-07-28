@@ -1,87 +1,27 @@
 package ui
 
-import "github.com/sorokin-vladimir/tele/internal/domain"
+import (
+	tea "charm.land/bubbletea/v2"
 
-func (m RootModel) filteredChats() []domain.Chat {
-	if m.st == nil {
-		return nil
-	}
-	all := m.st.Chats()
+	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
+)
 
-	// Archive virtual folder: only archived chats.
-	if m.activeFilter != nil && m.activeFilter.ID == domain.ArchiveFolderID {
-		out := make([]domain.Chat, 0)
-		for _, c := range all {
-			if c.IsArchived {
-				out = append(out, c)
-			}
-		}
-		return out
-	}
+// domainArchiveFolderID is the Archive virtual folder, named here so the folder
+// handling reads without a domain import at every use.
+const domainArchiveFolderID = domain.ArchiveFolderID
 
-	// All Chats: every non-archived chat.
-	if m.activeFilter == nil {
-		out := make([]domain.Chat, 0, len(all))
-		for _, c := range all {
-			if !c.IsArchived {
-				out = append(out, c)
-			}
-		}
-		return out
+// selectFolder re-points the chatlist window at another folder. Filtering and
+// ordering are the core's: the client only says which folder it is looking at.
+func (m RootModel) selectFolder(id int) (RootModel, tea.Cmd) {
+	m.activeFolder = id
+	if m.owner != nil && m.chatListSub != 0 {
+		offset, limit, _ := m.chatList.WindowRequest()
+		m.owner.MoveWindow(m.chatListSub, project.ChatListWindow{
+			Folder: id,
+			Offset: offset,
+			Limit:  limit,
+		})
 	}
-
-	// Custom filter: FolderFilter.Matches owns Telegram folder rules, including
-	// whether archived chats should be excluded.
-	out := make([]domain.Chat, 0, len(all))
-	for _, c := range all {
-		if m.activeFilter.Matches(c) {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-func (m RootModel) computeFolderUnreads() map[int]int {
-	counts := make(map[int]int)
-	if m.st == nil || m.folderBar == nil {
-		return counts
-	}
-	chats := m.st.Chats()
-	for _, f := range m.folderBar.Folders() {
-		// All Chats has no badge; Archive intentionally shows no unread
-		// count (mirrors the official client).
-		if f.ID == 0 || f.ID == domain.ArchiveFolderID {
-			continue
-		}
-		chatsWithUnread := 0
-		for _, c := range chats {
-			if f.Matches(c) && c.UnreadCount > 0 {
-				chatsWithUnread++
-			}
-		}
-		counts[f.ID] = chatsWithUnread
-	}
-	return counts
-}
-
-// syncFolderBar refreshes the folder pane's unread badges and toggles the
-// Archive entry's presence based on whether any archived chat exists.
-func (m RootModel) syncFolderBar() {
-	if m.folderBar == nil || m.st == nil {
-		return
-	}
-	m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
-	m.folderBar.SetArchivePresent(m.hasArchivedChats())
-}
-
-func (m RootModel) hasArchivedChats() bool {
-	if m.st == nil {
-		return false
-	}
-	for _, c := range m.st.Chats() {
-		if c.IsArchived {
-			return true
-		}
-	}
-	return false
+	return m, nil
 }

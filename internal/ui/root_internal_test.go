@@ -7,9 +7,30 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
+
+// rowsOf renders domain chats as the projection rows a test feeds the list
+// component, so a fixture can go on describing chats while the component
+// consumes rows.
+func rowsOf(chats []domain.Chat) []project.ChatRow {
+	out := make([]project.ChatRow, 0, len(chats))
+	for _, c := range chats {
+		out = append(out, project.ChatRow{
+			ID:         c.ID,
+			Title:      c.Title,
+			IsUser:     c.Peer.IsUser(),
+			Online:     c.Online,
+			Unread:     c.UnreadCount,
+			Mentions:   c.UnreadMentionsCount,
+			Reactions:  c.UnreadReactionsCount,
+			UnreadMark: c.UnreadMark,
+			Muted:      c.IsMuted,
+		})
+	}
+	return out
+}
 
 func TestMediaBuilderFor_FileBuildsForcedDocument(t *testing.T) {
 	att := &pendingAttachment{name: "report.pdf", mime: "application/pdf", sendAs: domain.MediaFile}
@@ -36,87 +57,4 @@ func TestMediaBuilderFor_VideoUnsupported(t *testing.T) {
 	att := &pendingAttachment{sendAs: domain.MediaVideo}
 	_, ok := mediaBuilderFor(att)
 	assert.False(t, ok, "video send-as is #107, not yet supported")
-}
-
-func TestComputeFolderUnreads_ArchiveNoBadge_CountsArchivedInCustomFolder(t *testing.T) {
-	st := store.NewMemory()
-	// One archived unread group and one normal unread group in a group folder.
-	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerGroup}, IsArchived: true, UnreadCount: 2})
-	st.SetChat(domain.Chat{ID: 2, Peer: domain.Peer{ID: 2, Type: domain.PeerGroup}, UnreadCount: 3})
-	m := NewRootModel(nil, st, 50, false)
-	m.folderBar.SetFolders([]domain.FolderFilter{{ID: 7, Title: "Groups", Groups: true}})
-	m.folderBar.SetArchivePresent(true)
-
-	counts := m.computeFolderUnreads()
-	// Archive virtual folder carries no unread badge.
-	_, hasArchive := counts[domain.ArchiveFolderID]
-	assert.False(t, hasArchive)
-	// Custom folders show archived chats in their listing, so the badge count
-	// aligns with that content and includes the archived unread chat.
-	assert.Equal(t, 2, counts[7])
-}
-
-func TestSyncFolderBar_TogglesArchivePresence(t *testing.T) {
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	m := NewRootModel(nil, st, 50, false)
-
-	m.syncFolderBar()
-	for _, f := range m.folderBar.Folders() {
-		require.NotEqual(t, domain.ArchiveFolderID, f.ID)
-	}
-
-	st.SetChatArchived(1, true)
-	m.syncFolderBar()
-	last := m.folderBar.Folders()
-	assert.Equal(t, domain.ArchiveFolderID, last[len(last)-1].ID)
-}
-
-func TestFilteredChats_ArchiveSplit(t *testing.T) {
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 1, Title: "Normal", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	st.SetChat(domain.Chat{ID: 2, Title: "Archived", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}, IsArchived: true})
-
-	m := NewRootModel(nil, st, 50, false)
-
-	// All Chats (nil filter): archived hidden.
-	m.activeFilter = nil
-	got := m.filteredChats()
-	require.Len(t, got, 1)
-	assert.Equal(t, int64(1), got[0].ID)
-
-	// Archive virtual folder: only archived.
-	arch := domain.FolderFilter{ID: domain.ArchiveFolderID, Title: "Archive"}
-	m.activeFilter = &arch
-	got = m.filteredChats()
-	require.Len(t, got, 1)
-	assert.Equal(t, int64(2), got[0].ID)
-}
-
-func TestFilteredChats_CustomFolderIncludesArchivedExplicitPeer(t *testing.T) {
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 1, Title: "Normal", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	st.SetChat(domain.Chat{ID: 2, Title: "Archived", Peer: domain.Peer{ID: 2, Type: domain.PeerChannel}, IsArchived: true})
-
-	m := NewRootModel(nil, st, 50, false)
-	f := domain.FolderFilter{ID: 7, Title: "News", IncludePeers: []int64{2}}
-	m.activeFilter = &f
-
-	got := m.filteredChats()
-	require.Len(t, got, 1)
-	assert.Equal(t, int64(2), got[0].ID)
-}
-
-func TestFilteredChats_CustomFolderIncludesArchivedCategoryMatch(t *testing.T) {
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 1, Title: "Normal", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	st.SetChat(domain.Chat{ID: 2, Title: "Archived", Peer: domain.Peer{ID: 2, Type: domain.PeerGroup}, IsArchived: true})
-
-	m := NewRootModel(nil, st, 50, false)
-	f := domain.FolderFilter{ID: 7, Title: "Groups", Groups: true}
-	m.activeFilter = &f
-
-	got := m.filteredChats()
-	require.Len(t, got, 1)
-	assert.Equal(t, int64(2), got[0].ID)
 }

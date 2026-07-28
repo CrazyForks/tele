@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"sync/atomic"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -31,7 +32,9 @@ func (o *Owner) RunUpdates(ctx context.Context) {
 			// Applying commits, and the owner's commit listener publishes the
 			// resulting deltas. Nothing is forwarded from here.
 			state.Apply(o.state, evt)
-			maybeNotify(o.notifier, o.state.Store(), evt, atomic.LoadInt64(&o.currentChatID), o.cfg.UI.NotificationPreview)
+			current := atomic.LoadInt64(&o.currentChatID)
+			maybeNotify(o.notifier, o.state.Store(), evt, current, o.cfg.UI.NotificationPreview)
+			o.publishIncoming(evt, current, time.Now())
 		}
 	}
 }

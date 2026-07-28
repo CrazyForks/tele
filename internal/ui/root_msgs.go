@@ -100,12 +100,6 @@ type markReadDoneMsg struct {
 	maxID  int
 }
 
-type historyChunkMsg struct {
-	chatID   int64
-	messages []domain.Message
-	err      error
-}
-
 type FolderFiltersMsg struct {
 	Filters []domain.FolderFilter
 }

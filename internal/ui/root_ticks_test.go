@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
@@ -18,7 +19,7 @@ func idleMainModel() RootModel {
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
 	m.chat.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
-	m.chatList.SetChats([]domain.Chat{{ID: 1}})
+	m.chatList.SetWindow(0, 1, []project.ChatRow{{ID: 1}})
 	return m
 }
 

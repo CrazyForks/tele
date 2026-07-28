@@ -63,6 +63,8 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			m.folderBar.SetSize(lay.folders.Width, lay.folders.Height)
 		}
 		m.chatList.SetSize(lay.chatList.Width, lay.chatList.Height)
+		// A taller pane shows more rows, so it needs a wider window.
+		m.syncChatListWindow()
 		// The chat pane owns both the message list and the composer, so it is
 		// sized to the full pane content height (messages + composer).
 		m.chat.SetSize(lay.messages.Width, lay.messages.Height+lay.composer.Height)
@@ -90,17 +92,15 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 				m.chatList.SetSize(lay.chatList.Width, lay.chatList.Height)
 				m.chat.SetSize(lay.messages.Width, lay.messages.Height+lay.composer.Height)
 			}
-			m.syncFolderBar()
 		}
 		return m, m.retransmitOnColsChange()
 
 	case screens.FolderSelectedMsg:
-		m.activeFilter = msg.Filter
-		m.chatList.SetChats(m.filteredChats())
-		m.chatList.SetActiveByID(m.currentChatID)
-		if m.folderBar != nil {
-			m.syncFolderBar()
+		folder := 0
+		if msg.Filter != nil {
+			folder = msg.Filter.ID
 		}
+		m, _ = m.selectFolder(folder)
 		result, cmd := m.focusPane(FocusChatList)
 		return result.(RootModel), cmd
 
@@ -108,12 +108,9 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.screen = ScreenMain
 		m.statusBar.SetVerbose(m.verbose)
 		m.statusBar.SetActivePane("chatlist")
-		if m.st != nil {
-			m.chatList.SetChats(m.filteredChats())
-		}
-		if m.folderBar != nil {
-			m.syncFolderBar()
-		}
+		// The chat list is a window onto the account, and this is the moment it
+		// first has a size to ask for one.
+		m.subscribeChatList()
 		// The spinner loop is (re)started by ensureAnimationTicks when an actual
 		// spinner is active (e.g. chats still loading); no unconditional start.
 		return m, nil
