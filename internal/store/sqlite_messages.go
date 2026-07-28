@@ -40,6 +40,12 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 		}
 	}
 	s.messages[chatID] = cp
+	// Remember how deep this chat was filled, so an arriving message does not
+	// cap the scrollback back down (see capMessagesLocked).
+	if s.msgFloor == nil {
+		s.msgFloor = make(map[int64]int)
+	}
+	s.msgFloor[chatID] = len(cp)
 	s.capMessagesLocked(chatID)
 	if chat, ok := s.chats[chatID]; ok && sharedPtsBox(chat.Peer) {
 		for _, m := range s.messages[chatID] {
@@ -233,15 +239,24 @@ func (s *SQLiteStore) LoadMessages(chatID int64) {
 	}
 }
 
-// capMessagesLocked trims a chat's message slice to the newest MaxMessagesPerChat,
-// dropping the oldest from the front and clearing their index entries. Caller
-// holds the lock. See issue #73.
+// capMessagesLocked trims a chat's message slice to the newest
+// MaxMessagesPerChat, dropping the oldest from the front and clearing their
+// index entries. Caller holds the lock. See issue #73.
+//
+// The cap bounds what arriving messages accumulate; it never trims below what
+// was last set outright. Scrolling far into history sets a longer tail on
+// purpose, and one incoming message must not throw that scrollback away — the
+// view is built from what the store holds, so the trim would be visible.
 func (s *SQLiteStore) capMessagesLocked(chatID int64) {
 	msgs := s.messages[chatID]
-	if len(msgs) <= MaxMessagesPerChat {
+	limit := MaxMessagesPerChat
+	if floor := s.msgFloor[chatID]; floor > limit {
+		limit = floor
+	}
+	if len(msgs) <= limit {
 		return
 	}
-	drop := len(msgs) - MaxMessagesPerChat
+	drop := len(msgs) - limit
 	for _, m := range msgs[:drop] {
 		delete(s.msgChat, m.ID)
 		s.markMsgDeletedLocked(chatID, m.ID)
@@ -272,6 +287,11 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.messages[msg.ChatID] = append(s.messages[msg.ChatID], msg)
+	// A chat holding more than the cap is holding a scrollback someone loaded on
+	// purpose. An arriving message adds to it rather than pushing the oldest out.
+	if s.msgFloor[msg.ChatID] >= MaxMessagesPerChat {
+		s.msgFloor[msg.ChatID]++
+	}
 	s.markMsgDirtyLocked(msg.ChatID, msg.ID)
 	if chat, ok := s.chats[msg.ChatID]; ok {
 		m := msg

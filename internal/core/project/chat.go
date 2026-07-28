@@ -21,10 +21,11 @@ type ChatContents struct {
 	HasNewer        bool
 	ReadInboxMaxID  int
 	ReadOutboxMaxID int
+	// UnreadReactions is the chat's unread-reaction count. It is per-chat state,
+	// not per-message: a reaction can land on a message far outside the window,
+	// and the client still has to mark it read while the user is looking.
+	UnreadReactions int
 	Draft           string
-	// Typing is ephemeral and has no persisted state to read, so the registry
-	// fills it rather than this builder.
-	Typing string
 }
 
 // BuildChat resolves the window's anchor against the stored history and slices
@@ -44,6 +45,7 @@ func BuildChat(r Reader, w ChatWindow) ChatContents {
 		out.Online = chat.Online
 		out.ReadInboxMaxID = chat.ReadInboxMaxID
 		out.ReadOutboxMaxID = chat.ReadOutboxMaxID
+		out.UnreadReactions = chat.UnreadReactionsCount
 		out.Draft = chat.Draft
 	}
 
@@ -67,6 +69,12 @@ func BuildChat(r Reader, w ChatWindow) ChatContents {
 		start = 0
 	}
 	end := idx + w.After + 1
+	if w.Anchor.Kind == AnchorFirstUnread {
+		// Anchored on the first unread, the window runs to the newest message:
+		// everything past the anchor is unread by definition, and a window that
+		// stopped at the separator would hide exactly what it was opened for.
+		end = len(all)
+	}
 	if end > len(all) {
 		end = len(all)
 	}

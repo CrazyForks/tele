@@ -87,6 +87,9 @@ func (m RootModel) handleMouseWheel(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	case regionChatList:
 		newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})
 		m.chatList = newPane.(*screens.ChatListModel)
+		// The wheel moves the cursor as surely as a key does, so it has to ask
+		// for the next window just the same.
+		m.syncChatListWindow()
 		return m, cmd
 	case regionMessages:
 		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})

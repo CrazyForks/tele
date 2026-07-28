@@ -20,7 +20,7 @@ func rootOnOpenChatWithMsg(t *testing.T, msgID int) RootModel {
 	t.Helper()
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	m := NewRootModel(nil, st, 50, false)
+	m := newRootInternal(st, 50)
 	m = m.WithScreen(ScreenMain)
 	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
 	m = newM.(RootModel)
@@ -81,7 +81,7 @@ func TestRoot_IncomingMsg_HighlightsNonOpenChat(t *testing.T) {
 func TestRoot_IncomingMsg_NoHighlightForOpenChat(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	m := NewRootModel(nil, st, 50, false)
+	m := newRootInternal(st, 50)
 	m = m.WithScreen(ScreenMain)
 	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
 	m = newM.(RootModel)
@@ -191,7 +191,7 @@ func newRootWithTwoChatsInternal(t *testing.T) (RootModel, store.Store) {
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
 	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	m := NewRootModel(nil, st, 50, false)
+	m := newRootInternal(st, 50)
 	m = m.WithScreen(ScreenMain)
 	newM, _ := m.Update(screens.TransitionToMainMsg{})
 	return newM.(RootModel), st

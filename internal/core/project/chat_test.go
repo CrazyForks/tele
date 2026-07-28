@@ -200,3 +200,19 @@ func TestBuildChat_GroupAndChannelAreGroups(t *testing.T) {
 		})
 	}
 }
+
+// Everything past the first unread is unread by definition, so a window
+// anchored there must run to the newest message. Stopping at the anchor hides
+// exactly what the chat was opened to show.
+func TestBuildChat_FirstUnreadWindowReachesTheNewestMessage(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}, msgs(10))
+
+	got := project.BuildChat(r, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2, After: 0,
+	})
+
+	assert.Equal(t, 7, got.AnchorMsgID)
+	assert.Equal(t, []int{5, 6, 7, 8, 9, 10}, ids(got.Messages),
+		"After is 0, yet the unread tail is still in the window")
+	assert.False(t, got.HasNewer)
+}

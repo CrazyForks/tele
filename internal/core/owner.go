@@ -38,6 +38,8 @@ type Owner struct {
 	events   <-chan store.Event
 	deltas   chan project.Delta
 	incoming chan Incoming
+	failures chan Failure
+	typing   chan Typing
 	registry *project.Registry
 	readyCh  chan struct{}
 	onAuthFn func(userID int64, username string)
@@ -71,6 +73,8 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		authFlow:     internaltg.NewAuthFlow(),
 		deltas:       make(chan project.Delta, 256),
 		incoming:     make(chan Incoming, 32),
+		failures:     make(chan Failure, 32),
+		typing:       make(chan Typing, 32),
 		registry:     project.NewRegistry(st.Store()),
 		readyCh:      make(chan struct{}),
 		historyLimit: cfg.UI.HistoryLimit,

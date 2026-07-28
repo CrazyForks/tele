@@ -65,6 +65,18 @@ func (m RootModel) handleIncoming(in core.Incoming) (RootModel, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// handleFailure renders work the owner could not finish. The owner reports what
+// failed in domain terms (#191); saying it is the client's job.
+func (m RootModel) handleFailure(f core.Failure) (RootModel, tea.Cmd) {
+	text, _, ok := errText(f.Op, f.Err)
+	if !ok {
+		// A cancelled operation is not a failure and must not blank out the
+		// pane with an empty error banner.
+		return m, nil
+	}
+	return m.handleChatLoadErr(chatLoadErrMsg{chatID: f.ChatID, text: text})
+}
+
 // notifyOpenMsg is emitted when a notify toast is clicked: it dismisses the
 // toast and opens the target chat (#59 click-to-open).
 type notifyOpenMsg struct {

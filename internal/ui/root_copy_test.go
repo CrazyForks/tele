@@ -18,7 +18,7 @@ func TestCopyKey_OnTextMessage_WritesTextToClipboard(t *testing.T) {
 
 	m, st := newRootOnChat(t, &mockTGClient{})
 	st.AppendMessage(domain.Message{ID: 7, ChatID: 1, Text: "hello world", Date: time.Now()})
-	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
 	m.View() // lay out the message list so the message becomes the selection
 
@@ -34,7 +34,7 @@ func TestCopyMsgRequest_FromContextMenu_WritesTextToClipboard(t *testing.T) {
 
 	m, st := newRootOnChat(t, &mockTGClient{})
 	st.AppendMessage(domain.Message{ID: 9, ChatID: 1, Text: "from menu", Date: time.Now()})
-	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
 	m.View()
 
@@ -51,7 +51,7 @@ func TestCopyKey_OnMediaOnlyMessage_DoesNotCopy(t *testing.T) {
 	m, st := newRootOnChat(t, &mockTGClient{})
 	st.AppendMessage(domain.Message{ID: 8, ChatID: 1, Date: time.Now(),
 		Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 1}})
-	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
 	m.View()
 

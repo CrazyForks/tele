@@ -2,6 +2,7 @@ package ui_test
 
 import (
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -25,13 +26,17 @@ type testOwner struct {
 	// incoming records the events the real owner would publish alongside the
 	// deltas: a message arriving in a chat the client is not showing.
 	incoming []core.Incoming
+	typing   []core.Typing
+	// moves records the windows the client asked for, so a test can assert that
+	// scrolling repositions a window rather than fetching anything itself.
+	moves []project.Window
 }
 
 func newTestOwner(st store.Store) *testOwner {
 	o := &testOwner{state: state.New(st), reg: project.NewRegistry(st)}
 	o.state.OnChange(func(chg state.Change) {
 		if chg.Kind == state.ChangeTyping {
-			o.queued = append(o.queued, o.reg.SetTyping(chg.ChatID, chg.Typing.Label())...)
+			o.typing = append(o.typing, core.Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
 			return
 		}
 		o.queued = append(o.queued, o.reg.Refresh()...)
@@ -46,7 +51,28 @@ func (o *testOwner) Subscribe(w project.Window) project.SubID {
 }
 
 func (o *testOwner) MoveWindow(id project.SubID, w project.Window) {
+	o.moves = append(o.moves, w)
 	o.queued = append(o.queued, o.reg.MoveWindow(id, w)...)
+}
+
+// lastChatWindow returns the most recent chat window the client asked for.
+func (o *testOwner) lastChatWindow() (project.ChatWindow, bool) {
+	for i := len(o.moves) - 1; i >= 0; i-- {
+		if w, ok := o.moves[i].(project.ChatWindow); ok {
+			return w, true
+		}
+	}
+	return project.ChatWindow{}, false
+}
+
+// lastChatListWindow returns the most recent chatlist window the client asked for.
+func (o *testOwner) lastChatListWindow() (project.ChatListWindow, bool) {
+	for i := len(o.moves) - 1; i >= 0; i-- {
+		if w, ok := o.moves[i].(project.ChatListWindow); ok {
+			return w, true
+		}
+	}
+	return project.ChatListWindow{}, false
 }
 
 func (o *testOwner) Unsubscribe(id project.SubID) { o.reg.Unsubscribe(id) }
@@ -58,14 +84,17 @@ func (o *testOwner) Refresh() { o.queued = append(o.queued, o.reg.Refresh()...) 
 func (o *testOwner) drain(m ui.RootModel) (tea.Model, tea.Cmd) {
 	var model tea.Model = m
 	var cmd tea.Cmd
-	for len(o.queued) > 0 || len(o.incoming) > 0 {
-		deltas, events := o.queued, o.incoming
-		o.queued, o.incoming = nil, nil
+	for len(o.queued) > 0 || len(o.incoming) > 0 || len(o.typing) > 0 {
+		deltas, events, typing := o.queued, o.incoming, o.typing
+		o.queued, o.incoming, o.typing = nil, nil, nil
 		for _, d := range deltas {
 			model, cmd = model.Update(d)
 		}
 		for _, in := range events {
 			model, cmd = model.Update(in)
+		}
+		for _, tp := range typing {
+			model, cmd = model.Update(tp)
 		}
 	}
 	return model, cmd
@@ -100,7 +129,7 @@ func applyEvent(t *testing.T, m ui.RootModel, st store.Store, evt store.Event) (
 	chg, applied := state.Apply(o.state, evt)
 	if applied && chg.Kind == state.ChangeNewMessage && !chg.Message.IsOut &&
 		chg.ChatID != m.CurrentChatID() {
-		o.incoming = append(o.incoming, incomingFor(st, chg))
+		o.incoming = append(o.incoming, incomingFor(st, m, chg))
 	}
 	return o.drain(m)
 }
@@ -120,6 +149,27 @@ func openChat(t *testing.T, m ui.RootModel, chatID int64, title string) ui.RootM
 	return drained.(ui.RootModel)
 }
 
+// drainOwner feeds whatever the owner has queued into the model. Anything that
+// subscribes or moves a window queues a delta the bubbletea program would
+// deliver; a test has to deliver it itself.
+func drainOwner(t *testing.T, m ui.RootModel) ui.RootModel {
+	t.Helper()
+	o, ok := m.Owner().(*testOwner)
+	if !ok {
+		return m
+	}
+	drained, _ := o.drain(m)
+	return drained.(ui.RootModel)
+}
+
+// toMain reaches the main screen, where the chat list first has a size and
+// subscribes, and drains the subscription's opening Reset.
+func toMain(t *testing.T, m ui.RootModel) ui.RootModel {
+	t.Helper()
+	next, _ := m.Update(screens.TransitionToMainMsg{})
+	return drainOwner(t, next.(ui.RootModel))
+}
+
 // applyHistory stands in for a history backfill: it commits the store's current
 // messages for a chat through state and drains the resulting chat:<id> delta
 // into the model, the way core.Owner.backfill does in production. It replaces
@@ -134,14 +184,14 @@ func applyHistory(t *testing.T, m ui.RootModel, st store.Store, chatID int64) (t
 	return o.drain(m)
 }
 
-// incomingFor builds the event the owner publishes for a message that arrived
-// in a chat the client is not showing.
-func incomingFor(st store.Store, chg state.Change) core.Incoming {
+// incomingFor reproduces core.Owner.publishIncoming: the same freshness and mute
+// gate the owner applies before telling a client anything arrived.
+func incomingFor(st store.Store, m ui.RootModel, chg state.Change) core.Incoming {
 	chat, _ := st.GetChat(chg.ChatID)
 	return core.Incoming{
 		ChatID:  chg.ChatID,
 		Title:   chat.Title,
 		Preview: chg.Message.Text,
-		Notify:  !chat.IsMuted && !chat.IsArchived,
+		Notify:  store.Notifiable(st, chg.ChatID, m.CurrentChatID(), chg.Message.Date, time.Now()),
 	}
 }

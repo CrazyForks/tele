@@ -119,6 +119,10 @@ type SQLiteStore struct {
 	// ID space and are deleted with an explicit ChatID. See issue #72.
 	msgChat map[int]int64
 
+	// msgFloor is how many messages a chat was last filled with outright, so the
+	// per-chat cap does not trim a scrollback the user deliberately loaded.
+	msgFloor map[int64]int
+
 	// dirtyPersist holds chat IDs whose row changed via a high-frequency
 	// write-behind mutation (read state, last message) and awaits a coalesced
 	// flush. flushStop signals the flusher goroutine to exit; flushDone is closed

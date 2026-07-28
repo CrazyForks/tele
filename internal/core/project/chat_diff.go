@@ -16,6 +16,12 @@ const (
 	// subscription, and whenever the window moved rather than grew: a jump to a
 	// quoted message, a chat switch, or any header change.
 	ChatReset ChatDeltaKind = iota
+	// ChatHeaderUpdate carries the per-chat state rendered around the window —
+	// title, peer presence, unread reactions — with the window itself untouched.
+	// It is separate from Reset because re-seating the message list re-anchors
+	// the viewport: a contact coming online must not scroll the chat you are
+	// reading back to the bottom.
+	ChatHeaderUpdate
 	ChatOlder
 	ChatNewer
 	ChatAppend
@@ -23,7 +29,6 @@ const (
 	ChatRemove
 	ChatRead
 	ChatDraft
-	ChatTyping
 )
 
 type ChatDelta struct {
@@ -37,7 +42,6 @@ type ChatDelta struct {
 	ReadInboxMaxID  int
 	ReadOutboxMaxID int
 	Draft           string
-	Typing          string
 }
 
 // DiffChat turns a pair of successive contents into deltas. The message window
@@ -46,11 +50,14 @@ type ChatDelta struct {
 // per message, one appended id at the live end is an Append, missing ids are a
 // Remove, and anything else means the window moved and is a Reset.
 func DiffChat(prev, next ChatContents) []ChatDelta {
-	if prev.ChatID != next.ChatID || headerChanged(prev, next) {
+	if prev.ChatID != next.ChatID {
 		return []ChatDelta{{Kind: ChatReset, Contents: next}}
 	}
 
 	out := diffWindow(prev, next)
+	if headerChanged(prev, next) {
+		out = append(out, ChatDelta{Kind: ChatHeaderUpdate, Contents: next})
+	}
 
 	if prev.ReadInboxMaxID != next.ReadInboxMaxID || prev.ReadOutboxMaxID != next.ReadOutboxMaxID {
 		out = append(out, ChatDelta{
@@ -62,17 +69,15 @@ func DiffChat(prev, next ChatContents) []ChatDelta {
 	if prev.Draft != next.Draft {
 		out = append(out, ChatDelta{Kind: ChatDraft, Draft: next.Draft})
 	}
-	if prev.Typing != next.Typing {
-		out = append(out, ChatDelta{Kind: ChatTyping, Typing: next.Typing})
-	}
 	return out
 }
 
 // headerChanged reports a change to the per-chat state rendered around the
-// window. It has no delta of its own: it changes rarely, and a Reset is cheaper
-// than another kind to get wrong.
+// window.
 func headerChanged(prev, next ChatContents) bool {
-	return prev.Title != next.Title || prev.IsUser != next.IsUser || prev.Online != next.Online
+	return prev.Title != next.Title || prev.IsUser != next.IsUser ||
+		prev.IsGroup != next.IsGroup || prev.Online != next.Online ||
+		prev.UnreadReactions != next.UnreadReactions
 }
 
 func diffWindow(prev, next ChatContents) []ChatDelta {

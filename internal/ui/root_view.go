@@ -68,10 +68,8 @@ func (m RootModel) View() tea.View {
 		chatDot := ""
 		if m.chat.IsTyping() {
 			chatDot = m.chat.TypingLabel()
-		} else if m.currentChatID != 0 && m.st != nil {
-			if chat, ok := m.st.GetChat(m.currentChatID); ok && chat.Peer.IsUser() && chat.Online {
-				chatDot = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("●")
-			}
+		} else if m.chat.PeerOnline() {
+			chatDot = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("●")
 		}
 
 		var main string

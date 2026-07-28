@@ -156,27 +156,41 @@ func TestDiffChat_DraftChangeIsADraftDelta(t *testing.T) {
 	assert.Equal(t, "typed elsewhere", got[0].Draft)
 }
 
-func TestDiffChat_TypingChangeIsATypingDelta(t *testing.T) {
-	prev := chatContents(msgs(1))
-	next := chatContents(msgs(1))
-	next.Typing = "Ada is typing"
-
-	got := project.DiffChat(prev, next)
-
-	require.Equal(t, []project.ChatDeltaKind{project.ChatTyping}, kinds(got))
-	assert.Equal(t, "Ada is typing", got[0].Typing)
-}
-
-func TestDiffChat_PresenceChangeUpdatesTheHeaderViaReset(t *testing.T) {
+// A contact coming online must not disturb the message window: re-seating the
+// list re-anchors the viewport, which would scroll a chat being read back to
+// the bottom.
+func TestDiffChat_PresenceChangeUpdatesOnlyTheHeader(t *testing.T) {
 	prev := chatContents(msgs(1))
 	next := chatContents(msgs(1))
 	next.Online = true
 
 	got := project.DiffChat(prev, next)
 
-	require.Equal(t, []project.ChatDeltaKind{project.ChatReset}, kinds(got),
-		"the header has no delta of its own; it rides on Reset")
+	require.Equal(t, []project.ChatDeltaKind{project.ChatHeaderUpdate}, kinds(got))
 	assert.True(t, got[0].Contents.Online)
+}
+
+func TestDiffChat_UnreadReactionsAreHeaderState(t *testing.T) {
+	// The reaction may have landed on a message far outside the window, so the
+	// count is carried by the header rather than by any message.
+	prev := chatContents(msgs(3))
+	next := chatContents(msgs(3))
+	next.UnreadReactions = 1
+
+	got := project.DiffChat(prev, next)
+
+	require.Equal(t, []project.ChatDeltaKind{project.ChatHeaderUpdate}, kinds(got))
+	assert.Equal(t, 1, got[0].Contents.UnreadReactions)
+}
+
+func TestDiffChat_HeaderAndWindowChangeTogether(t *testing.T) {
+	prev := chatContents(msgs(3))
+	next := chatContents(msgs(4))
+	next.Online = true
+
+	got := project.DiffChat(prev, next)
+
+	assert.Equal(t, []project.ChatDeltaKind{project.ChatAppend, project.ChatHeaderUpdate}, kinds(got))
 }
 
 func TestDiffChat_SwitchingChatIsAReset(t *testing.T) {

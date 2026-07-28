@@ -47,6 +47,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   connection becoming its own process, so that a terminal window, a second
   window and a command-line call can share one account without competing for the
   session (#190).
+- The chat list and the open chat are now drawn from what the owner sends rather
+  than read out of the database directly, and the owner sends only what is on
+  screen. Ordering, folder filtering and history paging moved with it. Two
+  visible consequences: a presence change for a chat far down the list no longer
+  costs a redraw, where every one of them used to, and loading older history is
+  now one request at a time from a single place instead of a guard the chat
+  window kept for itself. Otherwise nothing looks different (#194).
 - Failures now explain themselves. Where the status bar used to print whatever
   Telegram returned — `CHAT_SEND_MEDIA_FORBIDDEN`, `PEER_ID_INVALID` — it now
   says "not allowed in this chat", "chat unavailable", "too fast, retry in 12m".

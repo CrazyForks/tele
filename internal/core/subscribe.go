@@ -17,6 +17,12 @@ func (o *Owner) Deltas() <-chan project.Delta { return o.deltas }
 // Subscribe registers a window. The subscription's first delta carries its
 // current contents, which is what makes a resubscribe a full resync.
 func (o *Owner) Subscribe(w project.Window) project.SubID {
+	// Bring the chat's persisted tail into memory before the window is built, so
+	// it paints cached history at once instead of waiting on the network — and
+	// still shows something when there is no network at all (#139).
+	if cw, ok := w.(project.ChatWindow); ok {
+		o.state.Store().LoadMessages(cw.ChatID)
+	}
 	id, deltas := o.registry.Subscribe(w)
 	o.publish(deltas)
 	o.maybeBackfill(id, w)
@@ -62,11 +68,12 @@ func needsBackfill(c project.ChatContents, w project.ChatWindow) bool {
 }
 
 // publishChange turns one applied domain change into whatever the current
-// subscriptions actually need to hear. Every kind but typing is rebuilt from
-// state; typing is ephemeral and has nothing persisted to rebuild from.
+// subscriptions need to hear. Typing goes out as an event instead: it has no
+// persisted state to rebuild a projection from, and nothing would ever clear it
+// if it were held as one.
 func (o *Owner) publishChange(chg state.Change) {
 	if chg.Kind == state.ChangeTyping {
-		o.publish(o.registry.SetTyping(chg.ChatID, chg.Typing.Label()))
+		o.publishTyping(Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
 		return
 	}
 	o.publish(o.registry.Refresh())

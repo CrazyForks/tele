@@ -357,6 +357,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleDelta(msg)
 	case core.Incoming:
 		return m.handleIncoming(msg)
+	case core.Failure:
+		return m.handleFailure(msg)
+	case core.Typing:
+		return m.handleTyping(msg)
 	case screens.SendMsgRequest:
 		return m.handleSendMsg(msg)
 	case screens.EditSendRequest:

@@ -23,9 +23,10 @@ func New(st store.Store) *State {
 	return &State{st: st}
 }
 
-// Store exposes the underlying store for readers that have not yet moved to
-// projections (#194). It is not a mutation path: writing through it bypasses
-// commit and the change stream.
+// Store exposes the underlying store. Its readers are the owner's own paths —
+// building projections, resolving a peer for a fetch — and the command call
+// sites #198 converts. It is not a mutation path: writing through it bypasses
+// commit, so nothing downstream hears about it.
 func (s *State) Store() store.Store { return s.st }
 
 // OnChange registers fn to run for every committed Change. The owner registers

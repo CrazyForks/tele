@@ -51,7 +51,7 @@ func TestDownloadKey_OnPhoto_SavesFullQualityJpg(t *testing.T) {
 		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
 		Photo: &domain.PhotoRef{ID: 321, FullThumbSize: "y"}}
 	st.AppendMessage(photo)
-	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
 	m.View() // lay out the message list so the photo becomes the selection
 
@@ -77,7 +77,7 @@ func TestDownloadKey_OnVideo_SavesSynthesizedName(t *testing.T) {
 		Media:    &domain.MediaRef{Kind: domain.MediaVideo},
 		Document: &domain.DocumentRef{ID: 654, MimeType: "video/mp4"}}
 	st.AppendMessage(video)
-	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
 	m.View()
 
@@ -105,7 +105,7 @@ func TestDownloadFileRequest_RoutedForPhoto(t *testing.T) {
 		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
 		Photo: &domain.PhotoRef{ID: 999}}
 	st.AppendMessage(photo)
-	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
 	m.View()
 

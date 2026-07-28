@@ -10,10 +10,6 @@ type Registry struct {
 	reader Reader
 	next   SubID
 	subs   map[SubID]*sub
-
-	// typing holds the ephemeral typing label per chat. It has no persisted
-	// state to rebuild from, so the registry carries it between refreshes.
-	typing map[int64]string
 }
 
 type sub struct {
@@ -23,11 +19,7 @@ type sub struct {
 }
 
 func NewRegistry(r Reader) *Registry {
-	return &Registry{
-		reader: r,
-		subs:   make(map[SubID]*sub),
-		typing: make(map[int64]string),
-	}
+	return &Registry{reader: r, subs: make(map[SubID]*sub)}
 }
 
 // Subscribe registers a window and replies with its current contents, so a
@@ -81,19 +73,6 @@ func (g *Registry) Refresh() []Delta {
 	return g.rebuildAll()
 }
 
-// SetTyping records an ephemeral typing label and refreshes. The label is not
-// persisted anywhere, so it cannot be rebuilt from the reader.
-func (g *Registry) SetTyping(chatID int64, label string) []Delta {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if label == "" {
-		delete(g.typing, chatID)
-	} else {
-		g.typing[chatID] = label
-	}
-	return g.rebuildAll()
-}
-
 // rebuildAll refreshes every subscription. Caller holds the lock. Map iteration
 // makes the order across subscriptions unspecified, which is fine: every delta
 // is addressed to one subscription.
@@ -119,7 +98,6 @@ func (g *Registry) rebuild(id SubID) []Delta {
 		s.list = next
 	case ChatWindow:
 		next := BuildChat(g.reader, w)
-		next.Typing = g.typing[w.ChatID]
 		for _, d := range DiffChat(s.chat, next) {
 			out = append(out, Delta{Sub: id, Chat: &d})
 		}

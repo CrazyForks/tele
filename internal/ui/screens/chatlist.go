@@ -168,8 +168,14 @@ func (m *ChatListModel) TickSpinner() { m.spinner.Tick() }
 func (m *ChatListModel) IsLoadingChats() bool { return m.total == 0 }
 
 // SetWindow replaces the window with the contents of a chatlist Reset delta.
-// The cursor is re-bound to the chat it was on, which is what makes a Reset —
-// emitted on every reorder — non-disruptive.
+// The cursor follows the chat it was on, which is what makes a Reset — emitted
+// on every reorder — non-disruptive.
+//
+// When the cursor sits outside the window being replaced, there is no chat to
+// follow and the numeric position is kept instead. That case is not exotic: a
+// jump to the end of the list moves the cursor first and only then asks for the
+// window around it, so the arriving window is precisely the one the cursor is
+// no longer inside.
 func (m *ChatListModel) SetWindow(offset, total int, rows []project.ChatRow) {
 	cursorID := int64(0)
 	if r, ok := m.rowAt(m.cursor); ok {
@@ -180,11 +186,12 @@ func (m *ChatListModel) SetWindow(offset, total int, rows []project.ChatRow) {
 	m.offset = offset
 	m.total = total
 
-	m.cursor = 0
-	for i, r := range rows {
-		if r.ID == cursorID {
-			m.cursor = offset + i
-			break
+	if cursorID != 0 {
+		for i, r := range rows {
+			if r.ID == cursorID {
+				m.cursor = offset + i
+				break
+			}
 		}
 	}
 	m.clampCursor()

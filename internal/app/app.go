@@ -207,6 +207,10 @@ func (a *App) Run() error {
 				prog.Send(d)
 			case in := <-a.owner.Incoming():
 				prog.Send(in)
+			case f := <-a.owner.Failures():
+				prog.Send(f)
+			case tp := <-a.owner.Typing():
+				prog.Send(tp)
 			}
 		}
 	}()

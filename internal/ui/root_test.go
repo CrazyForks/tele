@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -431,17 +432,13 @@ func TestRoot_ChatOpenFailure_ClearsSpinnerAndShowsError(t *testing.T) {
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = newM.(ui.RootModel)
 
-	newM, cmd := m.Update(screens.OpenChatMsg{ChatID: chat.ID, Title: chat.Title})
-	require.NotNil(t, cmd)
-	// drain the batched open cmd; one branch yields the chat load error
+	m = openChat(t, m, chat.ID, chat.Title)
+
+	// The client cannot see whether filling the window touched the network, so
+	// the owner has to say when it could not: otherwise the pane waits forever.
+	newM, _ = m.Update(core.Failure{ChatID: chat.ID, Op: "load history", Err: mc.historyErr})
 	m = newM.(ui.RootModel)
-	for _, inner := range drainMsgs(cmd()) {
-		if inner == nil {
-			continue
-		}
-		nm, _ := m.Update(inner)
-		m = nm.(ui.RootModel)
-	}
+
 	assert.Contains(t, m.View().Content, "timeout")
 }
 
@@ -507,18 +504,7 @@ func newRootOnChat(t *testing.T, mc *mockTGClient) (ui.RootModel, store.Store) {
 	m := newRoot(mc, st, 50, false).WithScreen(ui.ScreenMain)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(ui.RootModel)
-	nm, cmd := m.Update(screens.OpenChatMsg{ChatID: chat.ID, Title: chat.Title})
-	m = nm.(ui.RootModel)
-	if cmd != nil {
-		for _, inner := range drainMsgs(cmd()) {
-			if inner == nil {
-				continue
-			}
-			nm2, _ := m.Update(inner)
-			m = nm2.(ui.RootModel)
-		}
-	}
-	return m, st
+	return openChat(t, m, chat.ID, chat.Title), st
 }
 
 func writeTempFile(t *testing.T, name, content string) string {
@@ -903,7 +889,10 @@ func TestRoot_DownloadKey_StartsFileDownload(t *testing.T) {
 		Media:    &domain.MediaRef{Kind: domain.MediaFile},
 		Document: &domain.DocumentRef{ID: 5, FileName: "report.pdf"},
 	}
-	m, _ := newRootOnChat(t, &mockTGClient{history: []domain.Message{fileMsg}})
+	m, st := newRootOnChat(t, &mockTGClient{})
+	st.SetMessages(1, []domain.Message{fileMsg})
+	nm, _ := applyHistory(t, m, st, 1)
+	m = nm.(ui.RootModel)
 	_ = m.View() // establish the selected message
 
 	m2, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
@@ -960,49 +949,59 @@ func TestRoot_CtrlC_Quits(t *testing.T) {
 	assert.True(t, isQuit)
 }
 
-func TestRoot_LoadMoreMsg_DispatchesGetHistory(t *testing.T) {
+// Reaching the top of the window widens it. The client asks for more history; it
+// no longer fetches, and no longer knows whether the extra messages come from
+// the store or from Telegram.
+func TestRoot_LoadMore_WidensTheChatWindow(t *testing.T) {
 	mock := &mockTGClient{}
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	m := newRoot(mock, st, 50, false)
-	m = m.WithScreen(ui.ScreenMain)
+	m := newRoot(mock, st, 50, false).WithScreen(ui.ScreenMain)
+	m = openChat(t, m, 1, "Alice")
+	o := m.Owner().(*testOwner)
 
-	// Set current chat to 1 by sending OpenChatMsg
-	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
-	m = newM.(ui.RootModel)
+	m.Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 5})
 
-	newM, cmd := m.Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 5})
-	_ = newM
-	require.NotNil(t, cmd)
-	// cmd should trigger a GetHistory call — verify it returns a non-nil message
-	result := cmd()
-	assert.NotNil(t, result)
+	w, ok := o.lastChatWindow()
+	require.True(t, ok, "reaching the top must move the chat window")
+	assert.Equal(t, int64(1), w.ChatID)
+	assert.Greater(t, w.Before, 50, "the window must ask for more than it already had")
 }
 
-func TestRoot_LoadMore_GuardsConcurrentRequests(t *testing.T) {
-	mock := &mockTGClient{history: []domain.Message{{ID: 1, ChatID: 1, Date: time.Now()}}}
+// Repeating it keeps widening; collapsing duplicate fetches is the owner's job
+// (see TestOwner_ConcurrentBackfillsCollapseToOneFetch), not the client's.
+func TestRoot_LoadMore_WidensAgainOnRepeat(t *testing.T) {
+	mock := &mockTGClient{}
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(mock, st, 50, false).WithScreen(ui.ScreenMain)
-	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
-	m = newM.(ui.RootModel)
+	m = openChat(t, m, 1, "Alice")
+	o := m.Owner().(*testOwner)
 
-	// First load-older dispatches a fetch and arms the in-flight guard.
-	newM, cmd1 := m.Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 5})
-	m = newM.(ui.RootModel)
-	require.NotNil(t, cmd1)
+	next, _ := m.Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 5})
+	first, _ := o.lastChatWindow()
+	next.(ui.RootModel).Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 5})
 
-	// A second load-older while the first is still in flight is ignored — no
-	// duplicate fetch that would later stack a duplicate chunk (issue #120).
-	newM, cmd2 := m.Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 5})
-	m = newM.(ui.RootModel)
-	assert.Nil(t, cmd2)
+	second, ok := o.lastChatWindow()
+	require.True(t, ok)
+	assert.Greater(t, second.Before, first.Before)
+}
 
-	// Once the chunk resolves the guard clears, so further loads are allowed.
-	newM, _ = m.Update(cmd1())
-	m = newM.(ui.RootModel)
-	_, cmd3 := m.Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 1})
-	assert.NotNil(t, cmd3)
+// A load-more for a chat that is not open is ignored: it belongs to a window
+// nobody is looking at.
+func TestRoot_LoadMore_IgnoredForAnotherChat(t *testing.T) {
+	mock := &mockTGClient{}
+	st := store.NewMemory()
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
+	m := newRoot(mock, st, 50, false).WithScreen(ui.ScreenMain)
+	m = openChat(t, m, 1, "Alice")
+	o := m.Owner().(*testOwner)
+	o.moves = nil
+
+	m.Update(screens.LoadMoreMsg{ChatID: 99, OffsetID: 5})
+
+	_, ok := o.lastChatWindow()
+	assert.False(t, ok)
 }
 
 func TestRoot_SlashKey_ActivatesSearch(t *testing.T) {
@@ -1224,15 +1223,12 @@ func TestRoot_Send_FailedSendRemovesSentinel(t *testing.T) {
 
 func TestRootModel_PhotoDownloadDispatchedOnHistory(t *testing.T) {
 	mock := &mockTGClient{}
-	m, _ := newRootWithOpenChat(t, mock)
-	m2, cmd := m.Update(ui.ChatHistoryMsg{
-		ChatID: 1,
-		Messages: []domain.Message{
-			{ID: 10, ChatID: 1, Text: "hello"},
-			{ID: 11, ChatID: 1, Photo: &domain.PhotoRef{ID: 77, ThumbSize: "m"}},
-		},
+	m, st := newRootWithOpenChat(t, mock)
+	st.SetMessages(1, []domain.Message{
+		{ID: 10, ChatID: 1, Text: "hello", Date: time.Unix(1, 0)},
+		{ID: 11, ChatID: 1, Photo: &domain.PhotoRef{ID: 77, ThumbSize: "m"}, Date: time.Unix(2, 0)},
 	})
-	_ = m2
+	_, cmd := applyHistory(t, m, st, 1)
 	require.NotNil(t, cmd, "should return cmd (download + markread) for messages with photo")
 }
 
@@ -1644,16 +1640,24 @@ func TestRoot_FolderSelectedMsg_FiltersChatList(t *testing.T) {
 	m := newRoot(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
+	m = toMain(t, m)
+
+	// The owner stores the filters and then tells the client about them; the
+	// core resolves a folder id against the stored set when it windows the list.
 	filter := domain.FolderFilter{ID: 1, Title: "Contacts", Contacts: true}
+	st.SetFolderFilters([]domain.FolderFilter{filter})
 	newM, _ := m.Update(ui.FolderFiltersMsg{Filters: []domain.FolderFilter{filter}})
 	m = newM.(ui.RootModel)
 
-	// Select the Contacts folder
+	// Selecting a folder repoints the window; the core does the filtering.
 	selectedFilter := filter
 	newM, _ = m.Update(screens.FolderSelectedMsg{Filter: &selectedFilter})
-	root := newM.(ui.RootModel)
+	root := drainOwner(t, newM.(ui.RootModel))
 
-	// Only the contact chat should be in the chatlist
+	w, ok := root.Owner().(*testOwner).lastChatListWindow()
+	require.True(t, ok, "selecting a folder must move the chatlist window")
+	assert.Equal(t, 1, w.Folder)
+
 	chats := root.ChatList().Rows()
 	require.Len(t, chats, 1)
 	assert.Equal(t, int64(1), chats[0].ID)
@@ -2201,11 +2205,10 @@ func TestRoot_Space_OpensChatMenu_OnChatList(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1, Title: "A", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(&mockTGClient{}, st, 50, false).
 		WithScreen(ui.ScreenMain).WithFocus(ui.FocusChatList)
-	// TransitionToMainMsg populates the chat list from the store.
-	nm, _ := m.Update(screens.TransitionToMainMsg{})
-	m = nm.(ui.RootModel)
+	// Reaching the main screen subscribes the chat list; its first delta fills it.
+	m = toMain(t, m)
 
-	nm, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	nm, _ := m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
 	m = nm.(ui.RootModel)
 	assert.True(t, m.ChatMenuOpen())
 }
@@ -2218,8 +2221,7 @@ func TestRoot_RebindChatListConfirmToL_OpensChat(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(&mockTGClient{}, st, 50, false).
 		WithScreen(ui.ScreenMain).WithFocus(ui.FocusChatList)
-	nm, _ := m.Update(screens.TransitionToMainMsg{})
-	m = nm.(ui.RootModel)
+	m = toMain(t, m)
 
 	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
 		"chatlist": {"confirm": {"l"}},

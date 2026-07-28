@@ -22,8 +22,53 @@ type Incoming struct {
 	Notify  bool
 }
 
+// Failure reports work the owner could not finish on a client's behalf. A client
+// cannot see the attempt — filling a window may or may not touch the network —
+// so a silent failure would leave a spinner running forever.
+//
+// Err carries the domain error kind from #191; the client decides how to say it.
+type Failure struct {
+	ChatID int64
+	Op     string
+	Err    error
+}
+
+// Typing reports that someone started or stopped composing in a chat. An empty
+// Label means stopped.
+//
+// It is an event rather than part of the chat projection, because there is no
+// state behind it to be right about: Telegram is not obliged to send a stop, so
+// a stored label has nothing to clear it and would outlive the typing forever.
+// The client shows it and lets it expire.
+type Typing struct {
+	ChatID int64
+	Label  string
+}
+
 // Incoming is the event stream a client renders alongside its projections.
 func (o *Owner) Incoming() <-chan Incoming { return o.incoming }
+
+// Typing reports composing activity in the chats a client may be showing.
+func (o *Owner) Typing() <-chan Typing { return o.typing }
+
+func (o *Owner) publishTyping(t Typing) {
+	select {
+	case o.typing <- t:
+	default:
+		o.log.Warn("typing event dropped: client is not draining")
+	}
+}
+
+// Failures reports operations the owner could not complete.
+func (o *Owner) Failures() <-chan Failure { return o.failures }
+
+func (o *Owner) publishFailure(f Failure) {
+	select {
+	case o.failures <- f:
+	default:
+		o.log.Warn("failure event dropped: client is not draining")
+	}
+}
 
 // publishIncoming reports an inbound message in a chat the client is not
 // showing. Outgoing messages and the open chat are excluded: neither should

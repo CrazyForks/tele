@@ -7,11 +7,6 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
-type ChatHistoryMsg struct {
-	ChatID   int64
-	Messages []domain.Message
-}
-
 type PhotoReadyMsg struct {
 	PhotoID int64
 	Image   image.Image

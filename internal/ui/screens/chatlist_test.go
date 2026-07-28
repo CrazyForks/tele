@@ -265,7 +265,11 @@ func TestChatList_SetChats_CursorClampsWhenChatRemoved(t *testing.T) {
 		{ID: 1, Title: "Alice"},
 		{ID: 2, Title: "Bob"},
 	})
-	assert.Equal(t, 0, m.Cursor())
+
+	// The chat the cursor was on is gone, so there is nothing to follow: the
+	// cursor stays where it was, clamped to the shorter list, rather than
+	// jumping the user back to the top.
+	assert.Equal(t, 1, m.Cursor())
 }
 
 func TestChatList_EmptyShowsSpinner(t *testing.T) {
@@ -288,13 +292,13 @@ func TestChatList_Confirm_SetsActiveIdx(t *testing.T) {
 func TestChatList_Navigation_DoesNotChangeActiveIdx(t *testing.T) {
 	m := screens.NewChatListModel()
 	setChats(m, makeTestChats())
-	assert.Equal(t, 0, m.ActiveIdx())
+	assert.Equal(t, -1, m.ActiveIdx(), "no chat is open yet, so no row is the active one")
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionDown})
 	m = newPane.(*screens.ChatListModel)
 	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionDown})
 	m = newPane.(*screens.ChatListModel)
 	assert.Equal(t, 2, m.Cursor(), "cursor moved")
-	assert.Equal(t, 0, m.ActiveIdx(), "activeIdx unchanged without Enter")
+	assert.Equal(t, -1, m.ActiveIdx(), "moving the cursor does not open a chat")
 }
 
 func TestChatList_SetChats_PreservesActiveIdxByID(t *testing.T) {
@@ -516,4 +520,45 @@ func TestChatIndexAtViewportRow_Scrolled(t *testing.T) {
 	idx, ok = m.ChatIndexAtViewportRow(2)
 	require.True(t, ok)
 	assert.Equal(t, 9, idx)
+}
+
+// Jumping to the end moves the cursor first and only then asks for the window
+// around it, so the arriving window is one the cursor is not inside. Resetting
+// the cursor there blanks the pane until something moves it again.
+func TestChatList_WindowArrivingWithTheCursorOutsideItKeepsTheCursor(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 5)
+	m.SetWindow(0, 200, rowsFor(1, 40))
+	m.SetCursor(199) // G
+
+	m.SetWindow(120, 200, rowsFor(121, 200))
+
+	assert.Equal(t, 199, m.Cursor(), "the cursor must not be dragged back to the top")
+	row, ok := m.CursorChat()
+	require.True(t, ok, "the window that arrived contains the cursor")
+	assert.Equal(t, int64(200), row.ID)
+}
+
+func TestChatList_JumpToEndAsksForTheWindowAroundIt(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 5)
+	m.SetWindow(0, 200, rowsFor(1, 40))
+	m.WindowRequest() // the window it already has
+
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionGoBottom})
+	m = newPane.(*screens.ChatListModel)
+
+	offset, limit, changed := m.WindowRequest()
+	require.True(t, changed)
+	assert.LessOrEqual(t, offset, 195, "the window must reach the end of the list")
+	assert.GreaterOrEqual(t, offset+limit, 200)
+}
+
+// rowsFor builds rows with ids first..last inclusive.
+func rowsFor(first, last int64) []project.ChatRow {
+	out := make([]project.ChatRow, 0, last-first+1)
+	for id := first; id <= last; id++ {
+		out = append(out, project.ChatRow{ID: id, Title: "chat"})
+	}
+	return out
 }

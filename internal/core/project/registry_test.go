@@ -155,9 +155,10 @@ func TestRegistry_WindowReportsTheCurrentWindow(t *testing.T) {
 	assert.Equal(t, project.ChatListWindow{Offset: 1, Limit: 5}, w)
 }
 
-func TestRegistry_TypingReachesOnlyTheSubscribedChat(t *testing.T) {
+func TestRegistry_PresenceReachesOnlyTheSubscribedChat(t *testing.T) {
+	all := chats(2)
 	r := &fakeReader{
-		chats: chats(2),
+		chats: all,
 		msgs:  map[int64][]domain.Message{1: msgs(2), 2: msgs(2)},
 	}
 	g := project.NewRegistry(r)
@@ -167,26 +168,14 @@ func TestRegistry_TypingReachesOnlyTheSubscribedChat(t *testing.T) {
 	g.Subscribe(project.ChatWindow{
 		ChatID: 2, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
 	})
+	// Drain the two opening Resets.
+	g.Refresh()
 
-	deltas := g.SetTyping(1, "Ada is typing")
+	all[0].Online = true
+	r.chats = all
+	deltas := g.Refresh()
 
 	require.Len(t, deltas, 1)
 	assert.Equal(t, sub1, deltas[0].Sub)
-	assert.Equal(t, project.ChatTyping, deltas[0].Chat.Kind)
-	assert.Equal(t, "Ada is typing", deltas[0].Chat.Typing)
-}
-
-func TestRegistry_ClearingTypingEmitsAnEmptyLabel(t *testing.T) {
-	r := &fakeReader{chats: chats(1), msgs: map[int64][]domain.Message{1: msgs(2)}}
-	g := project.NewRegistry(r)
-	g.Subscribe(project.ChatWindow{
-		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
-	})
-	g.SetTyping(1, "Ada is typing")
-
-	deltas := g.SetTyping(1, "")
-
-	require.Len(t, deltas, 1)
-	assert.Equal(t, project.ChatTyping, deltas[0].Chat.Kind)
-	assert.Empty(t, deltas[0].Chat.Typing)
+	assert.Equal(t, project.ChatHeaderUpdate, deltas[0].Chat.Kind)
 }

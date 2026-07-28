@@ -58,6 +58,9 @@ func (o *Owner) backfill(ctx context.Context, id project.SubID, w project.ChatWi
 	fetched, err := o.client.GetHistory(ctx, chat.Peer, offsetID, o.historyLimit)
 	if err != nil {
 		o.log.Warn("history backfill failed", zap.Int64("chat", w.ChatID), zap.Error(err))
+		// The client asked for a window it cannot fill itself, so it has to be
+		// told: otherwise the pane waits on a load that will never arrive.
+		o.publishFailure(Failure{ChatID: w.ChatID, Op: "load history", Err: err})
 		return
 	}
 	if len(fetched) == 0 {

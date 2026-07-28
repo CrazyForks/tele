@@ -205,7 +205,27 @@ func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
 	assert.Empty(t, s.RemoveMessagesByID([]int{1}))
 }
 
-func TestSQLite_SetMessages_CapsHistory(t *testing.T) {
+// SetMessages is the owner saying what a chat's history is, and how deep it goes
+// is driven by how far the reader scrolled. Capping it would cap the scrollback:
+// the view is built from what the store holds.
+func TestSQLite_SetMessages_KeepsWhatItIsGiven(t *testing.T) {
+	s := newTestSQLite(t)
+	const total = store.MaxMessagesPerChat + 100
+	msgs := make([]domain.Message, total)
+	for i := range msgs {
+		msgs[i] = domain.Message{ID: i + 1, ChatID: 1}
+	}
+
+	s.SetMessages(1, msgs)
+
+	got := s.Messages(1)
+	require.Len(t, got, total)
+	assert.Equal(t, 1, got[0].ID)
+	assert.Equal(t, total, got[len(got)-1].ID)
+}
+
+// An arriving message must not trim a scrollback the reader deliberately loaded.
+func TestSQLite_AppendMessage_DoesNotTrimALoadedScrollback(t *testing.T) {
 	s := newTestSQLite(t)
 	const total = store.MaxMessagesPerChat + 100
 	msgs := make([]domain.Message, total)
@@ -213,10 +233,12 @@ func TestSQLite_SetMessages_CapsHistory(t *testing.T) {
 		msgs[i] = domain.Message{ID: i + 1, ChatID: 1}
 	}
 	s.SetMessages(1, msgs)
+
+	s.AppendMessage(domain.Message{ID: total + 1, ChatID: 1})
+
 	got := s.Messages(1)
-	require.Len(t, got, store.MaxMessagesPerChat)
-	assert.Equal(t, total-store.MaxMessagesPerChat+1, got[0].ID) // kept the newest tail
-	assert.Equal(t, total, got[len(got)-1].ID)
+	require.Len(t, got, total+1)
+	assert.Equal(t, 1, got[0].ID, "the oldest loaded message is still there")
 }
 
 func persistedReadInboxMaxID(t *testing.T, s *store.SQLiteStore, id int64) int {

@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -74,7 +75,9 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		m.chat.SetMessages(m.chatMsgs)
 		m.chat.SetLoading(false)
 		m.chat.SetLoadError("")
-		m.applyTypingLabel(c.Typing)
+		if cmd := m.readReactionsOnScreen(c); cmd != nil {
+			return m, cmd
+		}
 		// The window was anchored on the first unread: put that message on
 		// screen rather than the tail.
 		if c.AnchorMsgID != 0 && c.AnchorMsgID <= c.ReadInboxMaxID {
@@ -88,6 +91,21 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		// since no key event will.
 		nm, gifCmd := m.ensureGifAnimForSelection()
 		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(c.Messages), gifCmd)
+
+	case project.ChatHeaderUpdate:
+		// Only the state around the window changed. The message list is left
+		// alone: re-seating it would re-anchor the viewport, so a contact coming
+		// online would scroll the chat you are reading back to the bottom.
+		c := d.Contents
+		m.chat.SetHeader(screens.ChatHeader{
+			ChatID:          c.ChatID,
+			Title:           c.Title,
+			IsUser:          c.IsUser,
+			IsGroup:         c.IsGroup,
+			Online:          c.Online,
+			ReadOutboxMaxID: c.ReadOutboxMaxID,
+		})
+		return m, m.readReactionsOnScreen(c)
 
 	case project.ChatOlder:
 		if len(d.Messages) == 0 {
@@ -107,9 +125,10 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 
 	case project.ChatAppend:
 		m.chatMsgs = append(m.chatMsgs, d.Message)
-		// SetMessages, not KeepScroll: a message arriving in the chat you are
-		// reading should bring the view to it.
-		m.chat.SetMessages(m.chatMsgs)
+		// KeepScroll re-anchors to the bottom only when the viewport was already
+		// there, so a message arriving while you are reading history does not
+		// yank you out of it.
+		m.chat.SetMessagesKeepScroll(m.chatMsgs)
 		cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]domain.Message{d.Message})}
 		if m.focus == FocusChat && d.Message.Mentioned {
 			cmds = append(cmds, m.readMentionsCmd(m.currentChatID))
@@ -155,21 +174,27 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		if !m.chat.ComposerFocused() {
 			m.chat.SetComposerValue(d.Draft)
 		}
-
-	case project.ChatTyping:
-		return m.applyTypingLabelCmd(d.Typing)
 	}
 	return m, nil
 }
 
-// applyTypingLabel sets or clears the typing indicator without producing the
-// animation commands, for the Reset path where the pane is being rebuilt.
-func (m RootModel) applyTypingLabel(label string) {
-	if label == "" {
-		m.chat.ClearTypingLabel()
-		return
+// readReactionsOnScreen marks a chat's reactions read when the user is looking
+// at it. The count is per-chat state, so the message the reaction landed on need
+// not be in the window (#199).
+func (m RootModel) readReactionsOnScreen(c project.ChatContents) tea.Cmd {
+	if m.focus != FocusChat || c.UnreadReactions == 0 {
+		return nil
 	}
-	m.chat.SetTypingLabel(label)
+	return m.readReactionsCmd(c.ChatID)
+}
+
+// handleTyping shows a composing indicator and arms its expiry. The owner sends
+// no state to clear, so the client's own timeout is what ends it.
+func (m RootModel) handleTyping(t core.Typing) (RootModel, tea.Cmd) {
+	if t.ChatID != m.currentChatID {
+		return m, nil
+	}
+	return m.applyTypingLabelCmd(t.Label)
 }
 
 // applyTypingLabelCmd sets the typing indicator and starts the dot animation and

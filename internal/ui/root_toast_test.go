@@ -122,7 +122,7 @@ func notifyModel(t *testing.T, chat domain.Chat) RootModel {
 	t.Helper()
 	st := store.NewMemory()
 	st.SetChat(chat)
-	m := NewRootModel(nil, st, 50, false).WithScreen(ScreenMain)
+	m := newRootInternal(st, 50).WithScreen(ScreenMain)
 	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return model.(RootModel)
 }
