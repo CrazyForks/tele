@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // waveformBlocks maps an amplitude level (0..7) to a Unicode block glyph.
@@ -17,7 +17,7 @@ const maxWaveformBars = 32
 
 // voiceLabel renders a voice message as its waveform plus duration, falling
 // back to a plain label when no waveform is present.
-func voiceLabel(m *store.MediaRef) string {
+func voiceLabel(m *domain.MediaRef) string {
 	bars := renderWaveform(decodeWaveform(m.Waveform), maxWaveformBars)
 	if bars == "" {
 		if m.Duration > 0 {
@@ -30,7 +30,7 @@ func voiceLabel(m *store.MediaRef) string {
 
 // voicePlayingLabel renders a voice message that is currently playing: the
 // waveform with a progress playhead and the live position (instead of total).
-func voicePlayingLabel(m *store.MediaRef, progress float64, posSecs int) string {
+func voicePlayingLabel(m *domain.MediaRef, progress float64, posSecs int) string {
 	bars := renderWaveformProgress(decodeWaveform(m.Waveform), maxWaveformBars, progress)
 	if bars == "" {
 		return "🎤 voice " + formatDuration(posSecs)
@@ -40,7 +40,7 @@ func voicePlayingLabel(m *store.MediaRef, progress float64, posSecs int) string 
 
 // audioLabel renders an audio (music) message as performer/title or filename,
 // with a trailing duration when known.
-func audioLabel(m *store.MediaRef) string {
+func audioLabel(m *domain.MediaRef) string {
 	var name string
 	switch {
 	case m.Title != "" && m.Performer != "":

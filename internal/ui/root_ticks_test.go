@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
@@ -17,8 +17,8 @@ func idleMainModel() RootModel {
 	m := NewRootModel(nil, nil, 50, false)
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
-	m.chat.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
-	m.chatList.SetChats([]store.Chat{{ID: 1}})
+	m.chat.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	m.chatList.SetChats([]domain.Chat{{ID: 1}})
 	return m
 }
 
@@ -32,7 +32,7 @@ func TestRoot_SpinnerTick_LoadingChats_KeepsTicking(t *testing.T) {
 	m := NewRootModel(nil, nil, 50, false)
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
-	m.chat.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	m.chat.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	// No chats set: the chat list shows its "Loading chats..." spinner, so the
 	// spinner loop must stay alive.
 	_, cmd := m.Update(components.SpinnerTickMsg{})

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,9 +16,9 @@ func TestOpenKey_OnSingleLinkMessage_OpensURL(t *testing.T) {
 	defer ui.SetURLOpenerForTest(func(u string) { got = u })()
 
 	m, st := newRootOnChat(t, &mockTGClient{})
-	st.AppendMessage(store.Message{ID: 3, ChatID: 1, Date: time.Now(),
+	st.AppendMessage(domain.Message{ID: 3, ChatID: 1, Date: time.Now(),
 		Text:     "see https://example.com now",
-		Entities: []store.MessageEntity{{Type: "url", Offset: 4, Length: 19}}})
+		Entities: []domain.MessageEntity{{Type: "url", Offset: 4, Length: 19}}})
 	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = nm.(ui.RootModel)
 	m.View()
@@ -35,10 +35,10 @@ func TestOpenKey_MultipleTargets_OpensPickerThenTarget(t *testing.T) {
 
 	m, st := newRootOnChat(t, &mockTGClient{})
 	// Photo with a caption link -> two open targets (Photo + link).
-	st.AppendMessage(store.Message{ID: 5, ChatID: 1, Date: time.Now(),
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Date: time.Now(),
 		Text:     "pic https://example.com",
-		Photo:    &store.PhotoRef{ID: 1, FullThumbSize: "y"},
-		Entities: []store.MessageEntity{{Type: "url", Offset: 4, Length: 19}}})
+		Photo:    &domain.PhotoRef{ID: 1, FullThumbSize: "y"},
+		Entities: []domain.MessageEntity{{Type: "url", Offset: 4, Length: 19}}})
 	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = nm.(ui.RootModel)
 	m.View()
@@ -68,7 +68,7 @@ func TestOpenKey_OnPlainTextMessage_NoURLOpened(t *testing.T) {
 	defer ui.SetURLOpenerForTest(func(string) { called = true })()
 
 	m, st := newRootOnChat(t, &mockTGClient{})
-	st.AppendMessage(store.Message{ID: 4, ChatID: 1, Date: time.Now(), Text: "just text"})
+	st.AppendMessage(domain.Message{ID: 4, ChatID: 1, Date: time.Now(), Text: "just text"})
 	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = nm.(ui.RootModel)
 	m.View()

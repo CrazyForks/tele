@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -18,15 +19,15 @@ import (
 func rootOnOpenChatWithMsg(t *testing.T, msgID int) RootModel {
 	t.Helper()
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ScreenMain)
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	m = newM.(RootModel)
 	newM, _ = applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
-		Message: store.Message{ID: msgID, ChatID: 1, Text: "target", Date: time.Now()}})
+		Message: domain.Message{ID: msgID, ChatID: 1, Text: "target", Date: time.Now()}})
 	return newM.(RootModel)
 }
 
@@ -71,7 +72,7 @@ func TestRoot_IncomingMsg_HighlightsNonOpenChat(t *testing.T) {
 	m, st := newRootWithTwoChatsInternal(t)
 
 	newM, cmd := applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
-		Message: store.Message{ID: 1, ChatID: 2, Text: "hi", Date: time.Now()}})
+		Message: domain.Message{ID: 1, ChatID: 2, Text: "hi", Date: time.Now()}})
 	root := newM.(RootModel)
 
 	assert.Equal(t, int64(2), root.ChatList().HighlightedChatID())
@@ -81,16 +82,16 @@ func TestRoot_IncomingMsg_HighlightsNonOpenChat(t *testing.T) {
 
 func TestRoot_IncomingMsg_NoHighlightForOpenChat(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ScreenMain)
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	m = newM.(RootModel)
 
 	newM, _ = applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
-		Message: store.Message{ID: 9, ChatID: 1, Text: "hi", Date: time.Now()}})
+		Message: domain.Message{ID: 9, ChatID: 1, Text: "hi", Date: time.Now()}})
 	root := newM.(RootModel)
 
 	assert.Equal(t, int64(0), root.ChatList().HighlightedChatID(),
@@ -101,7 +102,7 @@ func TestRoot_IncomingMsg_NoHighlightForOutgoing(t *testing.T) {
 	m, st := newRootWithTwoChatsInternal(t)
 
 	newM, _ := applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
-		Message: store.Message{ID: 1, ChatID: 2, Text: "hi", IsOut: true, Date: time.Now()}})
+		Message: domain.Message{ID: 1, ChatID: 2, Text: "hi", IsOut: true, Date: time.Now()}})
 	root := newM.(RootModel)
 
 	assert.Equal(t, int64(0), root.ChatList().HighlightedChatID(),
@@ -111,7 +112,7 @@ func TestRoot_IncomingMsg_NoHighlightForOutgoing(t *testing.T) {
 func TestRoot_ChatHighlightFade_DecrementsAndStaleIgnored(t *testing.T) {
 	m, st := newRootWithTwoChatsInternal(t)
 	newM, _ := applyEventInternal(t, m, st, store.Event{Kind: store.EventNewMessage,
-		Message: store.Message{ID: 1, ChatID: 2, Text: "hi", Date: time.Now()}})
+		Message: domain.Message{ID: 1, ChatID: 2, Text: "hi", Date: time.Now()}})
 	m = newM.(RootModel)
 
 	// Matching serial decrements.
@@ -144,7 +145,7 @@ func drainBatch(msg tea.Msg) []tea.Msg {
 
 func TestRoot_DeleteMsgFailed_StartsErrorHighlight(t *testing.T) {
 	m := rootOnOpenChatWithMsg(t, 5) // open chat is 1
-	restored := []store.Message{{ID: 5, ChatID: 1, Text: "target", Date: time.Now()}}
+	restored := []domain.Message{{ID: 5, ChatID: 1, Text: "target", Date: time.Now()}}
 
 	newM, cmd := m.Update(deleteMsgFailedMsg{chatID: 1, msgID: 5, messages: restored})
 	root := newM.(RootModel)
@@ -165,7 +166,7 @@ func TestRoot_DeleteMsgFailed_StartsErrorHighlight(t *testing.T) {
 
 func TestRoot_EditMsgFailed_StartsErrorHighlight(t *testing.T) {
 	m := rootOnOpenChatWithMsg(t, 7)
-	restored := []store.Message{{ID: 7, ChatID: 1, Text: "orig", Date: time.Now()}}
+	restored := []domain.Message{{ID: 7, ChatID: 1, Text: "orig", Date: time.Now()}}
 
 	newM, cmd := m.Update(editMsgFailedMsg{chatID: 1, msgID: 7, messages: restored})
 	root := newM.(RootModel)
@@ -177,7 +178,7 @@ func TestRoot_EditMsgFailed_StartsErrorHighlight(t *testing.T) {
 
 func TestRoot_MsgFailed_NoHighlightForOtherChat(t *testing.T) {
 	m := rootOnOpenChatWithMsg(t, 5) // open chat is 1
-	restored := []store.Message{{ID: 5, ChatID: 2, Text: "x", Date: time.Now()}}
+	restored := []domain.Message{{ID: 5, ChatID: 2, Text: "x", Date: time.Now()}}
 
 	newM, cmd := m.Update(deleteMsgFailedMsg{chatID: 2, msgID: 5, messages: restored})
 	root := newM.(RootModel)
@@ -192,8 +193,8 @@ func TestRoot_MsgFailed_NoHighlightForOtherChat(t *testing.T) {
 func newRootWithTwoChatsInternal(t *testing.T) (RootModel, store.Store) {
 	t.Helper()
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
-	st.SetChat(store.Chat{ID: 2, Title: "Bob"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
 	m := NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ScreenMain)
 	newM, _ := m.Update(screens.TransitionToMainMsg{})

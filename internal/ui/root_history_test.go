@@ -5,9 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/require"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // Regression: when a photo above the newest message finishes downloading, its
@@ -25,9 +24,9 @@ func TestRoot_PhotoReady_AtBottom_KeepsNewestVisible(t *testing.T) {
 	m := NewRootModel(nil, nil, 50, false)
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "oldest", Date: time.Now()},
-		{ID: 2, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 2, ChatID: 1, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 42}, Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "newest", Date: time.Now()},
 	}
 	m.chat.SetMessages(msgs)

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 func TestMosaicCols(t *testing.T) {
@@ -116,10 +116,10 @@ func testImage(w, h int) image.Image { return image.NewRGBA(image.Rect(0, 0, w, 
 func TestMosaicTileTransmitBoxStableUnderLoad(t *testing.T) {
 	ml := NewMessageList(40, 80)
 	ml.SetImage(11, testImage(600, 800)) // one photo cached
-	parts := []store.Message{
-		{ID: 1, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
-		{ID: 2, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaVideo}, Document: &store.DocumentRef{ID: 22, ThumbSize: "m"}},
-		{ID: 3, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 33}},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 9, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 9, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaVideo}, Document: &domain.DocumentRef{ID: 22, ThumbSize: "m"}},
+		{ID: 3, GroupedID: 9, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 33}},
 	}
 	ml.SetMessages(parts)
 
@@ -144,7 +144,7 @@ func TestMosaicTileTransmitBoxStableUnderLoad(t *testing.T) {
 func TestRenderMosaicTileShape(t *testing.T) {
 	ml := NewMessageList(40, 80)
 	ml.SetImage(11, testImage(1000, 1200)) // mild portrait -> cover
-	gm := groupMedia{Index: 3, Msg: store.Message{ID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}}}
+	gm := groupMedia{Index: 3, Msg: domain.Message{ID: 1, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 11}}}
 	g := coverWindow(1000, 1200, 20, 10)
 	lines := ml.renderMosaicTile(gm, g, "[3] photo ")
 	if len(lines) != g.TileRows {
@@ -162,7 +162,7 @@ func TestRenderMosaicTileShape(t *testing.T) {
 
 func TestComposeMosaicRowWidth(t *testing.T) {
 	ml := NewMessageList(40, 80)
-	m := ml.measureBubble(store.Message{Text: ""})
+	m := ml.measureBubble(domain.Message{Text: ""})
 	tiles := [][]string{
 		{"aaa", "aaa"},
 		{"bb", "bb"},
@@ -184,11 +184,11 @@ func TestMosaicHeightMatchesRender(t *testing.T) {
 	for _, id := range []int64{11, 22, 33, 44} {
 		ml.SetImage(id, testImage(600, 800))
 	}
-	mk := func(mid int, pid int64) store.Message {
-		return store.Message{ID: mid, GroupedID: 9, SenderID: 7,
-			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: pid}}
+	mk := func(mid int, pid int64) domain.Message {
+		return domain.Message{ID: mid, GroupedID: 9, SenderID: 7,
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: pid}}
 	}
-	parts := []store.Message{mk(1, 11), mk(2, 22), mk(3, 33), mk(4, 44)}
+	parts := []domain.Message{mk(1, 11), mk(2, 22), mk(3, 33), mk(4, 44)}
 	want := ml.mosaicHeight(parts)
 	got := len(ml.renderMosaic(parts, false))
 	if got != want {
@@ -204,9 +204,9 @@ func TestMosaicFallsBackToStack(t *testing.T) {
 	// One previewable part -> stack (no grid).
 	ml := NewMessageList(40, 80)
 	ml.SetImage(11, testImage(600, 800))
-	parts := []store.Message{
-		{ID: 1, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
-		{ID: 2, GroupedID: 9, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaFile, FileName: "a.pdf"}, Document: &store.DocumentRef{ID: 2}},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 9, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 9, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaFile, FileName: "a.pdf"}, Document: &domain.DocumentRef{ID: 2}},
 	}
 	if _, _, _, _, _, ok := ml.mosaicPlan(parts); ok {
 		t.Fatalf("one previewable part should not grid")
@@ -214,10 +214,10 @@ func TestMosaicFallsBackToStack(t *testing.T) {
 
 	// Narrow pane -> stack even with several photos (tileW below the minimum).
 	narrow := NewMessageList(40, 16)
-	four := []store.Message{}
+	four := []domain.Message{}
 	for i, id := range []int64{11, 12, 13, 14} {
-		four = append(four, store.Message{ID: i + 1, GroupedID: 9, SenderID: 7,
-			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: id}})
+		four = append(four, domain.Message{ID: i + 1, GroupedID: 9, SenderID: 7,
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: id}})
 	}
 	if _, _, _, _, _, ok := narrow.mosaicPlan(four); ok {
 		t.Fatalf("narrow pane should fall back to the stack")
@@ -229,11 +229,11 @@ func TestMosaicBadgeIndexOrder(t *testing.T) {
 	for _, id := range []int64{11, 22, 33} {
 		ml.SetImage(id, testImage(600, 800))
 	}
-	mk := func(mid int, pid int64) store.Message {
-		return store.Message{ID: mid, GroupedID: 9, SenderID: 7,
-			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: pid}}
+	mk := func(mid int, pid int64) domain.Message {
+		return domain.Message{ID: mid, GroupedID: 9, SenderID: 7,
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: pid}}
 	}
-	parts := []store.Message{mk(1, 11), mk(2, 22), mk(3, 33)}
+	parts := []domain.Message{mk(1, 11), mk(2, 22), mk(3, 33)}
 	out := strings.Join(ml.renderMosaic(parts, false), "\n")
 	i1, i2, i3 := strings.Index(out, "[1]"), strings.Index(out, "[2]"), strings.Index(out, "[3]")
 	if i1 < 0 || i2 < 0 || i3 < 0 || i1 >= i2 || i2 >= i3 {

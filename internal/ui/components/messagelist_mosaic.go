@@ -5,7 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
@@ -169,7 +169,7 @@ func containWindow(imgW, imgH, tileW, tileRows int) tileGeom {
 
 // previewParts is the album's previewable parts (photos, thumbnailed video/GIF),
 // in album order. Metadata-derived (albumPartReservesPreview), stable across load.
-func (ml *MessageList) previewParts(parts []store.Message) []groupMedia {
+func (ml *MessageList) previewParts(parts []domain.Message) []groupMedia {
 	var out []groupMedia
 	for _, gm := range groupMediaParts(parts) {
 		if ml.albumPartReservesPreview(gm.Msg) {
@@ -187,7 +187,7 @@ func (ml *MessageList) mosaicContentW() int {
 
 // mosaicOverheadRows are the album's non-tile rows: two borders, one blank row
 // between grid rows, a badge row per non-previewable file part, and the caption.
-func (ml *MessageList) mosaicOverheadRows(parts []store.Message, nRows int) int {
+func (ml *MessageList) mosaicOverheadRows(parts []domain.Message, nRows int) int {
 	fileCount := 0
 	for _, gm := range groupMediaParts(parts) {
 		if !ml.albumPartReservesPreview(gm.Msg) {
@@ -220,7 +220,7 @@ func (ml *MessageList) mosaicTileRows(tileW, nRows, overheadRows int) int {
 // previewable tile. Derived from metadata (previewable count, pane width, the
 // part's grid index) plus the image's own dimensions, so it does not change as
 // sibling parts load in.
-func (ml *MessageList) albumTileGeom(parts []store.Message, partMsgID, imgW, imgH int) (tileGeom, bool) {
+func (ml *MessageList) albumTileGeom(parts []domain.Message, partMsgID, imgW, imgH int) (tileGeom, bool) {
 	prev := ml.previewParts(parts)
 	cols := mosaicCols(len(prev))
 	ws := tileWidths(ml.mosaicContentW(), cols)
@@ -247,7 +247,7 @@ func (ml *MessageList) albumTileGeom(parts []store.Message, partMsgID, imgW, img
 
 // msgIDForPreviewID returns the message ID of the album part whose preview image
 // is cached under id, or 0 if none.
-func (ml *MessageList) msgIDForPreviewID(parts []store.Message, id int64) int {
+func (ml *MessageList) msgIDForPreviewID(parts []domain.Message, id int64) int {
 	for _, p := range parts {
 		if pid, ok := ml.PreviewImageID(p); ok && pid == id {
 			return p.ID
@@ -357,7 +357,7 @@ func (ml *MessageList) composeMosaicRow(tiles [][]string, widths []int, m bubble
 // mosaicPlan is the single geometry both mosaicHeight and renderMosaic consume,
 // keeping them in lock-step. ok=false means the album should render as the
 // vertical stack instead.
-func (ml *MessageList) mosaicPlan(parts []store.Message) (cols int, widths []int, nRows, tileRows, overhead int, ok bool) {
+func (ml *MessageList) mosaicPlan(parts []domain.Message) (cols int, widths []int, nRows, tileRows, overhead int, ok bool) {
 	prev := ml.previewParts(parts)
 	cols = mosaicCols(len(prev))
 	widths = tileWidths(ml.mosaicContentW(), cols)
@@ -373,7 +373,7 @@ func (ml *MessageList) mosaicPlan(parts []store.Message) (cols int, widths []int
 // previewDims returns the image dimensions used to compute a part's tile window:
 // the cached image bounds, or a 3:4 portrait default before the bytes arrive, so
 // the pre-load window is stable and close to a typical phone photo.
-func (ml *MessageList) previewDims(msg store.Message) (int, int) {
+func (ml *MessageList) previewDims(msg domain.Message) (int, int) {
 	if id, ok := ml.PreviewImageID(msg); ok {
 		if img, has := ml.cachedImage(id); has {
 			b := img.Bounds()
@@ -386,7 +386,7 @@ func (ml *MessageList) previewDims(msg store.Message) (int, int) {
 // mosaicHeight is the bubble line count for a gridded album: borders, the grid
 // rows (tileRows each) with a blank row between them, then any file rows and the
 // caption. Must equal renderMosaic's line count.
-func (ml *MessageList) mosaicHeight(parts []store.Message) int {
+func (ml *MessageList) mosaicHeight(parts []domain.Message) int {
 	_, _, nRows, tileRows, _, ok := ml.mosaicPlan(parts)
 	if !ok {
 		return ml.groupHeightStack(parts)
@@ -396,7 +396,7 @@ func (ml *MessageList) mosaicHeight(parts []store.Message) int {
 
 // mosaicFileAndCaptionRows is the file-row + caption line count; keep it identical
 // to what renderMosaic emits below the grid.
-func (ml *MessageList) mosaicFileAndCaptionRows(parts []store.Message) int {
+func (ml *MessageList) mosaicFileAndCaptionRows(parts []domain.Message) int {
 	h := 0
 	for _, gm := range groupMediaParts(parts) {
 		if !ml.albumPartReservesPreview(gm.Msg) {
@@ -411,7 +411,7 @@ func (ml *MessageList) mosaicFileAndCaptionRows(parts []store.Message) int {
 
 // mosaicFileRows renders the album's non-previewable file parts as standalone
 // badge lines below the grid.
-func (ml *MessageList) mosaicFileRows(parts []store.Message, m bubbleMetrics) []string {
+func (ml *MessageList) mosaicFileRows(parts []domain.Message, m bubbleMetrics) []string {
 	var out []string
 	for _, gm := range groupMediaParts(parts) {
 		if !ml.albumPartReservesPreview(gm.Msg) {
@@ -431,7 +431,7 @@ func sumWidths(ws []int) int {
 
 // renderMosaic renders a gridded album bubble, falling back to the vertical stack
 // when the plan says not to grid. Must stay in lock-step with mosaicHeight.
-func (ml *MessageList) renderMosaic(parts []store.Message, selected bool) []string {
+func (ml *MessageList) renderMosaic(parts []domain.Message, selected bool) []string {
 	cols, widths, nRows, tileRows, _, ok := ml.mosaicPlan(parts)
 	if !ok {
 		return ml.renderGroupStack(parts, selected)

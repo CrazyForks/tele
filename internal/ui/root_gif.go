@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	vmedia "github.com/sorokin-vladimir/tele/internal/media"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
@@ -50,7 +50,7 @@ func (m *RootModel) updateGifLoadingSpinner() {
 // downloadGifFileCmd streams a GIF's full MP4 to a temp file and reports its
 // path so it can be decoded into frames. It mirrors openDocumentCmd but yields
 // the path instead of launching an external player.
-func downloadGifFileCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string) tea.Cmd {
+func downloadGifFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
 		ext := filepath.Ext(ref.FileName)
 		if ext == "" {
@@ -62,7 +62,7 @@ func downloadGifFileCmd(ctx context.Context, client internaltg.Client, peer stor
 		}
 		name := f.Name()
 		_, _, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) (struct{}, error) {
+			func(r domain.DocumentRef) (struct{}, error) {
 				if _, serr := f.Seek(0, 0); serr != nil {
 					return struct{}{}, serr
 				}
@@ -214,7 +214,7 @@ func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 // GifFileReadyForTest runs downloadGifFileCmd and returns the resulting document
 // id and temp path (ok=false if it did not produce a gifFileReadyMsg). It exists
 // for the external ui_test package, which holds the client mock.
-func GifFileReadyForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string) (int64, string, bool) {
+func GifFileReadyForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) (int64, string, bool) {
 	msg := downloadGifFileCmd(context.Background(), c, peer, msgID, ref, tmpDir)()
 	r, ok := msg.(gifFileReadyMsg)
 	if !ok {

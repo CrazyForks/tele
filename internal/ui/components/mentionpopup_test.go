@@ -7,12 +7,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
-func mentionMembers() []store.ChatMember {
-	return []store.ChatMember{
+func mentionMembers() []domain.ChatMember {
+	return []domain.ChatMember{
 		{UserID: 1, Username: "alice", DisplayName: "Alice A"},
 		{UserID: 2, Username: "bob", DisplayName: "Bob B"},
 		{UserID: 3, Username: "", DisplayName: "Alan Nowhere"},
@@ -81,9 +81,9 @@ func TestMentionPopupCtrlKMovesUp(t *testing.T) {
 }
 
 func TestMentionPopupScrollsToKeepCursorVisible(t *testing.T) {
-	var members []store.ChatMember
+	var members []domain.ChatMember
 	for i := 1; i <= 8; i++ {
-		members = append(members, store.ChatMember{
+		members = append(members, domain.ChatMember{
 			UserID:      int64(i),
 			DisplayName: "User" + string(rune('0'+i)),
 		})
@@ -126,7 +126,7 @@ func TestMentionPopupEscCloses(t *testing.T) {
 
 func TestMentionPopupBoxShape(t *testing.T) {
 	p := components.NewMentionPopup()
-	p.SetMembers([]store.ChatMember{
+	p.SetMembers([]domain.ChatMember{
 		{UserID: 1, Username: "sorokin_vl", DisplayName: "Vladimir"},
 		{UserID: 2, Username: "bloom_80", DisplayName: "Igor Bloom"},
 		{UserID: 3, DisplayName: "Сергей"},

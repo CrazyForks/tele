@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/stretchr/testify/assert"
@@ -501,7 +501,7 @@ func videoTargets() []components.OpenTarget {
 }
 
 func TestNewContextMenu_PhotoMessage_ShowsAllThreeActions(t *testing.T) {
-	cm := components.NewContextMenu(1, false, 0, store.MediaPhoto, true, false, photoTargets(), defaultKM())
+	cm := components.NewContextMenu(1, false, 0, domain.MediaPhoto, true, false, photoTargets(), defaultKM())
 	view := strip(cm.View())
 	assert.Contains(t, view, "open photo")
 	assert.Contains(t, view, "Open photo externally")
@@ -516,7 +516,7 @@ func TestNewContextMenu_NoMedia_HidesMediaActions(t *testing.T) {
 }
 
 func TestNewContextMenu_VideoMessage_ShowsAllThreeActions(t *testing.T) {
-	cm := components.NewContextMenu(1, false, 0, store.MediaVideo, true, false, videoTargets(), defaultKM())
+	cm := components.NewContextMenu(1, false, 0, domain.MediaVideo, true, false, videoTargets(), defaultKM())
 	view := strip(cm.View())
 	assert.Contains(t, view, "open video")
 	assert.Contains(t, view, "Open video externally")
@@ -524,7 +524,7 @@ func TestNewContextMenu_VideoMessage_ShowsAllThreeActions(t *testing.T) {
 }
 
 func TestContextMenu_Photo_OpenExternal_EmitsOpenExternalRequest(t *testing.T) {
-	cm := components.NewContextMenu(1, false, 0, store.MediaPhoto, true, false, nil, defaultKM())
+	cm := components.NewContextMenu(1, false, 0, domain.MediaPhoto, true, false, nil, defaultKM())
 	newCM, cmd := cm.Update(keyMsg('O'))
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
@@ -533,7 +533,7 @@ func TestContextMenu_Photo_OpenExternal_EmitsOpenExternalRequest(t *testing.T) {
 }
 
 func TestContextMenu_Video_OpenInApp_EmitsOpenInViewerRequest(t *testing.T) {
-	cm := components.NewContextMenu(42, false, 0, store.MediaVideo, true, false, videoTargets(), defaultKM())
+	cm := components.NewContextMenu(42, false, 0, domain.MediaVideo, true, false, videoTargets(), defaultKM())
 	newCM, cmd := cm.Update(pressO())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
@@ -542,7 +542,7 @@ func TestContextMenu_Video_OpenInApp_EmitsOpenInViewerRequest(t *testing.T) {
 }
 
 func TestContextMenu_Photo_OpenInApp_EmitsOpenInViewerRequest(t *testing.T) {
-	cm := components.NewContextMenu(7, false, 0, store.MediaPhoto, true, false, photoTargets(), defaultKM())
+	cm := components.NewContextMenu(7, false, 0, domain.MediaPhoto, true, false, photoTargets(), defaultKM())
 	newCM, cmd := cm.Update(pressO())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
@@ -551,21 +551,21 @@ func TestContextMenu_Photo_OpenInApp_EmitsOpenInViewerRequest(t *testing.T) {
 }
 
 func TestNewContextMenu_VoiceMessage_ShowsPlayAndDownload(t *testing.T) {
-	cm := components.NewContextMenu(1, false, 0, store.MediaVoice, true, false, nil, defaultKM())
+	cm := components.NewContextMenu(1, false, 0, domain.MediaVoice, true, false, nil, defaultKM())
 	view := strip(cm.View())
 	assert.Contains(t, view, "play voice")
 	assert.Contains(t, view, "save voice (download)")
 }
 
 func TestNewContextMenu_GIFMessage_ShowsDownloadOnly(t *testing.T) {
-	cm := components.NewContextMenu(1, false, 0, store.MediaGIF, true, false, nil, defaultKM())
+	cm := components.NewContextMenu(1, false, 0, domain.MediaGIF, true, false, nil, defaultKM())
 	view := strip(cm.View())
 	assert.Contains(t, view, "save GIF (download)")
 	assert.NotContains(t, view, "externally")
 }
 
 func TestNewContextMenu_StickerMessage_ShowsNoMediaActions(t *testing.T) {
-	cm := components.NewContextMenu(1, false, 0, store.MediaSticker, true, false, nil, defaultKM())
+	cm := components.NewContextMenu(1, false, 0, domain.MediaSticker, true, false, nil, defaultKM())
 	view := strip(cm.View())
 	assert.NotContains(t, view, "Download")
 	assert.NotContains(t, view, "Open externally")
@@ -615,12 +615,12 @@ func TestContextMenu_Link_Open_EmitsOpenInViewerRequest(t *testing.T) {
 }
 
 func TestNewContextMenu_FileShowsDownload(t *testing.T) {
-	cm := components.NewContextMenu(1, false, 0, store.MediaFile, true, false, nil, defaultKM())
+	cm := components.NewContextMenu(1, false, 0, domain.MediaFile, true, false, nil, defaultKM())
 	assert.Contains(t, strip(cm.View()), "save file (download)")
 }
 
 func TestContextMenu_Download_EmitsDownloadFileRequest(t *testing.T) {
-	cm := components.NewContextMenu(42, false, 0, store.MediaFile, true, false, nil, defaultKM())
+	cm := components.NewContextMenu(42, false, 0, domain.MediaFile, true, false, nil, defaultKM())
 	// 's' is the Download binding in the context menu.
 	_, cmd := cm.Update(keyMsg('s'))
 	require.NotNil(t, cmd)

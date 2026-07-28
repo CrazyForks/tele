@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -88,7 +88,7 @@ func stageAndSend(t *testing.T, m ui.RootModel, paths []string) ui.RootModel {
 		m = nm.(ui.RootModel)
 	}
 	nm, cmd := m.Update(screens.SendMediaRequest{
-		Peer:    store.Peer{ID: 1, Type: store.PeerUser},
+		Peer:    domain.Peer{ID: 1, Type: domain.PeerUser},
 		Caption: "look",
 	})
 	m = nm.(ui.RootModel)
@@ -147,7 +147,7 @@ func TestAlbumSend_UploadFailureMarksThatPartAndSendsTheRest(t *testing.T) {
 
 	var failed int
 	for _, msg := range st.Messages(1) {
-		if msg.LocalMedia != nil && msg.LocalMedia.UploadState == store.UploadFailed {
+		if msg.LocalMedia != nil && msg.LocalMedia.UploadState == domain.UploadFailed {
 			failed++
 		}
 	}
@@ -157,8 +157,8 @@ func TestAlbumSend_UploadFailureMarksThatPartAndSendsTheRest(t *testing.T) {
 
 func TestAlbumSend_ConfirmedPartsShareTheGroupedID(t *testing.T) {
 	mc := &mockTGClient{sendAlbumIDs: []int{101, 102}}
-	mc.refreshFunc = func(id int) (store.Message, error) {
-		return store.Message{ID: id, ChatID: 1, GroupedID: 777}, nil
+	mc.refreshFunc = func(id int) (domain.Message, error) {
+		return domain.Message{ID: id, ChatID: 1, GroupedID: 777}, nil
 	}
 	m, st := newRootOnChat(t, mc)
 	_ = stageAndSend(t, m, []string{
@@ -184,15 +184,15 @@ func TestAlbumSend_SendFailureMarksEveryPartFailed(t *testing.T) {
 
 	for _, msg := range st.Messages(1) {
 		require.NotNil(t, msg.LocalMedia)
-		assert.Equal(t, store.UploadFailed, msg.LocalMedia.UploadState)
+		assert.Equal(t, domain.UploadFailed, msg.LocalMedia.UploadState)
 	}
 	assert.Contains(t, visibleText(m), "album send failed")
 }
 
 func TestAlbumSend_FullSuccessShowsNoToast(t *testing.T) {
 	mc := &mockTGClient{}
-	mc.refreshFunc = func(id int) (store.Message, error) {
-		return store.Message{ID: id, ChatID: 1, GroupedID: 5}, nil
+	mc.refreshFunc = func(id int) (domain.Message, error) {
+		return domain.Message{ID: id, ChatID: 1, GroupedID: 5}, nil
 	}
 	m, _ := newRootOnChat(t, mc)
 	m = stageAndSend(t, m, []string{
@@ -216,7 +216,7 @@ func TestAlbumSend_CaptionShowsOnTheOptimisticBubble(t *testing.T) {
 	// Only the send request is dispatched: the assertion is about what the user
 	// sees while the album is still uploading, before any server answer.
 	m.Update(screens.SendMediaRequest{
-		Peer:    store.Peer{ID: 1, Type: store.PeerUser},
+		Peer:    domain.Peer{ID: 1, Type: domain.PeerUser},
 		Caption: "look",
 	})
 
@@ -234,11 +234,11 @@ func TestAlbumSend_CaptionShowsOnTheOptimisticBubble(t *testing.T) {
 
 func TestAlbumSend_AdoptedPartsRequestTheirInlineImages(t *testing.T) {
 	mc := &mockTGClient{sendAlbumIDs: []int{101, 102}}
-	mc.refreshFunc = func(id int) (store.Message, error) {
-		return store.Message{
+	mc.refreshFunc = func(id int) (domain.Message, error) {
+		return domain.Message{
 			ID: id, ChatID: 1, GroupedID: 777,
-			Photo: &store.PhotoRef{ID: int64(900 + id), ThumbSize: "x"},
-			Media: &store.MediaRef{Kind: store.MediaPhoto},
+			Photo: &domain.PhotoRef{ID: int64(900 + id), ThumbSize: "x"},
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto},
 		}, nil
 	}
 	var downloads int

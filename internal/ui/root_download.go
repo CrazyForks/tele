@@ -14,8 +14,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/gabriel-vasile/mimetype"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -29,12 +29,12 @@ import (
 func downloadWithRefresh[T any, R any](
 	ctx context.Context,
 	client internaltg.Client,
-	peer store.Peer,
+	peer domain.Peer,
 	msgID int,
 	ref R,
 	download func(R) (T, error),
-	pickRef func(store.Message) (R, bool),
-) (result T, refreshed *store.Message, err error) {
+	pickRef func(domain.Message) (R, bool),
+) (result T, refreshed *domain.Message, err error) {
 	result, err = download(ref)
 	if err == nil {
 		return result, nil, nil
@@ -57,7 +57,7 @@ func downloadWithRefresh[T any, R any](
 	return result, &msg, nil
 }
 
-func downloadPhotoCmd(ctx context.Context, client internaltg.Client, mc *mediacache.Cache, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+func downloadPhotoCmd(ctx context.Context, client internaltg.Client, mc *mediacache.Cache, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
 	return func() tea.Msg {
 		key := mediacache.PhotoKey(ref.ID, ref.ThumbSize)
 		if mc != nil {
@@ -69,12 +69,12 @@ func downloadPhotoCmd(ctx context.Context, client internaltg.Client, mc *mediaca
 			}
 		}
 		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.PhotoRef) (image.Image, error) {
+			func(r domain.PhotoRef) (image.Image, error) {
 				return client.DownloadPhoto(ctx, r)
 			},
-			func(m store.Message) (store.PhotoRef, bool) {
+			func(m domain.Message) (domain.PhotoRef, bool) {
 				if m.Photo == nil {
-					return store.PhotoRef{}, false
+					return domain.PhotoRef{}, false
 				}
 				return *m.Photo, true
 			},
@@ -108,17 +108,17 @@ func encodeCacheJPEG(img image.Image) []byte {
 }
 
 // DownloadPhotoCmdForTest exposes downloadPhotoCmd (no disk cache) for tests.
-func DownloadPhotoCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+func DownloadPhotoCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
 	return downloadPhotoCmd(context.Background(), c, nil, peer, msgID, ref)
 }
 
 // DownloadPhotoCmdCachedForTest exposes downloadPhotoCmd with a disk cache.
-func DownloadPhotoCmdCachedForTest(c internaltg.Client, mc *mediacache.Cache, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+func DownloadPhotoCmdCachedForTest(c internaltg.Client, mc *mediacache.Cache, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
 	return downloadPhotoCmd(context.Background(), c, mc, peer, msgID, ref)
 }
 
 // HistoryChunkMsgForTest builds a historyChunkMsg for tests.
-func HistoryChunkMsgForTest(chatID int64, msgs []store.Message) tea.Msg {
+func HistoryChunkMsgForTest(chatID int64, msgs []domain.Message) tea.Msg {
 	return historyChunkMsg{chatID: chatID, messages: msgs}
 }
 
@@ -132,13 +132,13 @@ func refreshedBatch(ready, refreshed tea.Msg) tea.Msg {
 }
 
 // currentPeer returns the peer of the currently open chat, or the zero peer.
-func (m RootModel) currentPeer() store.Peer {
+func (m RootModel) currentPeer() domain.Peer {
 	if m.st != nil {
 		if chat, ok := m.st.GetChat(m.currentChatID); ok {
 			return chat.Peer
 		}
 	}
-	return store.Peer{}
+	return domain.Peer{}
 }
 
 // handleDownloadSelected saves the selected message's media to the Downloads
@@ -175,7 +175,7 @@ func (m RootModel) openPhotoExternal(photoID int64) (RootModel, tea.Cmd) {
 // startDocumentOpen sets the status-bar download indicator with label and
 // dispatches the external-player download; the completion message clears the
 // matching indicator (and surfaces any error).
-func (m RootModel) startDocumentOpen(ref store.DocumentRef, msgID int, label string) (RootModel, tea.Cmd) {
+func (m RootModel) startDocumentOpen(ref domain.DocumentRef, msgID int, label string) (RootModel, tea.Cmd) {
 	serial := m.statusBar.StartDownload(label)
 	return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, m.tmpDir, serial)
 }
@@ -187,7 +187,7 @@ func (m RootModel) selectedDownloadLabel() string {
 		id := m.chat.SelectedMessageID()
 		for _, msg := range m.st.Messages(m.currentChatID) {
 			if msg.ID == id {
-				if msg.Media != nil && msg.Media.Kind == store.MediaVideoNote {
+				if msg.Media != nil && msg.Media.Kind == domain.MediaVideoNote {
 					return "downloading note…"
 				}
 				break
@@ -199,7 +199,7 @@ func (m RootModel) selectedDownloadLabel() string {
 
 // startFileDownload sets the status-bar download indicator and dispatches a
 // streaming download of a generic file to the Downloads folder.
-func (m RootModel) startFileDownload(ref store.DocumentRef, kind store.MediaKind, msgID int) (RootModel, tea.Cmd) {
+func (m RootModel) startFileDownload(ref domain.DocumentRef, kind domain.MediaKind, msgID int) (RootModel, tea.Cmd) {
 	name := downloadFileName(ref, kind)
 	ref.FileName = name
 	serial := m.statusBar.StartDownload("downloading " + name + "…")
@@ -208,7 +208,7 @@ func (m RootModel) startFileDownload(ref store.DocumentRef, kind store.MediaKind
 
 // startPhotoDownload sets the status-bar download indicator and dispatches a
 // streaming download of a photo (full quality) to the Downloads folder.
-func (m RootModel) startPhotoDownload(ref store.PhotoRef, msgID int) (RootModel, tea.Cmd) {
+func (m RootModel) startPhotoDownload(ref domain.PhotoRef, msgID int) (RootModel, tea.Cmd) {
 	serial := m.statusBar.StartDownload("downloading photo…")
 	return m, downloadPhotoFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, downloadsDir(), serial)
 }
@@ -216,7 +216,7 @@ func (m RootModel) startPhotoDownload(ref store.PhotoRef, msgID int) (RootModel,
 // downloadPhotoFileCmd streams a photo's full-quality bytes to destDir as
 // photo_<id>.jpg (collision-resolved) and reports the saved path (or an error).
 // Mirrors downloadFileCmd's stream-to-disk + FILE_REFERENCE_EXPIRED retry.
-func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef, destDir string, serial int) tea.Cmd {
+func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef, destDir string, serial int) tea.Cmd {
 	fullRef := ref
 	fullRef.ThumbSize = ref.FullThumbSize
 	return func() tea.Msg {
@@ -231,7 +231,7 @@ func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer st
 		name := f.Name()
 
 		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, fullRef,
-			func(r store.PhotoRef) (struct{}, error) {
+			func(r domain.PhotoRef) (struct{}, error) {
 				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
 					return struct{}{}, serr
 				}
@@ -240,9 +240,9 @@ func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer st
 				}
 				return struct{}{}, client.DownloadPhotoToFile(ctx, r, f)
 			},
-			func(m store.Message) (store.PhotoRef, bool) {
+			func(m domain.Message) (domain.PhotoRef, bool) {
 				if m.Photo == nil {
-					return store.PhotoRef{}, false
+					return domain.PhotoRef{}, false
 				}
 				r := *m.Photo
 				r.ThumbSize = r.FullThumbSize
@@ -267,14 +267,14 @@ func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer st
 }
 
 // DownloadPhotoFileCmdForTest exposes downloadPhotoFileCmd for tests (serial 0).
-func DownloadPhotoFileCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef, destDir string) tea.Cmd {
+func DownloadPhotoFileCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef, destDir string) tea.Cmd {
 	return downloadPhotoFileCmd(context.Background(), c, peer, msgID, ref, destDir, 0)
 }
 
 // downloadFileCmd streams a document to destDir under its original name
 // (collision-resolved) and reports the saved path (or an error). Mirrors
 // openDocumentCmd's stream-to-disk + FILE_REFERENCE_EXPIRED retry.
-func downloadFileCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, destDir string, serial int) tea.Cmd {
+func downloadFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, destDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
 		fail := func(action string, err error) tea.Msg {
 			text, sev, _ := errText(action, err)
@@ -287,7 +287,7 @@ func downloadFileCmd(ctx context.Context, client internaltg.Client, peer store.P
 		name := f.Name()
 
 		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) (struct{}, error) {
+			func(r domain.DocumentRef) (struct{}, error) {
 				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
 					return struct{}{}, serr
 				}
@@ -319,7 +319,7 @@ func downloadFileCmd(ctx context.Context, client internaltg.Client, peer store.P
 // application (e.g. a video player). Runs async; the download may be large. It
 // always returns a documentOpenDoneMsg so the caller can clear the status-bar
 // download indicator identified by serial (and surface any error).
-func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string, serial int) tea.Cmd {
+func openDocumentCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
 		fail := func(action string, err error) tea.Msg {
 			text, sev, _ := errText(action, err)
@@ -339,7 +339,7 @@ func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.P
 		// FILE_REFERENCE_EXPIRED retry the file is truncated so a partial first
 		// attempt does not corrupt the result.
 		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) (struct{}, error) {
+			func(r domain.DocumentRef) (struct{}, error) {
 				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
 					return struct{}{}, serr
 				}
@@ -369,7 +369,7 @@ func openDocumentCmd(ctx context.Context, client internaltg.Client, peer store.P
 }
 
 // OpenDocumentCmdForTest exposes openDocumentCmd for tests (serial 0).
-func OpenDocumentCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string) tea.Cmd {
+func OpenDocumentCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) tea.Cmd {
 	return openDocumentCmd(context.Background(), c, peer, msgID, ref, tmpDir, 0)
 }
 
@@ -388,7 +388,7 @@ func DocumentOpenDoneMsgForTest(serial int, errText string, sev components.Sever
 }
 
 // DownloadFileCmdForTest exposes downloadFileCmd for tests (serial 0).
-func DownloadFileCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, destDir string) tea.Cmd {
+func DownloadFileCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, destDir string) tea.Cmd {
 	return downloadFileCmd(context.Background(), c, peer, msgID, ref, destDir, 0)
 }
 
@@ -423,9 +423,9 @@ func SetOpenPathForTest(fn func(string)) func() {
 
 // pickDocumentRef extracts a message's fresh document ref, used as the refresh
 // selector for document downloads.
-func pickDocumentRef(m store.Message) (store.DocumentRef, bool) {
+func pickDocumentRef(m domain.Message) (domain.DocumentRef, bool) {
 	if m.Document == nil {
-		return store.DocumentRef{}, false
+		return domain.DocumentRef{}, false
 	}
 	return *m.Document, true
 }
@@ -434,21 +434,21 @@ func pickDocumentRef(m store.Message) (store.DocumentRef, bool) {
 // original FileName when present, otherwise a synthesized "<prefix>_<id><ext>"
 // where the prefix reflects the media kind and the extension is derived from the
 // MIME type. Telegram photos/voice/round notes often carry no file name.
-func downloadFileName(ref store.DocumentRef, kind store.MediaKind) string {
+func downloadFileName(ref domain.DocumentRef, kind domain.MediaKind) string {
 	if ref.FileName != "" {
 		return ref.FileName
 	}
 	prefix := "file"
 	switch kind {
-	case store.MediaVideo:
+	case domain.MediaVideo:
 		prefix = "video"
-	case store.MediaVideoNote:
+	case domain.MediaVideoNote:
 		prefix = "video_note"
-	case store.MediaVoice:
+	case domain.MediaVoice:
 		prefix = "voice"
-	case store.MediaAudio:
+	case domain.MediaAudio:
 		prefix = "audio"
-	case store.MediaGIF:
+	case domain.MediaGIF:
 		prefix = "gif"
 	}
 	// Derive the extension from the MIME type via the mimetype library rather
@@ -497,10 +497,10 @@ func extFromMime(mimeType string) string {
 	return ".mp4"
 }
 
-func downloadVoiceCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef) tea.Cmd {
+func downloadVoiceCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef) tea.Cmd {
 	return func() tea.Msg {
 		data, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) ([]byte, error) {
+			func(r domain.DocumentRef) ([]byte, error) {
 				return client.DownloadDocument(ctx, r)
 			},
 			pickDocumentRef,
@@ -519,15 +519,15 @@ func downloadVoiceCmd(ctx context.Context, client internaltg.Client, peer store.
 	}
 }
 
-func downloadVideoThumbCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, crop bool) tea.Cmd {
+func downloadVideoThumbCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, crop bool) tea.Cmd {
 	return func() tea.Msg {
 		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) (image.Image, error) {
+			func(r domain.DocumentRef) (image.Image, error) {
 				return client.DownloadDocumentThumb(ctx, r)
 			},
-			func(m store.Message) (store.DocumentRef, bool) {
+			func(m domain.Message) (domain.DocumentRef, bool) {
 				if m.Document == nil {
-					return store.DocumentRef{}, false
+					return domain.DocumentRef{}, false
 				}
 				return *m.Document, true
 			},
@@ -552,15 +552,15 @@ func downloadVideoThumbCmd(ctx context.Context, client internaltg.Client, peer s
 
 // downloadStickerCmd downloads and decodes a static WEBP sticker (the full
 // document) and feeds it through the inline-image cache keyed by document id.
-func downloadStickerCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef) tea.Cmd {
+func downloadStickerCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef) tea.Cmd {
 	return func() tea.Msg {
 		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) (image.Image, error) {
+			func(r domain.DocumentRef) (image.Image, error) {
 				return client.DownloadDocumentImage(ctx, r)
 			},
-			func(m store.Message) (store.DocumentRef, bool) {
+			func(m domain.Message) (domain.DocumentRef, bool) {
 				if m.Document == nil {
-					return store.DocumentRef{}, false
+					return domain.DocumentRef{}, false
 				}
 				return *m.Document, true
 			},
@@ -580,21 +580,21 @@ func downloadStickerCmd(ctx context.Context, client internaltg.Client, peer stor
 }
 
 // DownloadStickerCmdForTest exposes downloadStickerCmd for tests.
-func DownloadStickerCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef) tea.Cmd {
+func DownloadStickerCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef) tea.Cmd {
 	return downloadStickerCmd(context.Background(), c, peer, msgID, ref)
 }
 
-func downloadFullPhotoCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+func downloadFullPhotoCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
 	fullRef := ref
 	fullRef.ThumbSize = ref.FullThumbSize
 	return func() tea.Msg {
 		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, fullRef,
-			func(r store.PhotoRef) (image.Image, error) {
+			func(r domain.PhotoRef) (image.Image, error) {
 				return client.DownloadPhoto(ctx, r)
 			},
-			func(m store.Message) (store.PhotoRef, bool) {
+			func(m domain.Message) (domain.PhotoRef, bool) {
 				if m.Photo == nil {
-					return store.PhotoRef{}, false
+					return domain.PhotoRef{}, false
 				}
 				r := *m.Photo
 				r.ThumbSize = r.FullThumbSize
@@ -615,10 +615,10 @@ func downloadFullPhotoCmd(ctx context.Context, client internaltg.Client, peer st
 	}
 }
 
-func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
+func (m RootModel) pendingDownloadCmds(msgs []domain.Message) tea.Cmd {
 	var cmds []tea.Cmd
 	for _, msg := range msgs {
-		var peer store.Peer
+		var peer domain.Peer
 		if m.st != nil {
 			if chat, ok := m.st.GetChat(msg.ChatID); ok {
 				peer = chat.Peer
@@ -635,16 +635,16 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 			}
 		}
 		// Video and GIF thumbnails reuse the inline-image cache, keyed by document id.
-		if msg.Media != nil && (msg.Media.Kind.IsVideo() || msg.Media.Kind == store.MediaGIF) && msg.Document != nil && msg.Document.ThumbSize != "" {
+		if msg.Media != nil && (msg.Media.Kind.IsVideo() || msg.Media.Kind == domain.MediaGIF) && msg.Document != nil && msg.Document.ThumbSize != "" {
 			if !m.imageCache.Contains(msg.Document.ID) {
 				// Round video notes are cropped to a circle, but only in Kitty mode
 				// (PNG alpha); block-art has no transparency, so keep it square there.
-				crop := msg.Media.Kind == store.MediaVideoNote && m.imageMode == media.ModeKitty
+				crop := msg.Media.Kind == domain.MediaVideoNote && m.imageMode == media.ModeKitty
 				cmds = append(cmds, downloadVideoThumbCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Document, crop))
 			}
 		}
 		// Static WEBP stickers render inline (Kitty only); decode the full document.
-		if m.imageMode == media.ModeKitty && store.IsStaticSticker(msg.Media, msg.Document) {
+		if m.imageMode == media.ModeKitty && domain.IsStaticSticker(msg.Media, msg.Document) {
 			if !m.imageCache.Contains(msg.Document.ID) {
 				cmds = append(cmds, downloadStickerCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Document))
 			}
@@ -654,6 +654,6 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 }
 
 // PendingDownloadCmdsForTest exposes pendingDownloadCmds for tests.
-func (m RootModel) PendingDownloadCmdsForTest(msgs []store.Message) tea.Cmd {
+func (m RootModel) PendingDownloadCmdsForTest(msgs []domain.Message) tea.Cmd {
 	return m.pendingDownloadCmds(msgs)
 }

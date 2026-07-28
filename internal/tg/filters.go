@@ -4,18 +4,17 @@ import (
 	"context"
 
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-func (c *GotdClient) GetDialogFilters(ctx context.Context) ([]store.FolderFilter, error) {
+func (c *GotdClient) GetDialogFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil, err
 	}
 
-	var filters []store.FolderFilter
+	var filters []domain.FolderFilter
 	err = WithRetry(ctx, func() error {
 		result, err := api.MessagesGetDialogFilters(ctx)
 		if err != nil {
@@ -28,15 +27,15 @@ func (c *GotdClient) GetDialogFilters(ctx context.Context) ([]store.FolderFilter
 	return filters, err
 }
 
-func parseDialogFilters(raw []tg.DialogFilterClass) []store.FolderFilter {
-	var out []store.FolderFilter
+func parseDialogFilters(raw []tg.DialogFilterClass) []domain.FolderFilter {
+	var out []domain.FolderFilter
 	for _, f := range raw {
 		df, ok := f.(*tg.DialogFilter)
 		if !ok {
 			// Skip DialogFilterDefault (All Chats sentinel) and DialogFilterChatlist
 			continue
 		}
-		out = append(out, store.FolderFilter{
+		out = append(out, domain.FolderFilter{
 			ID:              df.ID,
 			Title:           df.Title.Text,
 			Emoji:           df.Emoticon,

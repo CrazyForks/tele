@@ -3,16 +3,15 @@ package state_test
 import (
 	"testing"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestSetDialogs_WritesEveryChat(t *testing.T) {
 	s, st := newState(t)
 
-	s.SetDialogs([]store.Chat{
+	s.SetDialogs([]domain.Chat{
 		{ID: 1, Title: "A", UnreadCount: 2},
 		{ID: 2, Title: "B"},
 	})
@@ -27,7 +26,7 @@ func TestSetDialogs_WritesEveryChat(t *testing.T) {
 func TestSetFolderFilters_WritesFilters(t *testing.T) {
 	s, st := newState(t)
 
-	s.SetFolderFilters([]store.FolderFilter{{ID: 7, Title: "Work"}})
+	s.SetFolderFilters([]domain.FolderFilter{{ID: 7, Title: "Work"}})
 
 	got := st.FolderFilters()
 	require.Len(t, got, 1)

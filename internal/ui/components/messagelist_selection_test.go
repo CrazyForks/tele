@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +30,7 @@ func TestMessageList_SelectedMessageText_FollowsCursor(t *testing.T) {
 
 func TestMessageList_SelectedMessageText_EmptyOnMediaOnly(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Photo: &store.PhotoRef{ID: 42}}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Photo: &domain.PhotoRef{ID: 42}}})
 	text, ok := ml.SelectedMessageText()
 	assert.False(t, ok)
 	assert.Equal(t, "", text)
@@ -39,9 +39,9 @@ func TestMessageList_SelectedMessageText_EmptyOnMediaOnly(t *testing.T) {
 func TestSelectedGroupMedia(t *testing.T) {
 	d, _ := time.Parse(time.RFC3339, "2026-07-24T10:00:00Z")
 	ml := components.NewMessageList(24, 60)
-	ml.SetMessages([]store.Message{
-		{ID: 1, SenderID: 7, GroupedID: 100, Photo: &store.PhotoRef{ID: 11}, Date: d},
-		{ID: 2, SenderID: 7, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaVideo}, Document: &store.DocumentRef{ID: 22}, Date: d},
+	ml.SetMessages([]domain.Message{
+		{ID: 1, SenderID: 7, GroupedID: 100, Photo: &domain.PhotoRef{ID: 11}, Date: d},
+		{ID: 2, SenderID: 7, GroupedID: 100, Media: &domain.MediaRef{Kind: domain.MediaVideo}, Document: &domain.DocumentRef{ID: 22}, Date: d},
 	})
 	got := ml.SelectedGroupMedia()
 	require.Len(t, got, 2)

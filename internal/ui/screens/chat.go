@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -15,31 +15,31 @@ import (
 )
 
 type SendMsgRequest struct {
-	Peer         store.Peer
+	Peer         domain.Peer
 	Text         string
 	ReplyToMsgID int
-	Entities     []store.MessageEntity
+	Entities     []domain.MessageEntity
 }
 
 // SendMediaRequest is emitted when enter is pressed with a staged attachment.
 // It carries no file details; the root fills those from its pendingAttachment.
 type SendMediaRequest struct {
-	Peer         store.Peer
+	Peer         domain.Peer
 	Caption      string
 	ReplyToMsgID int
-	Entities     []store.MessageEntity
+	Entities     []domain.MessageEntity
 }
 
 type EditSendRequest struct {
-	Peer     store.Peer
+	Peer     domain.Peer
 	MsgID    int
 	Text     string
-	Entities []store.MessageEntity
+	Entities []domain.MessageEntity
 }
 
 type SetTypingRequest struct {
-	Peer   store.Peer
-	Action store.TypingAction
+	Peer   domain.Peer
+	Action domain.TypingAction
 }
 
 type LoadMoreMsg struct {
@@ -48,7 +48,7 @@ type LoadMoreMsg struct {
 }
 
 type ChatModel struct {
-	chat            *store.Chat
+	chat            *domain.Chat
 	msgList         *components.MessageList
 	composer        *components.Composer
 	width           int
@@ -119,7 +119,7 @@ func (m *ChatModel) TickSpinner() { m.spinner.Tick() }
 // TickLogo advances the chat-pane idle logo. Called by root on LogoTickMsg.
 func (m *ChatModel) TickLogo() { m.logo.Tick() }
 
-func (m *ChatModel) SetChat(chat *store.Chat) {
+func (m *ChatModel) SetChat(chat *domain.Chat) {
 	var oldID, newID int64
 	if m.chat != nil {
 		oldID = m.chat.Peer.ID
@@ -181,12 +181,12 @@ func (m *ChatModel) saveDraft(id int64, text string) {
 	}
 	m.drafts[id] = text
 }
-func (m *ChatModel) SetMessages(msgs []store.Message) { m.msgList.SetMessages(msgs) }
-func (m *ChatModel) SetMessagesKeepScroll(msgs []store.Message) {
+func (m *ChatModel) SetMessages(msgs []domain.Message) { m.msgList.SetMessages(msgs) }
+func (m *ChatModel) SetMessagesKeepScroll(msgs []domain.Message) {
 	m.msgList.SetMessagesKeepScroll(msgs)
 }
 func (m *ChatModel) RemoveMessage(id int)                    { m.msgList.RemoveMessage(id) }
-func (m *ChatModel) PrependMessages(older []store.Message)   { m.msgList.PrependMessages(older) }
+func (m *ChatModel) PrependMessages(older []domain.Message)  { m.msgList.PrependMessages(older) }
 func (m *ChatModel) SetImage(photoID int64, img image.Image) { m.msgList.SetImage(photoID, img) }
 func (m *ChatModel) SetVoicePlayback(docID int64, progress float64, posSecs int) {
 	m.msgList.SetVoicePlayback(docID, progress, posSecs)
@@ -220,12 +220,12 @@ func (m *ChatModel) ComposerHeight() int   { return m.composer.VisualHeight() }
 func (m *ChatModel) ComposerMentionQuery() (string, bool) { return m.composer.MentionQuery() }
 
 // ApplyComposerMention inserts the chosen member as a mention in the composer.
-func (m *ChatModel) ApplyComposerMention(member store.ChatMember) { m.composer.ApplyMention(member) }
+func (m *ChatModel) ApplyComposerMention(member domain.ChatMember) { m.composer.ApplyMention(member) }
 
 // CurrentPeer returns the open chat's peer (zero value when no chat is open).
-func (m *ChatModel) CurrentPeer() store.Peer {
+func (m *ChatModel) CurrentPeer() domain.Peer {
 	if m.chat == nil {
-		return store.Peer{}
+		return domain.Peer{}
 	}
 	return m.chat.Peer
 }
@@ -242,26 +242,26 @@ func (m *ChatModel) SelectedGroupMedia() []components.GroupMediaRef {
 func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.SelectedMessageIsOut() }
 func (m *ChatModel) SelectedMessageReplyToMsgID() int { return m.msgList.SelectedMessageReplyToMsgID() }
 func (m *ChatModel) SelectedMessagePhotoID() int64    { return m.msgList.SelectedMessagePhotoID() }
-func (m *ChatModel) SelectedMessageVideo() (store.DocumentRef, bool) {
+func (m *ChatModel) SelectedMessageVideo() (domain.DocumentRef, bool) {
 	return m.msgList.SelectedMessageVideo()
 }
-func (m *ChatModel) SelectedMessageVoice() (store.DocumentRef, bool) {
+func (m *ChatModel) SelectedMessageVoice() (domain.DocumentRef, bool) {
 	return m.msgList.SelectedMessageVoice()
 }
 
-func (m *ChatModel) SelectedMessageGIF() (store.DocumentRef, bool) {
+func (m *ChatModel) SelectedMessageGIF() (domain.DocumentRef, bool) {
 	return m.msgList.SelectedMessageGIF()
 }
 
-func (m *ChatModel) SelectedMessagePhoto() (store.PhotoRef, bool) {
+func (m *ChatModel) SelectedMessagePhoto() (domain.PhotoRef, bool) {
 	return m.msgList.SelectedMessagePhoto()
 }
 
-func (m *ChatModel) SelectedMessageMediaKind() (store.MediaKind, bool) {
+func (m *ChatModel) SelectedMessageMediaKind() (domain.MediaKind, bool) {
 	return m.msgList.SelectedMessageMediaKind()
 }
 
-func (m *ChatModel) SelectedMessageDownloadDoc() (store.DocumentRef, store.MediaKind, bool) {
+func (m *ChatModel) SelectedMessageDownloadDoc() (domain.DocumentRef, domain.MediaKind, bool) {
 	return m.msgList.SelectedMessageDownloadDoc()
 }
 
@@ -415,7 +415,7 @@ func (m *ChatModel) ComposerOverLimit() bool { return m.composer.OverLimit() }
 func (m *ChatModel) ComposerFlashActive() bool { return m.composer.FlashActive() }
 func (m *ChatModel) ComposerFlashSerial() int  { return m.composer.FlashSerialForTest() }
 
-func (m *ChatModel) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
+func (m *ChatModel) SetAttachment(name string, size int64, nativeKind, sendAs domain.MediaKind, toggleable bool) {
 	m.SetAttachments([]components.AttachmentChip{
 		{Name: name, Size: size, Kind: nativeKind, SendAs: sendAs},
 	}, toggleable)
@@ -455,7 +455,7 @@ func (m *ChatModel) SetComposerValue(v string) {
 }
 
 // SetComposerSource prefills the composer for an edit, markers included.
-func (m *ChatModel) SetComposerSource(text string, entities []store.MessageEntity) {
+func (m *ChatModel) SetComposerSource(text string, entities []domain.MessageEntity) {
 	m.composer.SetSource(text, entities)
 	m.syncMsgListHeight()
 }
@@ -501,7 +501,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 					peer := m.chat.Peer
 					m.lastTypingAt = time.Time{}
 					return m, func() tea.Msg {
-						return SetTypingRequest{Peer: peer, Action: store.TypingActionCancel}
+						return SetTypingRequest{Peer: peer, Action: domain.TypingActionCancel}
 					}
 				}
 			}
@@ -630,7 +630,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 					}
 					if wasTyping {
 						cancelCmd := func() tea.Msg {
-							return SetTypingRequest{Peer: peer, Action: store.TypingActionCancel}
+							return SetTypingRequest{Peer: peer, Action: domain.TypingActionCancel}
 						}
 						return m, tea.Batch(sendCmd, cancelCmd)
 					}
@@ -645,7 +645,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				peer := m.chat.Peer
 				m.lastTypingAt = time.Now()
 				typingCmd := func() tea.Msg {
-					return SetTypingRequest{Peer: peer, Action: store.TypingActionTyping}
+					return SetTypingRequest{Peer: peer, Action: domain.TypingActionTyping}
 				}
 				if cmd != nil {
 					return m, tea.Batch(cmd, typingCmd)

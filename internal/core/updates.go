@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/core/state"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // Start connects to Telegram and runs until ctx is cancelled. The caller runs it
@@ -66,7 +66,7 @@ func (o *Owner) Bootstrap(ctx context.Context) error {
 // LoadFolderFilters refreshes folder filters from the network. Returns the
 // filters so the caller can push them to a view; an empty result means the
 // account has none and the cached list should stand.
-func (o *Owner) LoadFolderFilters(ctx context.Context) ([]store.FolderFilter, error) {
+func (o *Owner) LoadFolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	filters, err := o.client.GetDialogFilters(ctx)
 	if err != nil {
 		return nil, err

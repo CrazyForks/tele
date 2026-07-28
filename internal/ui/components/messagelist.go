@@ -1,7 +1,7 @@
 package components
 
 import (
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
@@ -87,7 +87,7 @@ func (ml *MessageList) SetGifLoading(docID int64, spinner string) {
 
 // overlayLabelFor returns the thumbnail overlay for a message, adding the loading
 // spinner to a GIF badge while that GIF is being fetched.
-func (ml *MessageList) overlayLabelFor(msg store.Message) string {
+func (ml *MessageList) overlayLabelFor(msg domain.Message) string {
 	base := videoOverlayLabel(msg.Media)
 	if base == "GIF" && ml.gifLoadingID != 0 && ml.gifLoadingSpinner != "" &&
 		msg.Document != nil && msg.Document.ID == ml.gifLoadingID {

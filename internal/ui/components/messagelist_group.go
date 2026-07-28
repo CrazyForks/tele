@@ -3,7 +3,7 @@ package components
 import (
 	"strconv"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
@@ -20,19 +20,19 @@ const (
 // picker labels, and the modal paging order.
 type groupMedia struct {
 	Index int
-	Msg   store.Message
+	Msg   domain.Message
 }
 
 // hasRenderableMedia reports whether a message carries media the list draws
 // inline: a photo or any document-backed media.
-func hasRenderableMedia(msg store.Message) bool {
+func hasRenderableMedia(msg domain.Message) bool {
 	return msg.Photo != nil || (msg.Media != nil && msg.Document != nil)
 }
 
 // groupMediaParts returns the album's media-bearing parts in order, numbered from
 // 1. Text-only parts (an album can hold at most one caption-only message in
 // practice, but guard anyway) are skipped.
-func groupMediaParts(parts []store.Message) []groupMedia {
+func groupMediaParts(parts []domain.Message) []groupMedia {
 	out := make([]groupMedia, 0, len(parts))
 	n := 0
 	for _, p := range parts {
@@ -60,7 +60,7 @@ func (ml *MessageList) albumContentW() int {
 // file rows, and the caption — fits the viewport height. A readability floor of 2
 // rows applies. Both groupHeight and renderGroupBubble call this so they stay in
 // lock-step.
-func (ml *MessageList) albumImageRows(parts []store.Message) int {
+func (ml *MessageList) albumImageRows(parts []domain.Message) int {
 	media := groupMediaParts(parts)
 	imgCount, fileCount := 0, 0
 	for _, gm := range media {
@@ -102,7 +102,7 @@ func (ml *MessageList) albumImageRows(parts []store.Message) int {
 
 // albumCaption returns the album's single caption. Telegram attaches the caption
 // to one part (usually the first); return the first non-empty text in order.
-func albumCaption(parts []store.Message) string {
+func albumCaption(parts []domain.Message) string {
 	for _, p := range parts {
 		if p.Text != "" {
 			return p.Text
@@ -113,7 +113,7 @@ func albumCaption(parts []store.Message) string {
 
 // albumCaptionEntities returns the entities of the caption-bearing part so the
 // caption wraps and styles identically to a normal message body.
-func albumCaptionEntities(parts []store.Message) []store.MessageEntity {
+func albumCaptionEntities(parts []domain.Message) []domain.MessageEntity {
 	for _, p := range parts {
 		if p.Text != "" {
 			return p.Entities
@@ -126,7 +126,7 @@ func albumCaptionEntities(parts []store.Message) []store.MessageEntity {
 // inline preview, based on metadata alone (independent of download state): a
 // photo, or a video/GIF/sticker that carries a thumbnail. Used to size the shared
 // per-part budget so it stays stable as parts load in.
-func (ml *MessageList) albumPartReservesPreview(msg store.Message) bool {
+func (ml *MessageList) albumPartReservesPreview(msg domain.Message) bool {
 	if _, ok := ml.PreviewImageID(msg); ok {
 		return true
 	}
@@ -137,7 +137,7 @@ func (ml *MessageList) albumPartReservesPreview(msg store.Message) bool {
 // cached, so its preview can be drawn now with the badge folded onto the image's
 // first row. A photo still awaiting bytes, or a generic file, reports false and is
 // described by a standalone badge line instead.
-func (ml *MessageList) albumPartHasCachedArt(msg store.Message) bool {
+func (ml *MessageList) albumPartHasCachedArt(msg domain.Message) bool {
 	if id, ok := ml.PreviewImageID(msg); ok {
 		_, has := ml.cachedImage(id)
 		return has
@@ -158,7 +158,7 @@ func (ml *MessageList) albumPartBox(budgetRows, imgW, imgH int) (cols, rows int)
 // albumPartRows returns the reserved art rows for one album part: the downscaled
 // box height when its image bytes are cached, the full budget as a placeholder box
 // for a photo still awaiting bytes, or 0 for a badge-only part (a generic file).
-func (ml *MessageList) albumPartRows(budgetRows int, msg store.Message) int {
+func (ml *MessageList) albumPartRows(budgetRows int, msg domain.Message) int {
 	if id, ok := ml.PreviewImageID(msg); ok {
 		if img, has := ml.cachedImage(id); has {
 			b := img.Bounds()
@@ -176,7 +176,7 @@ func (ml *MessageList) albumPartRows(budgetRows int, msg store.Message) int {
 // context (a video's duration, a file's name and size), reusing the same labels
 // the single-message placeholders use. Photos without a MediaRef fall back to a
 // plain photo label rather than dereferencing a nil Media.
-func albumBadgeText(msg store.Message) string {
+func albumBadgeText(msg domain.Message) string {
 	if msg.Media != nil {
 		return placeholderFor(msg.Media)
 	}
@@ -187,6 +187,6 @@ func albumBadgeText(msg store.Message) string {
 }
 
 // albumBadgeLabel is the full badge line content for a part: "[n] <type/context>".
-func albumBadgeLabel(index int, msg store.Message) string {
+func albumBadgeLabel(index int, msg domain.Message) string {
 	return "[" + strconv.Itoa(index) + "] " + albumBadgeText(msg)
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestRenderPlainTextUnchanged(t *testing.T) {
@@ -15,17 +15,17 @@ func TestRenderPlainTextUnchanged(t *testing.T) {
 }
 
 func TestRenderBold(t *testing.T) {
-	ents := []store.MessageEntity{{Type: "bold", Offset: 7, Length: 5}}
+	ents := []domain.MessageEntity{{Type: "bold", Offset: 7, Length: 5}}
 	assert.Equal(t, "привет **важно**", markup.Render("привет важно", ents))
 }
 
 func TestRenderLink(t *testing.T) {
-	ents := []store.MessageEntity{{Type: "text_url", Offset: 0, Length: 3, URL: "https://ya.ru"}}
+	ents := []domain.MessageEntity{{Type: "text_url", Offset: 0, Length: 3, URL: "https://ya.ru"}}
 	assert.Equal(t, "[док](https://ya.ru)", markup.Render("док", ents))
 }
 
 func TestRenderPreWithLanguage(t *testing.T) {
-	ents := []store.MessageEntity{{Type: "pre", Offset: 0, Length: 4, Language: "go"}}
+	ents := []domain.MessageEntity{{Type: "pre", Offset: 0, Length: 4, Language: "go"}}
 	assert.Equal(t, "```go\ncode\n```", markup.Render("code", ents))
 }
 
@@ -38,7 +38,7 @@ func TestRenderEscapesOnlyRealMarkers(t *testing.T) {
 
 // Nesting order at a shared boundary: the inner span must close first.
 func TestRenderNestedClosesInnermostFirst(t *testing.T) {
-	ents := []store.MessageEntity{
+	ents := []domain.MessageEntity{
 		{Type: "italic", Offset: 7, Length: 8},
 		{Type: "bold", Offset: 0, Length: 15},
 	}
@@ -48,7 +48,7 @@ func TestRenderNestedClosesInnermostFirst(t *testing.T) {
 func TestRenderSkipsMentionName(t *testing.T) {
 	// The composer re-resolves mentions from its pending list, so Render must
 	// not invent markup for them.
-	ents := []store.MessageEntity{{Type: "mention_name", Offset: 0, Length: 7, UserID: 1}}
+	ents := []domain.MessageEntity{{Type: "mention_name", Offset: 0, Length: 7, UserID: 1}}
 	assert.Equal(t, "@Ivan P", markup.Render("@Ivan P", ents))
 }
 

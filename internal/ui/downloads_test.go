@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,23 +45,23 @@ func TestResolveDownloadsDir_NonEmpty(t *testing.T) {
 }
 
 func TestDownloadFileName_UsesOriginalWhenPresent(t *testing.T) {
-	ref := store.DocumentRef{ID: 7, FileName: "clip.mp4", MimeType: "video/mp4"}
-	assert.Equal(t, "clip.mp4", downloadFileName(ref, store.MediaVideo))
+	ref := domain.DocumentRef{ID: 7, FileName: "clip.mp4", MimeType: "video/mp4"}
+	assert.Equal(t, "clip.mp4", downloadFileName(ref, domain.MediaVideo))
 }
 
 func TestDownloadFileName_SynthesizesForUnnamed(t *testing.T) {
 	cases := []struct {
 		name string
-		ref  store.DocumentRef
-		kind store.MediaKind
+		ref  domain.DocumentRef
+		kind domain.MediaKind
 		want string
 	}{
-		{"video", store.DocumentRef{ID: 7, MimeType: "video/mp4"}, store.MediaVideo, "video_7.mp4"},
-		{"video note", store.DocumentRef{ID: 7, MimeType: "video/mp4"}, store.MediaVideoNote, "video_note_7.mp4"},
-		{"voice", store.DocumentRef{ID: 7, MimeType: "audio/ogg"}, store.MediaVoice, "voice_7.oga"},
-		{"audio", store.DocumentRef{ID: 7, MimeType: "audio/mpeg"}, store.MediaAudio, "audio_7.mp3"},
-		{"gif", store.DocumentRef{ID: 7, MimeType: "video/mp4"}, store.MediaGIF, "gif_7.mp4"},
-		{"file fallback", store.DocumentRef{ID: 7, MimeType: "application/pdf"}, store.MediaFile, "file_7.pdf"},
+		{"video", domain.DocumentRef{ID: 7, MimeType: "video/mp4"}, domain.MediaVideo, "video_7.mp4"},
+		{"video note", domain.DocumentRef{ID: 7, MimeType: "video/mp4"}, domain.MediaVideoNote, "video_note_7.mp4"},
+		{"voice", domain.DocumentRef{ID: 7, MimeType: "audio/ogg"}, domain.MediaVoice, "voice_7.oga"},
+		{"audio", domain.DocumentRef{ID: 7, MimeType: "audio/mpeg"}, domain.MediaAudio, "audio_7.mp3"},
+		{"gif", domain.DocumentRef{ID: 7, MimeType: "video/mp4"}, domain.MediaGIF, "gif_7.mp4"},
+		{"file fallback", domain.DocumentRef{ID: 7, MimeType: "application/pdf"}, domain.MediaFile, "file_7.pdf"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

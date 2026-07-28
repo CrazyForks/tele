@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -16,7 +17,7 @@ func newSizedRoot(t *testing.T, w, h int) RootModel {
 	t.Helper()
 	st := store.NewMemory()
 	for i := int64(1); i <= 5; i++ {
-		st.SetChat(store.Chat{ID: i, Peer: store.Peer{ID: i, Type: store.PeerUser}, Title: "chat"})
+		st.SetChat(domain.Chat{ID: i, Peer: domain.Peer{ID: i, Type: domain.PeerUser}, Title: "chat"})
 	}
 	m := NewRootModel(nil, st, 50, false).WithScreen(ScreenMain)
 	m.chatList.SetChats(st.Chats())

@@ -8,9 +8,8 @@ import (
 	"fmt"
 
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // ErrUnsupportedAlbumMedia is returned when messages.uploadMedia answers with a
@@ -58,7 +57,7 @@ func inputMediaFromMessageMedia(mm tg.MessageMediaClass) (tg.InputMediaClass, er
 
 // UploadMedia turns an uploaded InputFile (wrapped in an inputMediaUploaded*
 // constructor) into a server-side media ref usable as an album part.
-func (c *GotdClient) UploadMedia(ctx context.Context, peer store.Peer, media tg.InputMediaClass) (tg.InputMediaClass, error) {
+func (c *GotdClient) UploadMedia(ctx context.Context, peer domain.Peer, media tg.InputMediaClass) (tg.InputMediaClass, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil, err
@@ -90,12 +89,12 @@ func (c *GotdClient) UploadMedia(ctx context.Context, peer store.Peer, media tg.
 type AlbumItem struct {
 	Media    tg.InputMediaClass
 	Caption  string
-	Entities []store.MessageEntity
+	Entities []domain.MessageEntity
 }
 
 // SendAlbumParams carries everything SendAlbum needs.
 type SendAlbumParams struct {
-	Peer         store.Peer
+	Peer         domain.Peer
 	Items        []AlbumItem
 	ReplyToMsgID int
 }

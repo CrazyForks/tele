@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // wrappedLineCount returns how many rendered rows the message body occupies at
@@ -12,7 +12,7 @@ import (
 // applies, so the height estimate and the actual render stay in lock-step. A naive
 // ceil(runes/width) under-counts, because word-wrap cannot split words and leaves
 // ragged line ends, silently clipping the tail message (issue #115).
-func wrappedLineCount(text string, entities []store.MessageEntity, contentW int) int {
+func wrappedLineCount(text string, entities []domain.MessageEntity, contentW int) int {
 	if contentW < 1 {
 		contentW = 1
 	}
@@ -34,11 +34,11 @@ func wrappedLineCount(text string, entities []store.MessageEntity, contentW int)
 // isBareMedia reports whether a message should render borderless (no message
 // bubble): a static WEBP sticker or a round video note whose image is loaded,
 // with no caption, reply, or forward header that would need the bubble layout.
-func (ml *MessageList) isBareMedia(msg store.Message) bool {
+func (ml *MessageList) isBareMedia(msg domain.Message) bool {
 	if msg.Text != "" || msg.Forward != nil || msg.ReplyToMsgID != 0 || msg.Media == nil {
 		return false
 	}
-	if !store.IsStaticSticker(msg.Media, msg.Document) && msg.Media.Kind != store.MediaVideoNote {
+	if !domain.IsStaticSticker(msg.Media, msg.Document) && msg.Media.Kind != domain.MediaVideoNote {
 		return false
 	}
 	id, ok := ml.PreviewImageID(msg)
@@ -51,7 +51,7 @@ func (ml *MessageList) isBareMedia(msg store.Message) bool {
 
 // bareMediaRows returns the media's art-row footprint (without the overlay,
 // meta, or sender-name lines). Caller must have verified isBareMedia.
-func (ml *MessageList) bareMediaRows(msg store.Message) int {
+func (ml *MessageList) bareMediaRows(msg domain.Message) int {
 	id, _ := ml.PreviewImageID(msg)
 	img, _ := ml.cachedImage(id)
 	bb := img.Bounds()
@@ -59,7 +59,7 @@ func (ml *MessageList) bareMediaRows(msg store.Message) int {
 	return rows
 }
 
-func (ml *MessageList) msgHeight(msg store.Message) int {
+func (ml *MessageList) msgHeight(msg domain.Message) int {
 	if ml.viewWidth <= 0 {
 		return 4
 	}
@@ -174,7 +174,7 @@ func (ml *MessageList) computeItemHeight(i int) int {
 // scaled rows as a placeholder box so the height is stable before/after image
 // load (mirrors msgHeight, issue #115). It must stay in lock-step with
 // renderGroupBubble; TestGroupHeightMatchesRender guards that.
-func (ml *MessageList) groupHeight(parts []store.Message) int {
+func (ml *MessageList) groupHeight(parts []domain.Message) int {
 	if _, _, _, _, _, ok := ml.mosaicPlan(parts); ok {
 		return ml.mosaicHeight(parts)
 	}
@@ -182,7 +182,7 @@ func (ml *MessageList) groupHeight(parts []store.Message) int {
 }
 
 // groupHeightStack is the vertical-stack album height (see renderGroupStack).
-func (ml *MessageList) groupHeightStack(parts []store.Message) int {
+func (ml *MessageList) groupHeightStack(parts []domain.Message) int {
 	if ml.viewWidth <= 0 {
 		return 4
 	}

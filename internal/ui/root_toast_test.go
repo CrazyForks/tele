@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -117,7 +118,7 @@ func TestChatLoadErr_ToastHasRetryAction(t *testing.T) {
 	}
 }
 
-func notifyModel(t *testing.T, chat store.Chat) RootModel {
+func notifyModel(t *testing.T, chat domain.Chat) RootModel {
 	t.Helper()
 	st := store.NewMemory()
 	st.SetChat(chat)
@@ -129,14 +130,14 @@ func notifyModel(t *testing.T, chat store.Chat) RootModel {
 func newMessageEvent(chatID int64, text string, out bool) store.Event {
 	return store.Event{
 		Kind: store.EventNewMessage,
-		Message: store.Message{
+		Message: domain.Message{
 			ID: 1000, ChatID: chatID, Text: text, IsOut: out, Date: time.Now(),
 		},
 	}
 }
 
 func TestInAppNotify_InactiveChat_ShowsToast(t *testing.T) {
-	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0 // no active chat
 	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey there", false))
 	rm := model.(RootModel)
@@ -151,7 +152,7 @@ func TestInAppNotify_InactiveChat_ShowsToast(t *testing.T) {
 }
 
 func TestInAppNotify_ClickOpensChat(t *testing.T) {
-	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0
 	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hi", false))
 	rm := model.(RootModel)
@@ -188,7 +189,7 @@ func TestInAppNotify_ClickOpensChat(t *testing.T) {
 }
 
 func TestInAppNotify_ActiveChat_NoToast(t *testing.T) {
-	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 7 // this chat is open
 	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey", false))
 	if !model.(RootModel).toasts.Empty() {
@@ -197,7 +198,7 @@ func TestInAppNotify_ActiveChat_NoToast(t *testing.T) {
 }
 
 func TestInAppNotify_Outgoing_NoToast(t *testing.T) {
-	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0
 	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "sent by me", true))
 	if !model.(RootModel).toasts.Empty() {
@@ -206,7 +207,7 @@ func TestInAppNotify_Outgoing_NoToast(t *testing.T) {
 }
 
 func TestInAppNotify_MutedChat_NoToast(t *testing.T) {
-	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice", IsMuted: true})
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice", IsMuted: true})
 	m.currentChatID = 0
 	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey", false))
 	if !model.(RootModel).toasts.Empty() {
@@ -215,11 +216,11 @@ func TestInAppNotify_MutedChat_NoToast(t *testing.T) {
 }
 
 func TestInAppNotify_StaleMessage_NoToast(t *testing.T) {
-	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0
 	evt := store.Event{
 		Kind: store.EventNewMessage,
-		Message: store.Message{
+		Message: domain.Message{
 			ID: 1001, ChatID: 7, Text: "old", IsOut: false,
 			Date: time.Now().Add(-store.NotifyFreshnessWindow - time.Second),
 		},
@@ -231,7 +232,7 @@ func TestInAppNotify_StaleMessage_NoToast(t *testing.T) {
 }
 
 func TestInAppNotify_PreviewOff_HidesText(t *testing.T) {
-	m := notifyModel(t, store.Chat{ID: 7, Title: "Alice"})
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
 	m.currentChatID = 0
 	m.cfg = &config.Config{}
 	m.cfg.UI.NotificationPreview = false

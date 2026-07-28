@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -55,7 +56,7 @@ func TestPasteImage_StagesAsPhotoAndEntersInsert(t *testing.T) {
 	require.True(t, m.Chat().HasAttachment(), "clipboard image must be staged as an attachment")
 	sendAs, ok := m.PendingAttachmentSendAs()
 	require.True(t, ok)
-	assert.Equal(t, store.MediaPhoto, sendAs, "clipboard image must stage as a photo, not a file")
+	assert.Equal(t, domain.MediaPhoto, sendAs, "clipboard image must stage as a photo, not a file")
 	assert.Equal(t, keys.ModeInsert, m.VimMode(), "caption field must be active")
 }
 

@@ -6,7 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	lipcompat "charm.land/lipgloss/v2/compat"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
@@ -99,7 +99,7 @@ type ContextMenu struct {
 	msgID        int
 	isOut        bool
 	replyToMsgID int
-	mediaKind    store.MediaKind
+	mediaKind    domain.MediaKind
 	hasMedia     bool
 	hasText      bool
 	openTargets  []OpenTarget
@@ -112,7 +112,7 @@ type ContextMenu struct {
 // hasText reports whether the message has copyable text (drives the Copy entry).
 // openTargets are the message's openable items (media plus links); they drive the
 // single unified "Open" entry.
-func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind store.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget, km keys.KeyMap) *ContextMenu {
+func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind domain.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget, km keys.KeyMap) *ContextMenu {
 	cm := &ContextMenu{
 		msgID:        msgID,
 		isOut:        isOut,
@@ -140,7 +140,7 @@ func (cm *ContextMenu) setItems(items []menuItem) {
 
 func (cm *ContextMenu) Cursor() int { return cm.list.Cursor() }
 
-func mainItems(isOut bool, isReply bool, mediaKind store.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget) []menuItem {
+func mainItems(isOut bool, isReply bool, mediaKind domain.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget) []menuItem {
 	var items []menuItem
 	if isReply {
 		items = append(items, menuItem{label: "Jump to original", action: keys.ActionJumpToOriginal})
@@ -188,28 +188,28 @@ func openItemLabel(targets []OpenTarget) string {
 // external open for photo and video, playback for voice, and download for every
 // downloadable kind. The primary in-app open is handled by the unified Open
 // entry. Stickers and non-file media (location, etc.) get no media actions.
-func mediaItems(kind store.MediaKind) []menuItem {
+func mediaItems(kind domain.MediaKind) []menuItem {
 	switch kind {
-	case store.MediaPhoto:
+	case domain.MediaPhoto:
 		return []menuItem{
 			{label: "Open photo externally", action: keys.ActionOpenExternal},
 			{label: "save photo (download)", action: keys.ActionDownloadFile},
 		}
-	case store.MediaVideo, store.MediaVideoNote:
+	case domain.MediaVideo, domain.MediaVideoNote:
 		return []menuItem{
 			{label: "Open video externally", action: keys.ActionOpenExternal},
 			{label: "save video (download)", action: keys.ActionDownloadFile},
 		}
-	case store.MediaVoice:
+	case domain.MediaVoice:
 		return []menuItem{
 			{label: "Play voice", action: keys.ActionPlayVoice},
 			{label: "save voice (download)", action: keys.ActionDownloadFile},
 		}
-	case store.MediaAudio:
+	case domain.MediaAudio:
 		return []menuItem{{label: "save audio (download)", action: keys.ActionDownloadFile}}
-	case store.MediaGIF:
+	case domain.MediaGIF:
 		return []menuItem{{label: "save GIF (download)", action: keys.ActionDownloadFile}}
-	case store.MediaFile:
+	case domain.MediaFile:
 		return []menuItem{{label: "save file (download)", action: keys.ActionDownloadFile}}
 	default:
 		return nil

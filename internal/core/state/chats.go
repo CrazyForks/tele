@@ -1,6 +1,6 @@
 package state
 
-import "github.com/sorokin-vladimir/tele/internal/store"
+import "github.com/sorokin-vladimir/tele/internal/domain"
 
 // ApplyReadInbox advances a chat's inbound read pointer. Reports false when the
 // pointer did not move, so nothing downstream is recomputed for a duplicate or
@@ -65,7 +65,7 @@ func (s *State) ApplyDraft(chatID int64, text string) (Change, bool) {
 
 // ApplyTyping publishes a typing indicator. It has no persisted state: the
 // typing label is ephemeral and belongs to the chat view, not to the account.
-func (s *State) ApplyTyping(chatID int64, action store.TypingAction) (Change, bool) {
+func (s *State) ApplyTyping(chatID int64, action domain.TypingAction) (Change, bool) {
 	c := Change{Kind: ChangeTyping, ChatID: chatID, Typing: action}
 	s.commit(c)
 	return c, true

@@ -3,7 +3,7 @@ package components
 import (
 	"time"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // GroupMediaRef is one media part of the selected album, carrying everything the
@@ -11,9 +11,9 @@ import (
 // ref, and the part's own message ID and meta.
 type GroupMediaRef struct {
 	Index   int
-	Kind    store.MediaKind
-	Photo   *store.PhotoRef
-	Doc     *store.DocumentRef
+	Kind    domain.MediaKind
+	Photo   *domain.PhotoRef
+	Doc     *domain.DocumentRef
 	MsgID   int
 	Sender  string
 	Date    time.Time
@@ -32,7 +32,7 @@ func (ml *MessageList) SelectedGroupMedia() []GroupMediaRef {
 	for _, gm := range media {
 		ref := GroupMediaRef{Index: gm.Index, MsgID: gm.Msg.ID, Sender: gm.Msg.SenderName, Date: gm.Msg.Date}
 		if gm.Msg.Photo != nil {
-			ref.Kind = store.MediaPhoto
+			ref.Kind = domain.MediaPhoto
 			ref.Photo = gm.Msg.Photo
 		} else if gm.Msg.Media != nil {
 			ref.Kind = gm.Msg.Media.Kind
@@ -120,54 +120,54 @@ func (ml *MessageList) SelectedMessagePhotoID() int64 {
 
 // SelectedMessageVideo returns the document ref of the selected message when it
 // is a playable video, for opening in an external player.
-func (ml *MessageList) SelectedMessageVideo() (store.DocumentRef, bool) {
+func (ml *MessageList) SelectedMessageVideo() (domain.DocumentRef, bool) {
 	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
 		msg.Media.Kind.IsVideo() && msg.Document != nil {
 		return *msg.Document, true
 	}
-	return store.DocumentRef{}, false
+	return domain.DocumentRef{}, false
 }
 
 // SelectedMessageVoice returns the document ref of the selected message when it
 // is a voice message, for in-app playback.
-func (ml *MessageList) SelectedMessageVoice() (store.DocumentRef, bool) {
+func (ml *MessageList) SelectedMessageVoice() (domain.DocumentRef, bool) {
 	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
-		msg.Media.Kind == store.MediaVoice && msg.Document != nil {
+		msg.Media.Kind == domain.MediaVoice && msg.Document != nil {
 		return *msg.Document, true
 	}
-	return store.DocumentRef{}, false
+	return domain.DocumentRef{}, false
 }
 
 // SelectedMessageGIF returns the document ref of the selected message when it is
 // an animated GIF, for inline looping playback (#105 Phase 2b).
-func (ml *MessageList) SelectedMessageGIF() (store.DocumentRef, bool) {
+func (ml *MessageList) SelectedMessageGIF() (domain.DocumentRef, bool) {
 	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
-		msg.Media.Kind == store.MediaGIF && msg.Document != nil {
+		msg.Media.Kind == domain.MediaGIF && msg.Document != nil {
 		return *msg.Document, true
 	}
-	return store.DocumentRef{}, false
+	return domain.DocumentRef{}, false
 }
 
 // SelectedMessagePhoto returns the full PhotoRef of the selected message when it
 // is a photo, for saving to disk at full quality.
-func (ml *MessageList) SelectedMessagePhoto() (store.PhotoRef, bool) {
+func (ml *MessageList) SelectedMessagePhoto() (domain.PhotoRef, bool) {
 	if msg := ml.computeSelectedMsg(); msg != nil && msg.Photo != nil {
 		return *msg.Photo, true
 	}
-	return store.PhotoRef{}, false
+	return domain.PhotoRef{}, false
 }
 
 // SelectedMessageMediaKind returns the media kind of the selected message and
 // whether it carries any media. Photos report MediaPhoto (detected via the
 // photo ref, independent of the Media field); document-backed media report
 // their Media.Kind. Messages with no downloadable/openable media report false.
-func (ml *MessageList) SelectedMessageMediaKind() (store.MediaKind, bool) {
+func (ml *MessageList) SelectedMessageMediaKind() (domain.MediaKind, bool) {
 	msg := ml.computeSelectedMsg()
 	if msg == nil {
 		return 0, false
 	}
 	if msg.Photo != nil {
-		return store.MediaPhoto, true
+		return domain.MediaPhoto, true
 	}
 	if msg.Media != nil && msg.Document != nil {
 		return msg.Media.Kind, true
@@ -179,13 +179,13 @@ func (ml *MessageList) SelectedMessageMediaKind() (store.MediaKind, bool) {
 // selected message when it is any downloadable document-backed media (video,
 // round note, voice, audio, GIF, generic file). Stickers are excluded (saving
 // them to disk is not offered); photos are handled by SelectedMessagePhoto.
-func (ml *MessageList) SelectedMessageDownloadDoc() (store.DocumentRef, store.MediaKind, bool) {
+func (ml *MessageList) SelectedMessageDownloadDoc() (domain.DocumentRef, domain.MediaKind, bool) {
 	msg := ml.computeSelectedMsg()
 	if msg == nil || msg.Media == nil || msg.Document == nil {
-		return store.DocumentRef{}, 0, false
+		return domain.DocumentRef{}, 0, false
 	}
-	if msg.Media.Kind == store.MediaSticker {
-		return store.DocumentRef{}, 0, false
+	if msg.Media.Kind == domain.MediaSticker {
+		return domain.DocumentRef{}, 0, false
 	}
 	return *msg.Document, msg.Media.Kind, true
 }
@@ -197,7 +197,7 @@ func (ml *MessageList) computeSelectedMsgID() int {
 	return 0
 }
 
-func (ml *MessageList) computeSelectedMsg() *store.Message {
+func (ml *MessageList) computeSelectedMsg() *domain.Message {
 	if len(ml.items) == 0 {
 		return nil
 	}

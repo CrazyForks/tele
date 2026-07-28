@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	vmedia "github.com/sorokin-vladimir/tele/internal/media"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -58,7 +58,7 @@ func (m RootModel) selectedPhotoInfo() (string, time.Time) {
 // when full quality is not cached and the photo has one, dispatches the
 // full-quality download so it can be swapped in on arrival. ref/msgID/sender/date
 // are supplied by the caller (mirrors openVideoModal).
-func (m RootModel) openPhotoModal(ref store.PhotoRef, msgID int, sender string, date time.Time) (RootModel, tea.Cmd) {
+func (m RootModel) openPhotoModal(ref domain.PhotoRef, msgID int, sender string, date time.Time) (RootModel, tea.Cmd) {
 	photoID := ref.ID
 	timeLabel := ""
 	if !date.IsZero() {
@@ -101,7 +101,7 @@ func (m RootModel) openPhotoModal(ref store.PhotoRef, msgID int, sender string, 
 
 // openPhotoModalAlbum opens a photo that is part of an album, recording the full
 // album and current index so left/right can page across parts.
-func (m RootModel) openPhotoModalAlbum(ref store.PhotoRef, msgID int, sender string, date time.Time, album []components.GroupMediaRef, idx int) (RootModel, tea.Cmd) {
+func (m RootModel) openPhotoModalAlbum(ref domain.PhotoRef, msgID int, sender string, date time.Time, album []components.GroupMediaRef, idx int) (RootModel, tea.Cmd) {
 	m, cmd := m.openPhotoModal(ref, msgID, sender, date)
 	if m.photoViewer != nil {
 		m.photoViewer.album = album

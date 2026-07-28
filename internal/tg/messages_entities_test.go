@@ -4,14 +4,13 @@ import (
 	"testing"
 
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 func TestConvertToTGEntitiesNameMention(t *testing.T) {
-	es := []store.MessageEntity{
+	es := []domain.MessageEntity{
 		{Type: "mention_name", Offset: 0, Length: 5, UserID: 10, AccessHash: 99},
 		{Type: "mention", Offset: 6, Length: 4}, // username: no entity emitted
 	}
@@ -33,7 +32,7 @@ func TestConvertToTGEntitiesNameMention(t *testing.T) {
 }
 
 func TestBuildSendRequestSetsEntities(t *testing.T) {
-	es := []store.MessageEntity{{Type: "mention_name", Offset: 0, Length: 3, UserID: 1, AccessHash: 2}}
+	es := []domain.MessageEntity{{Type: "mention_name", Offset: 0, Length: 3, UserID: 1, AccessHash: 2}}
 	req := buildSendRequest(&tg.InputPeerEmpty{}, "abc", 7, 0, es)
 	if len(req.Entities) != 1 {
 		t.Fatalf("want 1 entity in request, got %d", len(req.Entities))
@@ -48,7 +47,7 @@ func TestBuildSendRequestNoEntities(t *testing.T) {
 }
 
 func TestConvertToTGEntitiesMapsAllTypes(t *testing.T) {
-	es := []store.MessageEntity{
+	es := []domain.MessageEntity{
 		{Type: "bold", Offset: 0, Length: 1},
 		{Type: "italic", Offset: 1, Length: 1},
 		{Type: "strike", Offset: 2, Length: 1},
@@ -76,7 +75,7 @@ func TestConvertToTGEntitiesMapsAllTypes(t *testing.T) {
 
 // Auto-detected types are found server-side; sending them back would be noise.
 func TestConvertToTGEntitiesSkipsServerDetectedTypes(t *testing.T) {
-	es := []store.MessageEntity{
+	es := []domain.MessageEntity{
 		{Type: "url", Offset: 0, Length: 5},
 		{Type: "hashtag", Offset: 6, Length: 3},
 		{Type: "email", Offset: 10, Length: 5},
@@ -85,7 +84,7 @@ func TestConvertToTGEntitiesSkipsServerDetectedTypes(t *testing.T) {
 }
 
 func TestBuildSendMediaRequestSetsEntities(t *testing.T) {
-	es := []store.MessageEntity{{Type: "bold", Offset: 0, Length: 3}}
+	es := []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 3}}
 	req := buildSendMediaRequest(&tg.InputPeerEmpty{}, &tg.InputMediaEmpty{}, "abc", 7, 0, es)
 	require.Len(t, req.Entities, 1)
 	assert.IsType(t, &tg.MessageEntityBold{}, req.Entities[0])
@@ -97,7 +96,7 @@ func TestBuildSendMediaRequestNoEntities(t *testing.T) {
 }
 
 func TestBuildEditRequestSetsEntities(t *testing.T) {
-	es := []store.MessageEntity{{Type: "bold", Offset: 0, Length: 3}}
+	es := []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 3}}
 	req := buildEditRequest(&tg.InputPeerEmpty{}, 42, "abc", es)
 	assert.Equal(t, 42, req.ID)
 	assert.Equal(t, "abc", req.Message)

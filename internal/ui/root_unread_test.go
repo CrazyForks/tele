@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -16,12 +17,12 @@ import (
 func TestRoot_OpenChat_UnreadClearedOnMarkReadConfirmation(t *testing.T) {
 	m, st := newRootWithTwoChatsInternal(t)
 
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(RootModel)
 
 	newM, _ = applyEventInternal(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 7, ChatID: 1, Text: "hi"},
+		Message: domain.Message{ID: 7, ChatID: 1, Text: "hi"},
 	})
 	m = newM.(RootModel)
 
@@ -40,13 +41,13 @@ func TestRoot_OpenChat_UnreadClearedOnMarkReadConfirmation(t *testing.T) {
 func TestRoot_OpenChatUnfocused_KeepsUnread(t *testing.T) {
 	m, st := newRootWithTwoChatsInternal(t)
 
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(RootModel)
 	m = m.WithFocus(FocusChatList)
 
 	applyEventInternal(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 7, ChatID: 1, Text: "hi"},
+		Message: domain.Message{ID: 7, ChatID: 1, Text: "hi"},
 	})
 
 	c, _ := st.GetChat(1)

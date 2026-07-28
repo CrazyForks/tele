@@ -8,14 +8,14 @@ import (
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 // RefreshMessages re-fetches several messages in one round-trip and returns them
 // with fresh media refs and grouped_id. Only the messages the server returned
 // are present; the order follows the server response.
-func (c *GotdClient) RefreshMessages(ctx context.Context, peer store.Peer, msgIDs []int) ([]store.Message, error) {
+func (c *GotdClient) RefreshMessages(ctx context.Context, peer domain.Peer, msgIDs []int) ([]domain.Message, error) {
 	if len(msgIDs) == 0 {
 		return nil, nil
 	}
@@ -28,7 +28,7 @@ func (c *GotdClient) RefreshMessages(ctx context.Context, peer store.Peer, msgID
 	for _, id := range msgIDs {
 		ids = append(ids, &tg.InputMessageID{ID: id})
 	}
-	var out []store.Message
+	var out []domain.Message
 	err = WithRetry(ctx, func() error {
 		var (
 			result tg.MessagesMessagesClass
@@ -57,26 +57,26 @@ func (c *GotdClient) RefreshMessages(ctx context.Context, peer store.Peer, msgID
 }
 
 // RefreshMessage re-fetches one message and returns it with fresh media refs.
-func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error) {
+func (c *GotdClient) RefreshMessage(ctx context.Context, peer domain.Peer, msgID int) (domain.Message, error) {
 	msgs, err := c.RefreshMessages(ctx, peer, []int{msgID})
 	if err != nil {
-		return store.Message{}, err
+		return domain.Message{}, err
 	}
 	m, ok := selectMessageByID(msgs, msgID)
 	if !ok {
-		return store.Message{}, &telerr.Error{Kind: telerr.NotFound, Op: "refresh message", Detail: "not found"}
+		return domain.Message{}, &telerr.Error{Kind: telerr.NotFound, Op: "refresh message", Detail: "not found"}
 	}
 	return m, nil
 }
 
 // selectMessagesByIDs keeps only the messages whose ID is in want, preserving
 // the order of msgs.
-func selectMessagesByIDs(msgs []store.Message, want []int) []store.Message {
+func selectMessagesByIDs(msgs []domain.Message, want []int) []domain.Message {
 	set := make(map[int]struct{}, len(want))
 	for _, id := range want {
 		set[id] = struct{}{}
 	}
-	out := make([]store.Message, 0, len(want))
+	out := make([]domain.Message, 0, len(want))
 	for _, m := range msgs {
 		if _, ok := set[m.ID]; ok {
 			out = append(out, m)
@@ -85,7 +85,7 @@ func selectMessagesByIDs(msgs []store.Message, want []int) []store.Message {
 	return out
 }
 
-func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error) {
+func (c *GotdClient) GetHistory(ctx context.Context, peer domain.Peer, offsetID int, limit int) ([]domain.Message, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 
 	c.traceLog.Debug("GetHistory", zap.Int64("peer_id", peer.ID), zap.Int("offsetID", offsetID), zap.Int("limit", limit))
 	inputPeer := peerToInput(peer)
-	var msgs []store.Message
+	var msgs []domain.Message
 	err = WithRetry(ctx, func() error {
 		result, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
 			Peer:     inputPeer,
@@ -116,7 +116,7 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 	return msgs, err
 }
 
-func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error) {
+func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) (int, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return 0, err
@@ -152,11 +152,11 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 // SendMediaParams carries everything SendMedia needs. Media is a ready-made
 // InputMediaClass; SendMedia is type-agnostic and does not inspect it.
 type SendMediaParams struct {
-	Peer         store.Peer
+	Peer         domain.Peer
 	Media        tg.InputMediaClass
 	Caption      string
 	ReplyToMsgID int
-	Entities     []store.MessageEntity
+	Entities     []domain.MessageEntity
 }
 
 func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, error) {
@@ -195,7 +195,7 @@ func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, err
 // ForwardMessages forwards messages by ID from one peer to another via
 // messages.forwardMessages. No optimistic insert is performed: when the target
 // is the open chat, the message arrives through the normal live-update path.
-func (c *GotdClient) ForwardMessages(ctx context.Context, from store.Peer, to store.Peer, ids []int) error {
+func (c *GotdClient) ForwardMessages(ctx context.Context, from domain.Peer, to domain.Peer, ids []int) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -228,7 +228,7 @@ func buildForwardRequest(fromPeer, toPeer tg.InputPeerClass, ids []int, randomID
 	}
 }
 
-func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID int, entities []store.MessageEntity) *tg.MessagesSendMessageRequest {
+func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID int, entities []domain.MessageEntity) *tg.MessagesSendMessageRequest {
 	req := &tg.MessagesSendMessageRequest{
 		Peer:     inputPeer,
 		Message:  text,
@@ -247,7 +247,7 @@ func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, 
 // Name-based mentions carry an InputUser and need InputMessageEntityMentionName;
 // auto-detected types (url, email, hashtag, …) are found server-side and are
 // skipped, as are types we cannot produce.
-func convertToTGEntities(es []store.MessageEntity) []tg.MessageEntityClass {
+func convertToTGEntities(es []domain.MessageEntity) []tg.MessageEntityClass {
 	if len(es) == 0 {
 		return nil
 	}
@@ -279,7 +279,7 @@ func convertToTGEntities(es []store.MessageEntity) []tg.MessageEntityClass {
 	return out
 }
 
-func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass, caption string, randomID int64, replyToMsgID int, entities []store.MessageEntity) *tg.MessagesSendMediaRequest {
+func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass, caption string, randomID int64, replyToMsgID int, entities []domain.MessageEntity) *tg.MessagesSendMediaRequest {
 	req := &tg.MessagesSendMediaRequest{
 		Peer:     inputPeer,
 		Media:    media,
@@ -351,7 +351,7 @@ func BuildInputMediaUploadedVideo(f tg.InputFileClass, fileName, mime string, du
 	return doc
 }
 
-func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) error {
+func (c *GotdClient) MarkRead(ctx context.Context, peer domain.Peer, maxID int) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -372,7 +372,7 @@ func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) e
 	})
 }
 
-func (c *GotdClient) ReadReactions(ctx context.Context, peer store.Peer) error {
+func (c *GotdClient) ReadReactions(ctx context.Context, peer domain.Peer) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -385,7 +385,7 @@ func (c *GotdClient) ReadReactions(ctx context.Context, peer store.Peer) error {
 	})
 }
 
-func (c *GotdClient) ReadMentions(ctx context.Context, peer store.Peer) error {
+func (c *GotdClient) ReadMentions(ctx context.Context, peer domain.Peer) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -398,7 +398,7 @@ func (c *GotdClient) ReadMentions(ctx context.Context, peer store.Peer) error {
 	})
 }
 
-func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error {
+func (c *GotdClient) DeleteMessages(ctx context.Context, peer domain.Peer, ids []int, revoke bool) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -421,7 +421,7 @@ func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []
 	})
 }
 
-func buildEditRequest(inputPeer tg.InputPeerClass, msgID int, text string, entities []store.MessageEntity) *tg.MessagesEditMessageRequest {
+func buildEditRequest(inputPeer tg.InputPeerClass, msgID int, text string, entities []domain.MessageEntity) *tg.MessagesEditMessageRequest {
 	req := &tg.MessagesEditMessageRequest{
 		Peer:    inputPeer,
 		ID:      msgID,
@@ -433,7 +433,7 @@ func buildEditRequest(inputPeer tg.InputPeerClass, msgID int, text string, entit
 	return req
 }
 
-func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int, text string, entities []store.MessageEntity) error {
+func (c *GotdClient) EditMessage(ctx context.Context, peer domain.Peer, msgID int, text string, entities []domain.MessageEntity) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -451,7 +451,7 @@ func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int
 // SaveDraft persists (or clears, when text is empty) the message draft for a
 // peer via messages.saveDraft (#62). Telegram broadcasts the change to the
 // account's other clients as updateDraftMessage.
-func (c *GotdClient) SaveDraft(ctx context.Context, peer store.Peer, text string) error {
+func (c *GotdClient) SaveDraft(ctx context.Context, peer domain.Peer, text string) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -473,7 +473,7 @@ func buildSaveDraftRequest(inputPeer tg.InputPeerClass, text string) *tg.Message
 	}
 }
 
-func (c *GotdClient) SendReaction(ctx context.Context, peer store.Peer, msgID int, emoji string) error {
+func (c *GotdClient) SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -501,22 +501,22 @@ func buildReactionArg(emoji string) []tg.ReactionClass {
 
 // isChannelPeer reports whether a peer is addressed via the channels.* API
 // (channels and supergroups), as opposed to the messages.* API.
-func isChannelPeer(p store.Peer) bool {
-	return p.Type == store.PeerChannel || p.Type == store.PeerSuperGroup
+func isChannelPeer(p domain.Peer) bool {
+	return p.Type == domain.PeerChannel || p.Type == domain.PeerSuperGroup
 }
 
 // inputChannel builds the InputChannel for a channel/supergroup peer.
-func inputChannel(p store.Peer) *tg.InputChannel {
+func inputChannel(p domain.Peer) *tg.InputChannel {
 	return &tg.InputChannel{ChannelID: p.ID, AccessHash: p.AccessHash}
 }
 
-func peerToInput(p store.Peer) tg.InputPeerClass {
+func peerToInput(p domain.Peer) tg.InputPeerClass {
 	switch p.Type {
-	case store.PeerUser:
+	case domain.PeerUser:
 		return &tg.InputPeerUser{UserID: p.ID, AccessHash: p.AccessHash}
-	case store.PeerGroup:
+	case domain.PeerGroup:
 		return &tg.InputPeerChat{ChatID: p.ID}
-	case store.PeerChannel, store.PeerSuperGroup:
+	case domain.PeerChannel, domain.PeerSuperGroup:
 		return &tg.InputPeerChannel{ChannelID: p.ID, AccessHash: p.AccessHash}
 	default:
 		return &tg.InputPeerEmpty{}
@@ -554,32 +554,32 @@ func extractSentMessageID(updates tg.UpdatesClass, randomID int64) int {
 	return extractSentMessageIDs(updates, []int64{randomID})[0]
 }
 
-func typingActionToTG(a store.TypingAction) tg.SendMessageActionClass {
+func typingActionToTG(a domain.TypingAction) tg.SendMessageActionClass {
 	switch a {
-	case store.TypingActionTyping:
+	case domain.TypingActionTyping:
 		return &tg.SendMessageTypingAction{}
-	case store.TypingActionRecordAudio:
+	case domain.TypingActionRecordAudio:
 		return &tg.SendMessageRecordAudioAction{}
-	case store.TypingActionUploadAudio:
+	case domain.TypingActionUploadAudio:
 		return &tg.SendMessageUploadAudioAction{}
-	case store.TypingActionRecordVideo:
+	case domain.TypingActionRecordVideo:
 		return &tg.SendMessageRecordVideoAction{}
-	case store.TypingActionUploadVideo:
+	case domain.TypingActionUploadVideo:
 		return &tg.SendMessageUploadVideoAction{}
-	case store.TypingActionUploadPhoto:
+	case domain.TypingActionUploadPhoto:
 		return &tg.SendMessageUploadPhotoAction{}
-	case store.TypingActionUploadDocument:
+	case domain.TypingActionUploadDocument:
 		return &tg.SendMessageUploadDocumentAction{}
-	case store.TypingActionChooseSticker:
+	case domain.TypingActionChooseSticker:
 		return &tg.SendMessageChooseStickerAction{}
-	case store.TypingActionRecordRound:
+	case domain.TypingActionRecordRound:
 		return &tg.SendMessageRecordRoundAction{}
 	default:
 		return &tg.SendMessageCancelAction{}
 	}
 }
 
-func (c *GotdClient) SetTyping(ctx context.Context, peer store.Peer, action store.TypingAction) error {
+func (c *GotdClient) SetTyping(ctx context.Context, peer domain.Peer, action domain.TypingAction) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil // typing is best-effort; ignore when not connected

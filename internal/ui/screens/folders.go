@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
@@ -16,7 +16,7 @@ import (
 // FolderSelectedMsg is emitted when the user confirms a folder selection.
 // Filter is nil when "All Chats" is selected.
 type FolderSelectedMsg struct {
-	Filter *store.FolderFilter
+	Filter *domain.FolderFilter
 }
 
 var (
@@ -25,13 +25,13 @@ var (
 	activeFolderStyle   = lipgloss.NewStyle().Bold(true)
 )
 
-var allChatsFilter = store.FolderFilter{ID: 0, Title: "All Chats"}
+var allChatsFilter = domain.FolderFilter{ID: 0, Title: "All Chats"}
 
-var archiveFilter = store.FolderFilter{ID: store.ArchiveFolderID, Title: "Archive"}
+var archiveFilter = domain.FolderFilter{ID: domain.ArchiveFolderID, Title: "Archive"}
 
 type FoldersModel struct {
-	folders      []store.FolderFilter // computed: [AllChats] + realFolders + (Archive?)
-	realFolders  []store.FolderFilter
+	folders      []domain.FolderFilter // computed: [AllChats] + realFolders + (Archive?)
+	realFolders  []domain.FolderFilter
 	showArchive  bool
 	cursor       int
 	activeIdx    int
@@ -47,7 +47,7 @@ func NewFoldersModel() *FoldersModel {
 	return m
 }
 
-func (m *FoldersModel) SetFolders(folders []store.FolderFilter) {
+func (m *FoldersModel) SetFolders(folders []domain.FolderFilter) {
 	m.realFolders = folders
 	m.rebuild()
 }
@@ -69,7 +69,7 @@ func (m *FoldersModel) rebuild() {
 	cursorID := m.idAt(m.cursor)
 	activeID := m.idAt(m.activeIdx)
 
-	folders := make([]store.FolderFilter, 0, len(m.realFolders)+2)
+	folders := make([]domain.FolderFilter, 0, len(m.realFolders)+2)
 	folders = append(folders, allChatsFilter)
 	folders = append(folders, m.realFolders...)
 	if m.showArchive {
@@ -109,11 +109,11 @@ func (m *FoldersModel) Cursor() int                        { return m.cursor }
 func (m *FoldersModel) ScrollInfo() components.ScrollInfo {
 	return components.ScrollInfo{Total: len(m.folders), Visible: m.height, Offset: 0}
 }
-func (m *FoldersModel) Folders() []store.FolderFilter { return m.folders }
-func (m *FoldersModel) Context() keys.Context         { return keys.ContextFolders }
+func (m *FoldersModel) Folders() []domain.FolderFilter { return m.folders }
+func (m *FoldersModel) Context() keys.Context          { return keys.ContextFolders }
 
 // SelectedFilter returns the currently active filter. Nil means All Chats.
-func (m *FoldersModel) SelectedFilter() *store.FolderFilter {
+func (m *FoldersModel) SelectedFilter() *domain.FolderFilter {
 	if m.activeIdx == 0 {
 		return nil
 	}
@@ -146,7 +146,7 @@ func (m FoldersModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		}
 	case keys.ActionConfirm:
 		m.activeIdx = m.cursor
-		var f *store.FolderFilter
+		var f *domain.FolderFilter
 		if m.activeIdx > 0 {
 			ff := m.folders[m.activeIdx]
 			f = &ff
@@ -171,7 +171,7 @@ func (m FoldersModel) View() string {
 	return joinLines(lines)
 }
 
-func (m FoldersModel) formatEntry(f store.FolderFilter, active bool) string {
+func (m FoldersModel) formatEntry(f domain.FolderFilter, active bool) string {
 	badge := ""
 	if f.ID != 0 {
 		if n, ok := m.unreadCounts[f.ID]; ok && n > 0 {

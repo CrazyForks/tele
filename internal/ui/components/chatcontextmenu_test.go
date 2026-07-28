@@ -6,35 +6,35 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 func TestChatMenu_ReadLabelForUnreadChat(t *testing.T) {
-	chat := store.Chat{ID: 1, UnreadCount: 3, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	chat := domain.Chat{ID: 1, UnreadCount: 3, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
 	cm := components.NewChatContextMenu(chat, nil, keys.DefaultKeyMap())
 	assert.Contains(t, cm.View(), "Mark as read")
 }
 
 func TestChatMenu_UnreadLabelForReadChat(t *testing.T) {
-	chat := store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	chat := domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
 	cm := components.NewChatContextMenu(chat, nil, keys.DefaultKeyMap())
 	assert.Contains(t, cm.View(), "Mark as unread")
 }
 
 func TestChatMenu_MuteToggleLabel(t *testing.T) {
-	muted := components.NewChatContextMenu(store.Chat{ID: 1, IsMuted: true}, nil, keys.DefaultKeyMap())
+	muted := components.NewChatContextMenu(domain.Chat{ID: 1, IsMuted: true}, nil, keys.DefaultKeyMap())
 	assert.Contains(t, muted.View(), "Unmute")
 
-	unmuted := components.NewChatContextMenu(store.Chat{ID: 1}, nil, keys.DefaultKeyMap())
+	unmuted := components.NewChatContextMenu(domain.Chat{ID: 1}, nil, keys.DefaultKeyMap())
 	v := unmuted.View()
 	assert.Contains(t, v, "Mute")
 	assert.NotContains(t, v, "Unmute")
 }
 
 func TestChatMenu_EmitsToggleMuteRequest(t *testing.T) {
-	chat := store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	chat := domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
 	cm := components.NewChatContextMenu(chat, nil, keys.DefaultKeyMap())
 	_, cmd := cm.Update(keyMsg('m')) // direct key -> Mute
 	require.NotNil(t, cmd)
@@ -45,8 +45,8 @@ func TestChatMenu_EmitsToggleMuteRequest(t *testing.T) {
 }
 
 func TestChatMenu_FolderSubmenuToggle(t *testing.T) {
-	folders := []store.FolderFilter{{ID: 7, Title: "Work", IncludePeers: []int64{1}}}
-	chat := store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	folders := []domain.FolderFilter{{ID: 7, Title: "Work", IncludePeers: []int64{1}}}
+	chat := domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
 	cm := components.NewChatContextMenu(chat, folders, keys.DefaultKeyMap())
 
 	// open the folder submenu via direct key 'f'
@@ -64,15 +64,15 @@ func TestChatMenu_FolderSubmenuToggle(t *testing.T) {
 }
 
 func TestChatMenu_ArchiveEntry(t *testing.T) {
-	cm := components.NewChatContextMenu(store.Chat{ID: 1, Peer: store.Peer{ID: 1}}, nil, keys.DefaultKeyMap())
+	cm := components.NewChatContextMenu(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1}}, nil, keys.DefaultKeyMap())
 	assert.Contains(t, cm.View(), "Archive")
 
-	cmA := components.NewChatContextMenu(store.Chat{ID: 1, IsArchived: true, Peer: store.Peer{ID: 1}}, nil, keys.DefaultKeyMap())
+	cmA := components.NewChatContextMenu(domain.Chat{ID: 1, IsArchived: true, Peer: domain.Peer{ID: 1}}, nil, keys.DefaultKeyMap())
 	assert.Contains(t, cmA.View(), "Unarchive")
 }
 
 func TestChatMenu_EmitsToggleArchiveRequest(t *testing.T) {
-	cm := components.NewChatContextMenu(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}, nil, keys.DefaultKeyMap())
+	cm := components.NewChatContextMenu(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}, nil, keys.DefaultKeyMap())
 	_, cmd := cm.Update(keyMsg('a')) // direct key -> Archive
 	require.NotNil(t, cmd)
 	req, ok := cmd().(components.ToggleArchiveRequest)

@@ -5,14 +5,13 @@ import (
 	"strings"
 
 	"github.com/gotd/td/tg"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // SearchContacts queries Telegram (contacts.search) for users matching q,
-// returning matches as store.Chat with valid peers (access hashes). Phase 1:
+// returning matches as domain.Chat with valid peers (access hashes). Phase 1:
 // users only — groups/channels are filtered out (issue #82).
-func (c *GotdClient) SearchContacts(ctx context.Context, q string, limit int) ([]store.Chat, error) {
+func (c *GotdClient) SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error) {
 	q = strings.TrimPrefix(strings.TrimSpace(q), "@")
 	api, err := c.acquireAPI()
 	if err != nil {
@@ -30,10 +29,10 @@ func (c *GotdClient) SearchContacts(ctx context.Context, q string, limit int) ([
 }
 
 // usersFromContactsFound maps the user peers of a contacts.search response to
-// store.Chat. MyResults (exact/contact matches) are listed before global
+// domain.Chat. MyResults (exact/contact matches) are listed before global
 // Results; non-user peers, self, and duplicates are dropped, and the count is
 // capped at limit.
-func usersFromContactsFound(found *tg.ContactsFound, limit int) []store.Chat {
+func usersFromContactsFound(found *tg.ContactsFound, limit int) []domain.Chat {
 	if found == nil {
 		return nil
 	}
@@ -44,7 +43,7 @@ func usersFromContactsFound(found *tg.ContactsFound, limit int) []store.Chat {
 		}
 	}
 	seen := make(map[int64]struct{})
-	out := make([]store.Chat, 0, limit)
+	out := make([]domain.Chat, 0, limit)
 	add := func(peers []tg.PeerClass) {
 		for _, p := range peers {
 			pu, ok := p.(*tg.PeerUser)

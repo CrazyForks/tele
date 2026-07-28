@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 func TestRenderUploadBar(t *testing.T) {
@@ -15,50 +15,50 @@ func TestRenderUploadBar(t *testing.T) {
 }
 
 func TestUploadStatusLineFailed(t *testing.T) {
-	s := uploadStatusLine(&store.LocalMedia{UploadState: store.UploadFailed}, 20)
+	s := uploadStatusLine(&domain.LocalMedia{UploadState: domain.UploadFailed}, 20)
 	if !strings.Contains(strings.ToLower(s), "failed") {
 		t.Fatalf("failed status missing: %q", s)
 	}
 }
 
 func TestUploadStatusLineUploading(t *testing.T) {
-	s := uploadStatusLine(&store.LocalMedia{UploadProgress: 0.4}, 20)
+	s := uploadStatusLine(&domain.LocalMedia{UploadProgress: 0.4}, 20)
 	if !strings.Contains(s, "40%") {
 		t.Fatalf("uploading status missing percent: %q", s)
 	}
 }
 
 func TestLocalMediaLabel_Photo(t *testing.T) {
-	got := localMediaLabel(&store.LocalMedia{Kind: store.MediaPhoto, FileName: "pic.jpg"})
+	got := localMediaLabel(&domain.LocalMedia{Kind: domain.MediaPhoto, FileName: "pic.jpg"})
 	if !strings.HasPrefix(got, "🖼") || !strings.Contains(got, "pic.jpg") {
 		t.Fatalf("photo label want 🖼 + name, got %q", got)
 	}
 }
 
 func TestLocalMediaLabel_File(t *testing.T) {
-	got := localMediaLabel(&store.LocalMedia{Kind: store.MediaFile, FileName: "report.pdf"})
+	got := localMediaLabel(&domain.LocalMedia{Kind: domain.MediaFile, FileName: "report.pdf"})
 	if !strings.HasPrefix(got, "📎") || !strings.Contains(got, "report.pdf") {
 		t.Fatalf("file label want 📎 + name, got %q", got)
 	}
 }
 
 func TestVideoOverlayLabel_GIF(t *testing.T) {
-	if got := videoOverlayLabel(&store.MediaRef{Kind: store.MediaGIF}); got != "GIF" {
+	if got := videoOverlayLabel(&domain.MediaRef{Kind: domain.MediaGIF}); got != "GIF" {
 		t.Fatalf("GIF overlay want \"GIF\", got %q", got)
 	}
 }
 
 func TestVideoOverlayLabel_PhotoEmpty(t *testing.T) {
-	if got := videoOverlayLabel(&store.MediaRef{Kind: store.MediaPhoto}); got != "" {
+	if got := videoOverlayLabel(&domain.MediaRef{Kind: domain.MediaPhoto}); got != "" {
 		t.Fatalf("photo must have no overlay label, got %q", got)
 	}
 }
 
 func TestOverlayLabelFor_GIFLoadingSpinner(t *testing.T) {
 	ml := NewMessageList(20, 40)
-	gif := store.Message{
-		Media:    &store.MediaRef{Kind: store.MediaGIF},
-		Document: &store.DocumentRef{ID: 5, ThumbSize: "m"},
+	gif := domain.Message{
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: 5, ThumbSize: "m"},
 	}
 	if got := ml.overlayLabelFor(gif); got != "GIF" {
 		t.Fatalf("idle GIF want \"GIF\", got %q", got)
@@ -75,10 +75,10 @@ func TestOverlayLabelFor_GIFLoadingSpinner(t *testing.T) {
 
 func TestSelectedMessageGIF(t *testing.T) {
 	ml := NewMessageList(20, 40)
-	ml.SetMessages([]store.Message{{
+	ml.SetMessages([]domain.Message{{
 		ID:       1,
-		Media:    &store.MediaRef{Kind: store.MediaGIF},
-		Document: &store.DocumentRef{ID: 55, ThumbSize: "m"},
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: 55, ThumbSize: "m"},
 	}})
 	ref, ok := ml.SelectedMessageGIF()
 	if !ok || ref.ID != 55 {
@@ -88,10 +88,10 @@ func TestSelectedMessageGIF(t *testing.T) {
 
 func TestSelectedMessageGIF_NotAGif(t *testing.T) {
 	ml := NewMessageList(20, 40)
-	ml.SetMessages([]store.Message{{
+	ml.SetMessages([]domain.Message{{
 		ID:    1,
-		Media: &store.MediaRef{Kind: store.MediaPhoto},
-		Photo: &store.PhotoRef{ID: 9},
+		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo: &domain.PhotoRef{ID: 9},
 	}})
 	if _, ok := ml.SelectedMessageGIF(); ok {
 		t.Fatal("photo selection must not report a GIF")
@@ -100,9 +100,9 @@ func TestSelectedMessageGIF_NotAGif(t *testing.T) {
 
 func TestPreviewImageID_GIFWithThumb(t *testing.T) {
 	ml := NewMessageList(20, 40)
-	msg := store.Message{
-		Media:    &store.MediaRef{Kind: store.MediaGIF},
-		Document: &store.DocumentRef{ID: 777, ThumbSize: "m"},
+	msg := domain.Message{
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: 777, ThumbSize: "m"},
 	}
 	id, ok := ml.PreviewImageID(msg)
 	if !ok || id != 777 {
@@ -112,9 +112,9 @@ func TestPreviewImageID_GIFWithThumb(t *testing.T) {
 
 func TestPreviewImageID_GIFWithoutThumb(t *testing.T) {
 	ml := NewMessageList(20, 40)
-	msg := store.Message{
-		Media:    &store.MediaRef{Kind: store.MediaGIF},
-		Document: &store.DocumentRef{ID: 777}, // no ThumbSize
+	msg := domain.Message{
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: 777}, // no ThumbSize
 	}
 	if _, ok := ml.PreviewImageID(msg); ok {
 		t.Fatal("GIF without a thumb must have no inline preview")
@@ -122,28 +122,28 @@ func TestPreviewImageID_GIFWithoutThumb(t *testing.T) {
 }
 
 func TestLocalMediaLabel_Video(t *testing.T) {
-	got := localMediaLabel(&store.LocalMedia{Kind: store.MediaVideo, FileName: "clip.mp4"})
+	got := localMediaLabel(&domain.LocalMedia{Kind: domain.MediaVideo, FileName: "clip.mp4"})
 	if got != "🎥 clip.mp4" {
 		t.Fatalf("video label want '🎥 clip.mp4', got %q", got)
 	}
 }
 
 func TestLocalMediaLabel_VideoNoName(t *testing.T) {
-	got := localMediaLabel(&store.LocalMedia{Kind: store.MediaVideo})
+	got := localMediaLabel(&domain.LocalMedia{Kind: domain.MediaVideo})
 	if got != "🎥 video" {
 		t.Fatalf("nameless video label want '🎥 video', got %q", got)
 	}
 }
 
 func TestPlaceholderFor_FileWithNameAndSize(t *testing.T) {
-	got := placeholderFor(&store.MediaRef{Kind: store.MediaFile, FileName: "report.pdf", Size: 1300000})
+	got := placeholderFor(&domain.MediaRef{Kind: domain.MediaFile, FileName: "report.pdf", Size: 1300000})
 	if !strings.Contains(got, "report.pdf") || !strings.Contains(got, "MB") {
 		t.Fatalf("file placeholder want name + size, got %q", got)
 	}
 }
 
 func TestPlaceholderFor_FileNoName(t *testing.T) {
-	got := placeholderFor(&store.MediaRef{Kind: store.MediaFile})
+	got := placeholderFor(&domain.MediaRef{Kind: domain.MediaFile})
 	if got != "📎 file" {
 		t.Fatalf("nameless file placeholder want '📎 file', got %q", got)
 	}

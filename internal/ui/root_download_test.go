@@ -12,8 +12,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -40,16 +40,16 @@ func TestDownloadKey_OnPhoto_SavesFullQualityJpg(t *testing.T) {
 	defer ui.SetDownloadsDirForTest(dir)()
 
 	mc := &mockTGClient{
-		downloadPhotoFileFunc: func(_ store.PhotoRef, dst io.Writer) error {
+		downloadPhotoFileFunc: func(_ domain.PhotoRef, dst io.Writer) error {
 			_, err := io.WriteString(dst, "jpeg")
 			return err
 		},
 	}
 	m, st := newRootOnChat(t, mc)
 
-	photo := store.Message{ID: 10, ChatID: 1, Date: time.Now(),
-		Media: &store.MediaRef{Kind: store.MediaPhoto},
-		Photo: &store.PhotoRef{ID: 321, FullThumbSize: "y"}}
+	photo := domain.Message{ID: 10, ChatID: 1, Date: time.Now(),
+		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo: &domain.PhotoRef{ID: 321, FullThumbSize: "y"}}
 	st.AppendMessage(photo)
 	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = nm.(ui.RootModel)
@@ -73,9 +73,9 @@ func TestDownloadKey_OnVideo_SavesSynthesizedName(t *testing.T) {
 	}
 	m, st := newRootOnChat(t, mc)
 
-	video := store.Message{ID: 11, ChatID: 1, Date: time.Now(),
-		Media:    &store.MediaRef{Kind: store.MediaVideo},
-		Document: &store.DocumentRef{ID: 654, MimeType: "video/mp4"}}
+	video := domain.Message{ID: 11, ChatID: 1, Date: time.Now(),
+		Media:    &domain.MediaRef{Kind: domain.MediaVideo},
+		Document: &domain.DocumentRef{ID: 654, MimeType: "video/mp4"}}
 	st.AppendMessage(video)
 	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = nm.(ui.RootModel)
@@ -94,16 +94,16 @@ func TestDownloadFileRequest_RoutedForPhoto(t *testing.T) {
 	defer ui.SetDownloadsDirForTest(dir)()
 
 	mc := &mockTGClient{
-		downloadPhotoFileFunc: func(_ store.PhotoRef, dst io.Writer) error {
+		downloadPhotoFileFunc: func(_ domain.PhotoRef, dst io.Writer) error {
 			_, err := io.WriteString(dst, "jpeg")
 			return err
 		},
 	}
 	m, st := newRootOnChat(t, mc)
 
-	photo := store.Message{ID: 12, ChatID: 1, Date: time.Now(),
-		Media: &store.MediaRef{Kind: store.MediaPhoto},
-		Photo: &store.PhotoRef{ID: 999}}
+	photo := domain.Message{ID: 12, ChatID: 1, Date: time.Now(),
+		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo: &domain.PhotoRef{ID: 999}}
 	st.AppendMessage(photo)
 	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = nm.(ui.RootModel)
@@ -132,8 +132,8 @@ func TestOpenDocumentCmd_StreamsToTempFile(t *testing.T) {
 	restore := ui.SetOpenPathForTest(func(name string) { opened = name })
 	defer restore()
 
-	ref := store.DocumentRef{ID: 7, FileName: "clip.mp4"}
-	msg := ui.OpenDocumentCmdForTest(client, store.Peer{ID: 1}, 99, ref, tmpDir)()
+	ref := domain.DocumentRef{ID: 7, FileName: "clip.mp4"}
+	msg := ui.OpenDocumentCmdForTest(client, domain.Peer{ID: 1}, 99, ref, tmpDir)()
 
 	errText, ok := ui.DocumentOpenErrTextForTest(msg)
 	require.True(t, ok, "completion must be a documentOpenDoneMsg")
@@ -165,8 +165,8 @@ func TestOpenDocumentCmd_TruncatesOnRetry(t *testing.T) {
 			_, err := io.WriteString(dst, fresh)
 			return err
 		},
-		refreshFunc: func(int) (store.Message, error) {
-			return store.Message{Document: &store.DocumentRef{ID: 7, FileName: "clip.mp4"}}, nil
+		refreshFunc: func(int) (domain.Message, error) {
+			return domain.Message{Document: &domain.DocumentRef{ID: 7, FileName: "clip.mp4"}}, nil
 		},
 	}
 
@@ -174,8 +174,8 @@ func TestOpenDocumentCmd_TruncatesOnRetry(t *testing.T) {
 	restore := ui.SetOpenPathForTest(func(name string) { opened = name })
 	defer restore()
 
-	ref := store.DocumentRef{ID: 7, FileName: "clip.mp4"}
-	msg := ui.OpenDocumentCmdForTest(client, store.Peer{ID: 1}, 99, ref, tmpDir)()
+	ref := domain.DocumentRef{ID: 7, FileName: "clip.mp4"}
+	msg := ui.OpenDocumentCmdForTest(client, domain.Peer{ID: 1}, 99, ref, tmpDir)()
 
 	assert.Equal(t, 2, calls, "must retry once after refresh")
 	errText, ok := ui.DocumentOpenErrTextForTest(msg)
@@ -201,8 +201,8 @@ func TestOpenDocumentCmd_FailureReportsErrText(t *testing.T) {
 	restore := ui.SetOpenPathForTest(func(string) {})
 	defer restore()
 
-	ref := store.DocumentRef{ID: 7, FileName: "clip.mp4"}
-	msg := ui.OpenDocumentCmdForTest(client, store.Peer{ID: 1}, 99, ref, tmpDir)()
+	ref := domain.DocumentRef{ID: 7, FileName: "clip.mp4"}
+	msg := ui.OpenDocumentCmdForTest(client, domain.Peer{ID: 1}, 99, ref, tmpDir)()
 
 	errText, ok := ui.DocumentOpenErrTextForTest(msg)
 	require.True(t, ok, "completion must be a documentOpenDoneMsg")
@@ -219,8 +219,8 @@ func TestDownloadFileCmd_SavesToDir(t *testing.T) {
 		},
 	}
 
-	ref := store.DocumentRef{ID: 7, FileName: "report.pdf"}
-	msg := ui.DownloadFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+	ref := domain.DocumentRef{ID: 7, FileName: "report.pdf"}
+	msg := ui.DownloadFileCmdForTest(client, domain.Peer{ID: 1}, 99, ref, dir)()
 
 	text, sev, ok := ui.FileDownloadDoneTextForTest(msg)
 	require.True(t, ok, "completion must be a fileDownloadDoneMsg")
@@ -242,8 +242,8 @@ func TestDownloadFileCmd_CollisionGetsSuffix(t *testing.T) {
 			return err
 		},
 	}
-	ref := store.DocumentRef{ID: 7, FileName: "report.pdf"}
-	msg := ui.DownloadFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+	ref := domain.DocumentRef{ID: 7, FileName: "report.pdf"}
+	msg := ui.DownloadFileCmdForTest(client, domain.Peer{ID: 1}, 99, ref, dir)()
 
 	text, _, ok := ui.FileDownloadDoneTextForTest(msg)
 	require.True(t, ok)
@@ -254,14 +254,14 @@ func TestDownloadPhotoFileCmd_SavesJpg(t *testing.T) {
 	dir := t.TempDir()
 	const body = "\xff\xd8\xff raw jpeg bytes"
 	client := &mockTGClient{
-		downloadPhotoFileFunc: func(_ store.PhotoRef, dst io.Writer) error {
+		downloadPhotoFileFunc: func(_ domain.PhotoRef, dst io.Writer) error {
 			_, err := io.WriteString(dst, body)
 			return err
 		},
 	}
 
-	ref := store.PhotoRef{ID: 42}
-	msg := ui.DownloadPhotoFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+	ref := domain.PhotoRef{ID: 42}
+	msg := ui.DownloadPhotoFileCmdForTest(client, domain.Peer{ID: 1}, 99, ref, dir)()
 
 	text, sev, ok := ui.FileDownloadDoneTextForTest(msg)
 	require.True(t, ok, "completion must be a fileDownloadDoneMsg")
@@ -277,17 +277,17 @@ func TestDownloadPhotoFileCmd_SavesJpg(t *testing.T) {
 // ref.FullThumbSize, not the small inline ThumbSize.
 func TestDownloadPhotoFileCmd_UsesFullQuality(t *testing.T) {
 	dir := t.TempDir()
-	var gotRef store.PhotoRef
+	var gotRef domain.PhotoRef
 	client := &mockTGClient{
-		downloadPhotoFileFunc: func(ref store.PhotoRef, dst io.Writer) error {
+		downloadPhotoFileFunc: func(ref domain.PhotoRef, dst io.Writer) error {
 			gotRef = ref
 			_, err := io.WriteString(dst, "x")
 			return err
 		},
 	}
 
-	ref := store.PhotoRef{ID: 42, ThumbSize: "m", FullThumbSize: "y"}
-	_ = ui.DownloadPhotoFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+	ref := domain.PhotoRef{ID: 42, ThumbSize: "m", FullThumbSize: "y"}
+	_ = ui.DownloadPhotoFileCmdForTest(client, domain.Peer{ID: 1}, 99, ref, dir)()
 
 	assert.Equal(t, "y", gotRef.ThumbSize, "must download the full-quality size")
 }
@@ -295,10 +295,10 @@ func TestDownloadPhotoFileCmd_UsesFullQuality(t *testing.T) {
 func TestDownloadPhotoFileCmd_FailureLeavesNoFile(t *testing.T) {
 	dir := t.TempDir()
 	client := &mockTGClient{
-		downloadPhotoFileFunc: func(_ store.PhotoRef, _ io.Writer) error { return assert.AnError },
+		downloadPhotoFileFunc: func(_ domain.PhotoRef, _ io.Writer) error { return assert.AnError },
 	}
-	ref := store.PhotoRef{ID: 42}
-	msg := ui.DownloadPhotoFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+	ref := domain.PhotoRef{ID: 42}
+	msg := ui.DownloadPhotoFileCmdForTest(client, domain.Peer{ID: 1}, 99, ref, dir)()
 
 	text, sev, ok := ui.FileDownloadDoneTextForTest(msg)
 	require.True(t, ok)
@@ -315,8 +315,8 @@ func TestDownloadFileCmd_FailureLeavesNoFile(t *testing.T) {
 	client := &mockTGClient{
 		downloadDocFileFunc: func(io.Writer) error { return assert.AnError },
 	}
-	ref := store.DocumentRef{ID: 7, FileName: "report.pdf"}
-	msg := ui.DownloadFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+	ref := domain.DocumentRef{ID: 7, FileName: "report.pdf"}
+	msg := ui.DownloadFileCmdForTest(client, domain.Peer{ID: 1}, 99, ref, dir)()
 
 	text, sev, ok := ui.FileDownloadDoneTextForTest(msg)
 	require.True(t, ok)
@@ -340,7 +340,7 @@ func makeJPEG(t *testing.T) []byte {
 func TestDownloadPhotoCmd_CacheHitSkipsNetwork(t *testing.T) {
 	mc, err := mediacache.New(t.TempDir(), 1<<20)
 	require.NoError(t, err)
-	ref := store.PhotoRef{ID: 42, ThumbSize: "m"}
+	ref := domain.PhotoRef{ID: 42, ThumbSize: "m"}
 	mc.Put(mediacache.PhotoKey(ref.ID, ref.ThumbSize), makeJPEG(t))
 
 	calls := 0
@@ -349,7 +349,7 @@ func TestDownloadPhotoCmd_CacheHitSkipsNetwork(t *testing.T) {
 		return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 	}}
 
-	msg := ui.DownloadPhotoCmdCachedForTest(client, mc, store.Peer{ID: 1}, 7, ref)()
+	msg := ui.DownloadPhotoCmdCachedForTest(client, mc, domain.Peer{ID: 1}, 7, ref)()
 
 	ready, ok := msg.(ui.PhotoReadyMsg)
 	require.True(t, ok)
@@ -361,13 +361,13 @@ func TestDownloadPhotoCmd_CacheHitSkipsNetwork(t *testing.T) {
 func TestDownloadPhotoCmd_CacheMissPopulatesCache(t *testing.T) {
 	mc, err := mediacache.New(t.TempDir(), 1<<20)
 	require.NoError(t, err)
-	ref := store.PhotoRef{ID: 99, ThumbSize: "m"}
+	ref := domain.PhotoRef{ID: 99, ThumbSize: "m"}
 
 	client := &mockTGClient{downloadPhotoFunc: func() (image.Image, error) {
 		return image.NewRGBA(image.Rect(0, 0, 4, 4)), nil
 	}}
 
-	msg := ui.DownloadPhotoCmdCachedForTest(client, mc, store.Peer{ID: 1}, 7, ref)()
+	msg := ui.DownloadPhotoCmdCachedForTest(client, mc, domain.Peer{ID: 1}, 7, ref)()
 
 	_, ok := msg.(ui.PhotoReadyMsg)
 	require.True(t, ok)

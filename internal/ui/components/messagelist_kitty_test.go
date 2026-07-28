@@ -8,16 +8,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
-func kittyTailMsgs() []store.Message {
-	return []store.Message{
+func kittyTailMsgs() []domain.Message {
+	return []domain.Message{
 		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
 		{ID: 2, ChatID: 1, Text: "msg 2", Date: time.Now()},
-		{ID: 3, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Text: "the tail", Date: time.Now()},
+		{ID: 3, ChatID: 1, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 42}, Text: "the tail", Date: time.Now()},
 	}
 }
 

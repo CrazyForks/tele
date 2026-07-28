@@ -3,13 +3,13 @@ package ui
 import (
 	"image"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
 type ChatHistoryMsg struct {
 	ChatID   int64
-	Messages []store.Message
+	Messages []domain.Message
 }
 
 type PhotoReadyMsg struct {
@@ -102,12 +102,12 @@ type markReadDoneMsg struct {
 
 type historyChunkMsg struct {
 	chatID   int64
-	messages []store.Message
+	messages []domain.Message
 	err      error
 }
 
 type FolderFiltersMsg struct {
-	Filters []store.FolderFilter
+	Filters []domain.FolderFilter
 }
 
 type clearTypingMsg struct{ serial int }
@@ -139,7 +139,7 @@ type documentOpenDoneMsg struct {
 	sev     components.Severity
 	chatID  int64
 	msgID   int
-	doc     *store.DocumentRef
+	doc     *domain.DocumentRef
 }
 
 // fileDownloadDoneMsg reports completion of a file download started via
@@ -152,8 +152,8 @@ type fileDownloadDoneMsg struct {
 	sev    components.Severity
 	chatID int64
 	msgID  int
-	doc    *store.DocumentRef
-	photo  *store.PhotoRef
+	doc    *domain.DocumentRef
+	photo  *domain.PhotoRef
 }
 
 // chatLoadErrMsg reports a failed chat-open history load.
@@ -167,6 +167,6 @@ type chatLoadErrMsg struct {
 type mediaRefRefreshedMsg struct {
 	chatID int64
 	msgID  int
-	photo  *store.PhotoRef
-	doc    *store.DocumentRef
+	photo  *domain.PhotoRef
+	doc    *domain.DocumentRef
 }

@@ -1,16 +1,16 @@
 package ui
 
-import "github.com/sorokin-vladimir/tele/internal/store"
+import "github.com/sorokin-vladimir/tele/internal/domain"
 
-func (m RootModel) filteredChats() []store.Chat {
+func (m RootModel) filteredChats() []domain.Chat {
 	if m.st == nil {
 		return nil
 	}
 	all := m.st.Chats()
 
 	// Archive virtual folder: only archived chats.
-	if m.activeFilter != nil && m.activeFilter.ID == store.ArchiveFolderID {
-		out := make([]store.Chat, 0)
+	if m.activeFilter != nil && m.activeFilter.ID == domain.ArchiveFolderID {
+		out := make([]domain.Chat, 0)
 		for _, c := range all {
 			if c.IsArchived {
 				out = append(out, c)
@@ -21,7 +21,7 @@ func (m RootModel) filteredChats() []store.Chat {
 
 	// All Chats: every non-archived chat.
 	if m.activeFilter == nil {
-		out := make([]store.Chat, 0, len(all))
+		out := make([]domain.Chat, 0, len(all))
 		for _, c := range all {
 			if !c.IsArchived {
 				out = append(out, c)
@@ -32,7 +32,7 @@ func (m RootModel) filteredChats() []store.Chat {
 
 	// Custom filter: FolderFilter.Matches owns Telegram folder rules, including
 	// whether archived chats should be excluded.
-	out := make([]store.Chat, 0, len(all))
+	out := make([]domain.Chat, 0, len(all))
 	for _, c := range all {
 		if m.activeFilter.Matches(c) {
 			out = append(out, c)
@@ -50,7 +50,7 @@ func (m RootModel) computeFolderUnreads() map[int]int {
 	for _, f := range m.folderBar.Folders() {
 		// All Chats has no badge; Archive intentionally shows no unread
 		// count (mirrors the official client).
-		if f.ID == 0 || f.ID == store.ArchiveFolderID {
+		if f.ID == 0 || f.ID == domain.ArchiveFolderID {
 			continue
 		}
 		chatsWithUnread := 0

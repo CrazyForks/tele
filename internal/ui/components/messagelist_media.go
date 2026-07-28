@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
@@ -30,15 +30,15 @@ func renderUploadBar(frac float64, width int) string {
 
 // localMediaLabel is the first line of an optimistic media bubble: a kind glyph
 // plus the local file name. Photos use 🖼; documents (and any other kind) use 📎.
-func localMediaLabel(lm *store.LocalMedia) string {
-	if lm.Kind == store.MediaPhoto {
+func localMediaLabel(lm *domain.LocalMedia) string {
+	if lm.Kind == domain.MediaPhoto {
 		name := lm.FileName
 		if name == "" {
 			name = "photo"
 		}
 		return "🖼 " + name
 	}
-	if lm.Kind == store.MediaVideo {
+	if lm.Kind == domain.MediaVideo {
 		name := lm.FileName
 		if name == "" {
 			name = "video"
@@ -54,11 +54,11 @@ func localMediaLabel(lm *store.LocalMedia) string {
 
 // uploadStatusLine returns the status line under an optimistic media bubble:
 // a progress bar while uploading, or an error indicator if failed.
-func uploadStatusLine(lm *store.LocalMedia, width int) string {
+func uploadStatusLine(lm *domain.LocalMedia, width int) string {
 	if lm == nil {
 		return ""
 	}
-	if lm.UploadState == store.UploadFailed {
+	if lm.UploadState == domain.UploadFailed {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("✗ upload failed")
 	}
 	return renderUploadBar(lm.UploadProgress, width)
@@ -82,13 +82,13 @@ func (ml *MessageList) photoBox(imgW, imgH int) (cols, rows int) {
 // image. Borderless media stays picture-sized: static stickers use the compact
 // cap, round video notes a slightly larger cap; everything else uses the photo
 // cap. All sizing sites use this so footprints stay in lock-step.
-func (ml *MessageList) mediaBox(msg store.Message, imgW, imgH int) (cols, rows int) {
+func (ml *MessageList) mediaBox(msg domain.Message, imgW, imgH int) (cols, rows int) {
 	cw, ch := media.CellPx()
 	maxCols := ml.photoContentCols()
 	switch {
-	case store.IsStaticSticker(msg.Media, msg.Document):
+	case domain.IsStaticSticker(msg.Media, msg.Document):
 		maxCols = ml.compactMediaCols()
-	case msg.Media != nil && msg.Media.Kind == store.MediaVideoNote:
+	case msg.Media != nil && msg.Media.Kind == domain.MediaVideoNote:
 		maxCols = ml.videoNoteCols()
 	}
 	return media.PhotoBox(imgW, imgH, maxCols, ml.viewHeight, ml.maxMediaPx, cw, ch, media.CellAspect())
@@ -187,28 +187,28 @@ func (ml *MessageList) cachedImage(id int64) (image.Image, bool) {
 
 // placeholderFor returns the text label shown for a media message until (and
 // unless) richer content such as photo block-art is available.
-func placeholderFor(m *store.MediaRef) string {
+func placeholderFor(m *domain.MediaRef) string {
 	switch m.Kind {
-	case store.MediaPhoto:
+	case domain.MediaPhoto:
 		return "📷 photo"
-	case store.MediaVideo:
+	case domain.MediaVideo:
 		return durationLabel("🎥 video", m.Duration)
-	case store.MediaVideoNote:
+	case domain.MediaVideoNote:
 		return durationLabel("⭕ video note", m.Duration)
-	case store.MediaVoice:
+	case domain.MediaVoice:
 		return voiceLabel(m)
-	case store.MediaAudio:
+	case domain.MediaAudio:
 		return audioLabel(m)
-	case store.MediaSticker:
+	case domain.MediaSticker:
 		if m.Emoji != "" {
 			return m.Emoji + " sticker"
 		}
 		return "sticker"
-	case store.MediaGIF:
+	case domain.MediaGIF:
 		return "🎞 GIF"
-	case store.MediaFile:
+	case domain.MediaFile:
 		return fileLabel(m)
-	case store.MediaLocation:
+	case domain.MediaLocation:
 		return "📍 location"
 	default:
 		return "📦 media"
@@ -217,7 +217,7 @@ func placeholderFor(m *store.MediaRef) string {
 
 // fileLabel renders a generic document's placeholder: a paperclip plus the file
 // name and a human-readable size when both are known, falling back to "📎 file".
-func fileLabel(m *store.MediaRef) string {
+func fileLabel(m *domain.MediaRef) string {
 	if m.FileName == "" {
 		return "📎 file"
 	}
@@ -238,41 +238,41 @@ func durationLabel(base string, dur int) string {
 // PreviewImageID returns the image-cache key for a message's inline image and
 // whether one applies: photos, videos with an embedded thumbnail, and static
 // WEBP stickers (Kitty mode only).
-func (ml *MessageList) PreviewImageID(msg store.Message) (int64, bool) {
+func (ml *MessageList) PreviewImageID(msg domain.Message) (int64, bool) {
 	if msg.Media == nil {
 		return 0, false
 	}
 	switch {
-	case msg.Media.Kind == store.MediaPhoto && msg.Photo != nil:
+	case msg.Media.Kind == domain.MediaPhoto && msg.Photo != nil:
 		return msg.Photo.ID, true
 	case msg.Media.Kind.IsVideo() && msg.Document != nil && msg.Document.ThumbSize != "":
 		return msg.Document.ID, true
-	case msg.Media.Kind == store.MediaGIF && msg.Document != nil && msg.Document.ThumbSize != "":
+	case msg.Media.Kind == domain.MediaGIF && msg.Document != nil && msg.Document.ThumbSize != "":
 		// Telegram GIFs are silent MP4s; show the document thumbnail inline like a
 		// video (Phase 2b animates the selected one).
 		return msg.Document.ID, true
-	case ml.imageMode == media.ModeKitty && store.IsStaticSticker(msg.Media, msg.Document):
+	case ml.imageMode == media.ModeKitty && domain.IsStaticSticker(msg.Media, msg.Document):
 		return msg.Document.ID, true
 	}
 	return 0, false
 }
 
 // PreviewImageIDForTest exposes PreviewImageID for tests in other packages.
-func (ml *MessageList) PreviewImageIDForTest(msg store.Message) (int64, bool) {
+func (ml *MessageList) PreviewImageIDForTest(msg domain.Message) (int64, bool) {
 	return ml.PreviewImageID(msg)
 }
 
 // videoOverlayLabel returns the affordance shown under a thumbnail: the play +
 // duration for video, a "GIF" badge for animated GIFs (so they read differently
 // from a still photo), or "" for other media.
-func videoOverlayLabel(m *store.MediaRef) string {
+func videoOverlayLabel(m *domain.MediaRef) string {
 	if m == nil {
 		return ""
 	}
 	if m.Kind.IsVideo() {
 		return "▶ " + formatDuration(m.Duration)
 	}
-	if m.Kind == store.MediaGIF {
+	if m.Kind == domain.MediaGIF {
 		return "GIF"
 	}
 	return ""
@@ -289,7 +289,7 @@ func labelLine(label string, actualW int, b lipgloss.Border, bs lipgloss.Style) 
 }
 
 // placeholderLine renders one bordered label line for a media placeholder.
-func placeholderLine(m *store.MediaRef, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
+func placeholderLine(m *domain.MediaRef, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
 	return labelLine(placeholderFor(m), actualW, b, bs)
 }
 

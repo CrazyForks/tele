@@ -7,18 +7,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 )
 
-type OpenChatMsg struct{ Chat store.Chat }
+type OpenChatMsg struct{ Chat domain.Chat }
 
 // ForwardToChatRequest is emitted by the forward-mode chat picker when the user
 // confirms a target chat. The source peer is resolved by the root model.
 type ForwardToChatRequest struct {
-	ToPeer  store.Peer
+	ToPeer  domain.Peer
 	MsgID   int
 	Comment string // optional; sent as a separate message before the forward
 }
@@ -81,7 +81,7 @@ func formatMentions(count int) string {
 // single space and omitted when empty: the dim mute marker, the pink
 // unread-reaction glyph, the blue unread-mention glyph, then the unread token
 // (numeric badge, or a manual-unread dot when marked unread with no real count).
-func rowIndicators(c store.Chat) string {
+func rowIndicators(c domain.Chat) string {
 	var unread string
 	switch {
 	case c.UnreadCount > 0:
@@ -111,7 +111,7 @@ func rowIndicators(c store.Chat) string {
 }
 
 type ChatListModel struct {
-	chats             []store.Chat
+	chats             []domain.Chat
 	cursor            int
 	activeIdx         int
 	width             int
@@ -139,7 +139,7 @@ func (m *ChatListModel) TickSpinner() { m.spinner.Tick() }
 // spinner tick loop (issue #147).
 func (m *ChatListModel) IsLoadingChats() bool { return len(m.chats) == 0 }
 
-func (m *ChatListModel) SetChats(chats []store.Chat) {
+func (m *ChatListModel) SetChats(chats []domain.Chat) {
 	var cursorID int64
 	if m.cursor < len(m.chats) {
 		cursorID = m.chats[m.cursor].ID
@@ -213,9 +213,9 @@ func (m *ChatListModel) styleTitle(i int, truncated string) string {
 // row highlight picks the accent tone suited to the theme.
 func (m *ChatListModel) SetDarkBackground(isDark bool) { m.hasDarkBackground = isDark }
 
-func (m *ChatListModel) Cursor() int         { return m.cursor }
-func (m *ChatListModel) ActiveIdx() int      { return m.activeIdx }
-func (m *ChatListModel) Chats() []store.Chat { return m.chats }
+func (m *ChatListModel) Cursor() int          { return m.cursor }
+func (m *ChatListModel) ActiveIdx() int       { return m.activeIdx }
+func (m *ChatListModel) Chats() []domain.Chat { return m.chats }
 
 func (m *ChatListModel) SetActiveByID(id int64) {
 	for i, c := range m.chats {
@@ -236,9 +236,9 @@ func (m *ChatListModel) SetChatUnread(chatID int64, count int) {
 	}
 }
 
-func (m *ChatListModel) SelectedChat() (store.Chat, bool) {
+func (m *ChatListModel) SelectedChat() (domain.Chat, bool) {
 	if len(m.chats) == 0 || m.activeIdx >= len(m.chats) {
-		return store.Chat{}, false
+		return domain.Chat{}, false
 	}
 	return m.chats[m.activeIdx], true
 }
@@ -261,9 +261,9 @@ func (m *ChatListModel) SetSize(width, height int) {
 }
 
 // CursorChat returns the chat currently under the cursor.
-func (m *ChatListModel) CursorChat() (store.Chat, bool) {
+func (m *ChatListModel) CursorChat() (domain.Chat, bool) {
 	if m.cursor < 0 || m.cursor >= len(m.chats) {
-		return store.Chat{}, false
+		return domain.Chat{}, false
 	}
 	return m.chats[m.cursor], true
 }

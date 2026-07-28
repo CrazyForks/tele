@@ -10,8 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	vmedia "github.com/sorokin-vladimir/tele/internal/media"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -109,7 +109,7 @@ func (m RootModel) videoModalBox(imgW, imgH int) (int, int) {
 // downloadVideoFileCmd streams a video's bytes to a temp file for the in-app
 // player. Mirrors downloadGifFileCmd but carries the duration for the progress
 // bar and yields a videoFileReadyMsg.
-func downloadVideoFileCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string) tea.Cmd {
+func downloadVideoFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
 		f, err := createTempMediaFile(tmpDir, ".mp4")
 		if err != nil {
@@ -117,7 +117,7 @@ func downloadVideoFileCmd(ctx context.Context, client internaltg.Client, peer st
 		}
 		name := f.Name()
 		_, _, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r store.DocumentRef) (struct{}, error) {
+			func(r domain.DocumentRef) (struct{}, error) {
 				if _, serr := f.Seek(0, 0); serr != nil {
 					return struct{}{}, serr
 				}
@@ -189,7 +189,7 @@ func (m RootModel) selectedVideoInfo() (int, string) {
 
 // openVideoModal opens the modal shell immediately (so the loading spinner shows
 // while the file downloads) and kicks off the download.
-func (m RootModel) openVideoModal(ref store.DocumentRef, msgID, durSecs int, sender string) (RootModel, tea.Cmd) {
+func (m RootModel) openVideoModal(ref domain.DocumentRef, msgID, durSecs int, sender string) (RootModel, tea.Cmd) {
 	cols, rows := m.videoModalBox(16, 9) // provisional box; resized once probed
 	m.videoPlayer = &videoPlayer{docID: ref.ID, durSecs: durSecs, title: sender, cols: cols, rows: rows}
 	return m, downloadVideoFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, m.tmpDir)
@@ -197,7 +197,7 @@ func (m RootModel) openVideoModal(ref store.DocumentRef, msgID, durSecs int, sen
 
 // openVideoModalAlbum opens a video that is part of an album, recording the full
 // album and current index so left/right can page across parts.
-func (m RootModel) openVideoModalAlbum(ref store.DocumentRef, msgID, durSecs int, sender string, album []components.GroupMediaRef, idx int) (RootModel, tea.Cmd) {
+func (m RootModel) openVideoModalAlbum(ref domain.DocumentRef, msgID, durSecs int, sender string, album []components.GroupMediaRef, idx int) (RootModel, tea.Cmd) {
 	m, cmd := m.openVideoModal(ref, msgID, durSecs, sender)
 	if m.videoPlayer != nil {
 		m.videoPlayer.album = album

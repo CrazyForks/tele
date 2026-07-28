@@ -5,24 +5,23 @@ import (
 	"strings"
 
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 const participantsLimit = 200
 
 // buildChatMembers maps Telegram users to mention candidates, skipping deleted
 // users and bots. DisplayName is the trimmed First+Last.
-func buildChatMembers(users []tg.UserClass) []store.ChatMember {
-	out := make([]store.ChatMember, 0, len(users))
+func buildChatMembers(users []tg.UserClass) []domain.ChatMember {
+	out := make([]domain.ChatMember, 0, len(users))
 	for _, u := range users {
 		user, ok := u.(*tg.User)
 		if !ok || user.Deleted || user.Bot {
 			continue
 		}
 		name := strings.TrimSpace(user.FirstName + " " + user.LastName)
-		out = append(out, store.ChatMember{
+		out = append(out, domain.ChatMember{
 			UserID:      user.ID,
 			Username:    user.Username,
 			DisplayName: name,
@@ -35,12 +34,12 @@ func buildChatMembers(users []tg.UserClass) []store.ChatMember {
 // GetParticipants returns mention candidates for a group or channel. Basic
 // groups use messages.getFullChat; channels/supergroups use
 // channels.getParticipants (first page, capped). Private chats return nil.
-func (c *GotdClient) GetParticipants(ctx context.Context, peer store.Peer) ([]store.ChatMember, error) {
+func (c *GotdClient) GetParticipants(ctx context.Context, peer domain.Peer) ([]domain.ChatMember, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil, err
 	}
-	var members []store.ChatMember
+	var members []domain.ChatMember
 	err = WithRetry(ctx, func() error {
 		if isChannelPeer(peer) {
 			res, err := api.ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{

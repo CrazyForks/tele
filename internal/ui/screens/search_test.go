@@ -7,15 +7,15 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func makeSearchChats() []store.Chat {
-	return []store.Chat{
+func makeSearchChats() []domain.Chat {
+	return []domain.Chat{
 		{ID: 1, Title: "Alice"},
 		{ID: 2, Title: "Bob"},
 		{ID: 3, Title: "Alexander"},
@@ -55,10 +55,10 @@ func TestSearch_CursorClamped(t *testing.T) {
 	assert.Equal(t, 0, m.Cursor())
 }
 
-func makeForwardChats() []store.Chat {
-	return []store.Chat{
-		{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, UnreadCount: 3},
-		{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}},
+func makeForwardChats() []domain.Chat {
+	return []domain.Chat{
+		{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadCount: 3},
+		{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}},
 	}
 }
 
@@ -132,7 +132,7 @@ func TestSearch_DebounceStaleSerialNoOp(t *testing.T) {
 }
 
 func TestSearch_ResultPopulatesGlobalWithDedup(t *testing.T) {
-	chats := []store.Chat{{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}}
+	chats := []domain.Chat{{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}}}
 	m := screens.NewSearchModel(chats, 80, 24, nil)
 	m, cmd := typeRunes(m, "zz")
 	require.NotNil(t, cmd)
@@ -145,9 +145,9 @@ func TestSearch_ResultPopulatesGlobalWithDedup(t *testing.T) {
 	}
 	m, _ = m.Update(screens.SearchUsersResult{
 		Serial: req.Serial,
-		Chats: []store.Chat{
-			{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}, // dup → dropped
-			{ID: 99, Title: "Zoe", Peer: store.Peer{ID: 99, Type: store.PeerUser}},
+		Chats: []domain.Chat{
+			{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}}, // dup → dropped
+			{ID: 99, Title: "Zoe", Peer: domain.Peer{ID: 99, Type: domain.PeerUser}},
 		},
 	})
 	assert.False(t, m.GlobalLoading(), "loading should clear on result")
@@ -167,7 +167,7 @@ func TestSearch_StaleResultIgnored(t *testing.T) {
 			req = r
 		}
 	}
-	m, _ = m.Update(screens.SearchUsersResult{Serial: req.Serial - 1, Chats: []store.Chat{{ID: 99}}})
+	m, _ = m.Update(screens.SearchUsersResult{Serial: req.Serial - 1, Chats: []domain.Chat{{ID: 99}}})
 	assert.Empty(t, m.GlobalResults(), "stale result must be ignored")
 }
 
@@ -182,8 +182,8 @@ func TestSearch_ClearingQueryClearsGlobal(t *testing.T) {
 			req = r
 		}
 	}
-	m, _ = m.Update(screens.SearchUsersResult{Serial: req.Serial, Chats: []store.Chat{
-		{ID: 99, Title: "Zoe", Peer: store.Peer{ID: 99, Type: store.PeerUser}},
+	m, _ = m.Update(screens.SearchUsersResult{Serial: req.Serial, Chats: []domain.Chat{
+		{ID: 99, Title: "Zoe", Peer: domain.Peer{ID: 99, Type: domain.PeerUser}},
 	}})
 	require.NotEmpty(t, m.GlobalResults())
 	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace}) // "z" → below min length
@@ -198,7 +198,7 @@ func TestSearch_ForwardModeNeverSearchesGlobally(t *testing.T) {
 }
 
 // loadGlobal drives the model from a query to a populated global-results state.
-func loadGlobal(t *testing.T, m *screens.SearchModel, query string, results []store.Chat) *screens.SearchModel {
+func loadGlobal(t *testing.T, m *screens.SearchModel, query string, results []domain.Chat) *screens.SearchModel {
 	t.Helper()
 	m, cmd := typeRunes(m, query)
 	require.NotNil(t, cmd)
@@ -216,8 +216,8 @@ func loadGlobal(t *testing.T, m *screens.SearchModel, query string, results []st
 func TestSearch_CursorSpansBothSections(t *testing.T) {
 	// "zz" matches none of the existing chats → 0 existing, 1 global.
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24, nil)
-	m = loadGlobal(t, m, "zz", []store.Chat{
-		{ID: 99, Title: "Zoe", Peer: store.Peer{ID: 99, Type: store.PeerUser}},
+	m = loadGlobal(t, m, "zz", []domain.Chat{
+		{ID: 99, Title: "Zoe", Peer: domain.Peer{ID: 99, Type: domain.PeerUser}},
 	})
 	// Cursor at 0 must resolve to the global contact: Enter opens it.
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -229,8 +229,8 @@ func TestSearch_CursorSpansBothSections(t *testing.T) {
 
 func TestSearch_EnterOnNewContactOpensChat(t *testing.T) {
 	m := screens.NewSearchModel(nil, 80, 24, nil) // no existing chats
-	m = loadGlobal(t, m, "zo", []store.Chat{
-		{ID: 99, Title: "Zoe", Peer: store.Peer{ID: 99, Type: store.PeerUser, AccessHash: 7}},
+	m = loadGlobal(t, m, "zo", []domain.Chat{
+		{ID: 99, Title: "Zoe", Peer: domain.Peer{ID: 99, Type: domain.PeerUser, AccessHash: 7}},
 	})
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.NotNil(t, cmd)
@@ -241,9 +241,9 @@ func TestSearch_EnterOnNewContactOpensChat(t *testing.T) {
 }
 
 func TestSearch_LongListIsWindowed(t *testing.T) {
-	var chats []store.Chat
+	var chats []domain.Chat
 	for i := 0; i < 50; i++ {
-		chats = append(chats, store.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
+		chats = append(chats, domain.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
 	}
 	m := screens.NewSearchModel(chats, 80, 24, nil)
 	view := m.View()
@@ -253,9 +253,9 @@ func TestSearch_LongListIsWindowed(t *testing.T) {
 }
 
 func TestSearch_CtrlNavigationRussianLayout(t *testing.T) {
-	var chats []store.Chat
+	var chats []domain.Chat
 	for i := 0; i < 20; i++ {
-		chats = append(chats, store.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
+		chats = append(chats, domain.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
 	}
 	m := screens.NewSearchModel(chats, 80, 24, nil)
 	assert.Equal(t, 0, m.Cursor())
@@ -268,9 +268,9 @@ func TestSearch_CtrlNavigationRussianLayout(t *testing.T) {
 }
 
 func TestSearch_ScrollbarThumbWhenOverflowing(t *testing.T) {
-	var chats []store.Chat
+	var chats []domain.Chat
 	for i := 0; i < 50; i++ {
-		chats = append(chats, store.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
+		chats = append(chats, domain.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
 	}
 	// "█" also renders as the query-input cursor, so compare counts: the
 	// overflowing list adds a scrollbar thumb on top of that single cursor block.
@@ -282,8 +282,8 @@ func TestSearch_ScrollbarThumbWhenOverflowing(t *testing.T) {
 
 func TestSearch_ViewShowsNewContactsHeaderWhenResults(t *testing.T) {
 	m := screens.NewSearchModel(nil, 80, 24, nil)
-	m = loadGlobal(t, m, "zo", []store.Chat{
-		{ID: 99, Title: "Zoe", Peer: store.Peer{ID: 99, Type: store.PeerUser}},
+	m = loadGlobal(t, m, "zo", []domain.Chat{
+		{ID: 99, Title: "Zoe", Peer: domain.Peer{ID: 99, Type: domain.PeerUser}},
 	})
 	view := m.View()
 	assert.Contains(t, view, "New contacts")
@@ -314,9 +314,9 @@ func TestForwardPicker_FiltersLikeSearch(t *testing.T) {
 }
 
 func TestSearch_CursorBelowWindow_StaysVisible(t *testing.T) {
-	chats := make([]store.Chat, 20)
+	chats := make([]domain.Chat, 20)
 	for i := range chats {
-		chats[i] = store.Chat{ID: int64(i + 1), Title: fmt.Sprintf("Chat%02d", i)}
+		chats[i] = domain.Chat{ID: int64(i + 1), Title: fmt.Sprintf("Chat%02d", i)}
 	}
 	m := screens.NewSearchModel(chats, 80, 24, nil)
 	for i := 0; i < 12; i++ { // move well past the 8-row window
@@ -408,7 +408,7 @@ func TestSearch_CursorResetOnFilter(t *testing.T) {
 }
 
 func TestSearch_SpaceInQuery(t *testing.T) {
-	m := screens.NewSearchModel([]store.Chat{
+	m := screens.NewSearchModel([]domain.Chat{
 		{ID: 1, Title: "John Doe"},
 		{ID: 2, Title: "Alice"},
 	}, 80, 24, nil)
@@ -516,12 +516,12 @@ func TestForwardPicker_WideRuneCommentStaysInsideBox(t *testing.T) {
 	assertBoxLinesWidth(t, m.View())
 }
 
-func makeLongTitleForwardChats() []store.Chat {
-	return []store.Chat{
+func makeLongTitleForwardChats() []domain.Chat {
+	return []domain.Chat{
 		{
 			ID:    1,
 			Title: "Engineering / Platform / Infrastructure Working Group Daily",
-			Peer:  store.Peer{ID: 1, Type: store.PeerUser},
+			Peer:  domain.Peer{ID: 1, Type: domain.PeerUser},
 		},
 	}
 }

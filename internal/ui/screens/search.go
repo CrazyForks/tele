@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
@@ -32,7 +32,7 @@ type SearchUsersRequest struct {
 type SearchUsersResult struct {
 	Query  string
 	Serial int
-	Chats  []store.Chat
+	Chats  []domain.Chat
 	Err    error
 }
 
@@ -68,8 +68,8 @@ const (
 
 type SearchModel struct {
 	query   string
-	all     []store.Chat
-	results []store.Chat
+	all     []domain.Chat
+	results []domain.Chat
 	list    *components.ListView
 	width   int
 	height  int
@@ -79,18 +79,18 @@ type SearchModel struct {
 	forwardMsgID int
 	phase        forwardPhase // forward mode only: select (default) | comment
 	comment      string
-	target       store.Chat // chat chosen when entering the comment phase
+	target       domain.Chat // chat chosen when entering the comment phase
 	// globalResults holds users found via server-side contacts.search (#82),
 	// shown in the "New contacts" section. serial guards debounce/RPC staleness.
-	globalResults []store.Chat
+	globalResults []domain.Chat
 	globalLoading bool
 	serial        int
 	spinner       components.Spinner
 }
 
-func NewSearchModel(chats []store.Chat, width, height int, km keys.KeyMap) *SearchModel {
+func NewSearchModel(chats []domain.Chat, width, height int, km keys.KeyMap) *SearchModel {
 	m := &SearchModel{all: chats, width: width, height: height, keyMap: km, list: components.NewListView(false), spinner: components.NewSpinner()}
-	m.results = make([]store.Chat, len(chats))
+	m.results = make([]domain.Chat, len(chats))
 	copy(m.results, chats)
 	m.syncCount()
 	return m
@@ -98,7 +98,7 @@ func NewSearchModel(chats []store.Chat, width, height int, km keys.KeyMap) *Sear
 
 // NewForwardPicker builds the chat picker in forward mode: confirming a chat
 // emits ForwardToChatRequest{ToPeer, MsgID} and rows show the unread count.
-func NewForwardPicker(chats []store.Chat, msgID int, width, height int, km keys.KeyMap) *SearchModel {
+func NewForwardPicker(chats []domain.Chat, msgID int, width, height int, km keys.KeyMap) *SearchModel {
 	m := NewSearchModel(chats, width, height, km)
 	m.forwardMsgID = msgID
 	return m
@@ -142,18 +142,18 @@ func arrowSym(key string) string {
 	}
 }
 
-func (m *SearchModel) Cursor() int                 { return m.list.Cursor() }
-func (m *SearchModel) Query() string               { return m.query }
-func (m *SearchModel) Results() []store.Chat       { return m.results }
-func (m *SearchModel) GlobalResults() []store.Chat { return m.globalResults }
-func (m *SearchModel) GlobalLoading() bool         { return m.globalLoading }
+func (m *SearchModel) Cursor() int                  { return m.list.Cursor() }
+func (m *SearchModel) Query() string                { return m.query }
+func (m *SearchModel) Results() []domain.Chat       { return m.results }
+func (m *SearchModel) GlobalResults() []domain.Chat { return m.globalResults }
+func (m *SearchModel) GlobalLoading() bool          { return m.globalLoading }
 
 // searchRow is one rendered line: either a non-selectable section header or a
 // selectable chat row. The list (incl. headers) is what the ListView windows
 // and scrolls; headers are skipped by cursor movement.
 type searchRow struct {
 	header string
-	chat   store.Chat
+	chat   domain.Chat
 	isChat bool
 }
 
@@ -188,10 +188,10 @@ func (m *SearchModel) rowModel() []searchRow {
 	return rows
 }
 
-func (m *SearchModel) selectableAt(cursor int) (store.Chat, bool) {
+func (m *SearchModel) selectableAt(cursor int) (domain.Chat, bool) {
 	rows := m.rowModel()
 	if cursor < 0 || cursor >= len(rows) || !rows[cursor].isChat {
-		return store.Chat{}, false
+		return domain.Chat{}, false
 	}
 	return rows[cursor].chat, true
 }
@@ -232,14 +232,14 @@ func (m *SearchModel) onQueryChanged() tea.Cmd {
 
 // dedupGlobal drops global results whose peer already appears in the local chat
 // list, so a user with an existing chat stays only in the top section.
-func dedupGlobal(global []store.Chat, existing ...[]store.Chat) []store.Chat {
+func dedupGlobal(global []domain.Chat, existing ...[]domain.Chat) []domain.Chat {
 	seen := make(map[int64]struct{})
 	for _, set := range existing {
 		for _, c := range set {
 			seen[c.Peer.ID] = struct{}{}
 		}
 	}
-	out := make([]store.Chat, 0, len(global))
+	out := make([]domain.Chat, 0, len(global))
 	for _, c := range global {
 		if _, dup := seen[c.Peer.ID]; dup {
 			continue
@@ -383,7 +383,7 @@ func (m *SearchModel) updateComment(msg tea.Msg) (*SearchModel, tea.Cmd) {
 
 func (m *SearchModel) filter() {
 	q := strings.ToLower(m.query)
-	filtered := make([]store.Chat, 0, len(m.all))
+	filtered := make([]domain.Chat, 0, len(m.all))
 	for _, c := range m.all {
 		if q == "" || strings.Contains(strings.ToLower(c.Title), q) {
 			filtered = append(filtered, c)

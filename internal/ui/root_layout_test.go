@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -53,7 +54,7 @@ func TestComputeLayout_ThreePaneWithFolders(t *testing.T) {
 
 func TestWindowSize_SetsPaneSizesFromLayout(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := NewRootModel(nil, st, 50, false).WithScreen(ScreenMain)
 	m.chatList.SetChats(st.Chats())
 

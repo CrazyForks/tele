@@ -6,14 +6,14 @@ import (
 
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSelectMessageByID(t *testing.T) {
-	msgs := []store.Message{{ID: 1}, {ID: 2}, {ID: 3}}
+	msgs := []domain.Message{{ID: 1}, {ID: 2}, {ID: 3}}
 	got, ok := selectMessageByID(msgs, 2)
 	assert.True(t, ok)
 	assert.Equal(t, 2, got.ID)
@@ -76,13 +76,13 @@ func TestParseHistory_RetriesOnFloodWait(t *testing.T) {
 
 func TestPeerToInput_AllTypes(t *testing.T) {
 	cases := []struct {
-		peer     store.Peer
+		peer     domain.Peer
 		wantType string
 	}{
-		{store.Peer{ID: 1, Type: store.PeerUser, AccessHash: 10}, "*tg.InputPeerUser"},
-		{store.Peer{ID: 2, Type: store.PeerGroup}, "*tg.InputPeerChat"},
-		{store.Peer{ID: 3, Type: store.PeerChannel, AccessHash: 20}, "*tg.InputPeerChannel"},
-		{store.Peer{Type: store.PeerType(99)}, "*tg.InputPeerEmpty"},
+		{domain.Peer{ID: 1, Type: domain.PeerUser, AccessHash: 10}, "*tg.InputPeerUser"},
+		{domain.Peer{ID: 2, Type: domain.PeerGroup}, "*tg.InputPeerChat"},
+		{domain.Peer{ID: 3, Type: domain.PeerChannel, AccessHash: 20}, "*tg.InputPeerChannel"},
+		{domain.Peer{Type: domain.PeerType(99)}, "*tg.InputPeerEmpty"},
 	}
 
 	for _, tc := range cases {
@@ -126,10 +126,10 @@ func TestConvertEntities_AllSupportedTypes(t *testing.T) {
 	}
 	got := convertEntities(entities)
 	require.Len(t, got, 4)
-	assert.Equal(t, store.MessageEntity{Type: "bold", Offset: 0, Length: 5}, got[0])
-	assert.Equal(t, store.MessageEntity{Type: "italic", Offset: 6, Length: 4}, got[1])
-	assert.Equal(t, store.MessageEntity{Type: "code", Offset: 11, Length: 3}, got[2])
-	assert.Equal(t, store.MessageEntity{Type: "pre", Offset: 15, Length: 10}, got[3])
+	assert.Equal(t, domain.MessageEntity{Type: "bold", Offset: 0, Length: 5}, got[0])
+	assert.Equal(t, domain.MessageEntity{Type: "italic", Offset: 6, Length: 4}, got[1])
+	assert.Equal(t, domain.MessageEntity{Type: "code", Offset: 11, Length: 3}, got[2])
+	assert.Equal(t, domain.MessageEntity{Type: "pre", Offset: 15, Length: 10}, got[3])
 }
 
 func TestConvertEntities_ExtendedTypes(t *testing.T) {
@@ -148,17 +148,17 @@ func TestConvertEntities_ExtendedTypes(t *testing.T) {
 	}
 	got := convertEntities(entities)
 	require.Len(t, got, 11)
-	assert.Equal(t, store.MessageEntity{Type: "strike", Offset: 0, Length: 2}, got[0])
-	assert.Equal(t, store.MessageEntity{Type: "underline", Offset: 2, Length: 2}, got[1])
-	assert.Equal(t, store.MessageEntity{Type: "text_url", Offset: 4, Length: 3, URL: "https://example.com"}, got[2])
-	assert.Equal(t, store.MessageEntity{Type: "url", Offset: 7, Length: 4}, got[3])
-	assert.Equal(t, store.MessageEntity{Type: "email", Offset: 11, Length: 5}, got[4])
-	assert.Equal(t, store.MessageEntity{Type: "phone", Offset: 16, Length: 6}, got[5])
-	assert.Equal(t, store.MessageEntity{Type: "bank_card", Offset: 22, Length: 7}, got[6])
-	assert.Equal(t, store.MessageEntity{Type: "mention", Offset: 29, Length: 3}, got[7])
-	assert.Equal(t, store.MessageEntity{Type: "hashtag", Offset: 32, Length: 4}, got[8])
-	assert.Equal(t, store.MessageEntity{Type: "cashtag", Offset: 36, Length: 4}, got[9])
-	assert.Equal(t, store.MessageEntity{Type: "bot_command", Offset: 40, Length: 5}, got[10])
+	assert.Equal(t, domain.MessageEntity{Type: "strike", Offset: 0, Length: 2}, got[0])
+	assert.Equal(t, domain.MessageEntity{Type: "underline", Offset: 2, Length: 2}, got[1])
+	assert.Equal(t, domain.MessageEntity{Type: "text_url", Offset: 4, Length: 3, URL: "https://example.com"}, got[2])
+	assert.Equal(t, domain.MessageEntity{Type: "url", Offset: 7, Length: 4}, got[3])
+	assert.Equal(t, domain.MessageEntity{Type: "email", Offset: 11, Length: 5}, got[4])
+	assert.Equal(t, domain.MessageEntity{Type: "phone", Offset: 16, Length: 6}, got[5])
+	assert.Equal(t, domain.MessageEntity{Type: "bank_card", Offset: 22, Length: 7}, got[6])
+	assert.Equal(t, domain.MessageEntity{Type: "mention", Offset: 29, Length: 3}, got[7])
+	assert.Equal(t, domain.MessageEntity{Type: "hashtag", Offset: 32, Length: 4}, got[8])
+	assert.Equal(t, domain.MessageEntity{Type: "cashtag", Offset: 36, Length: 4}, got[9])
+	assert.Equal(t, domain.MessageEntity{Type: "bot_command", Offset: 40, Length: 5}, got[10])
 }
 
 func TestConvertEntities_SkipsUnknownTypes(t *testing.T) {
@@ -492,7 +492,7 @@ func TestParseHistory_UserMessage_SenderNameFromUsers(t *testing.T) {
 func TestClassifyMedia_Photo(t *testing.T) {
 	m := classifyMedia(&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 1}})
 	require.NotNil(t, m)
-	assert.Equal(t, store.MediaPhoto, m.Kind)
+	assert.Equal(t, domain.MediaPhoto, m.Kind)
 }
 
 func TestClassifyMedia_Nil(t *testing.T) {
@@ -507,14 +507,14 @@ func TestClassifyMedia_Location(t *testing.T) {
 	} {
 		m := classifyMedia(media)
 		require.NotNil(t, m)
-		assert.Equal(t, store.MediaLocation, m.Kind)
+		assert.Equal(t, domain.MediaLocation, m.Kind)
 	}
 }
 
 func TestClassifyMedia_Other(t *testing.T) {
 	m := classifyMedia(&tg.MessageMediaContact{})
 	require.NotNil(t, m)
-	assert.Equal(t, store.MediaOther, m.Kind)
+	assert.Equal(t, domain.MediaOther, m.Kind)
 }
 
 func docMedia(attrs ...tg.DocumentAttributeClass) *tg.MessageMediaDocument {
@@ -527,18 +527,18 @@ func TestClassifyMedia_Document(t *testing.T) {
 	tests := []struct {
 		name  string
 		attrs []tg.DocumentAttributeClass
-		want  store.MediaKind
+		want  domain.MediaKind
 	}{
-		{"sticker", []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{Alt: "🐱"}}, store.MediaSticker},
-		{"sticker beats animated", []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{}, &tg.DocumentAttributeAnimated{}}, store.MediaSticker},
-		{"gif", []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}}, store.MediaGIF},
-		{"animated beats video (gif)", []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}, &tg.DocumentAttributeVideo{}}, store.MediaGIF},
-		{"video note", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{RoundMessage: true}}, store.MediaVideoNote},
-		{"video", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{}}, store.MediaVideo},
-		{"voice", []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{Voice: true}}, store.MediaVoice},
-		{"audio", []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{}}, store.MediaAudio},
-		{"file", []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: "a.pdf"}}, store.MediaFile},
-		{"empty file", nil, store.MediaFile},
+		{"sticker", []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{Alt: "🐱"}}, domain.MediaSticker},
+		{"sticker beats animated", []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{}, &tg.DocumentAttributeAnimated{}}, domain.MediaSticker},
+		{"gif", []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}}, domain.MediaGIF},
+		{"animated beats video (gif)", []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}, &tg.DocumentAttributeVideo{}}, domain.MediaGIF},
+		{"video note", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{RoundMessage: true}}, domain.MediaVideoNote},
+		{"video", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{}}, domain.MediaVideo},
+		{"voice", []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{Voice: true}}, domain.MediaVoice},
+		{"audio", []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{}}, domain.MediaAudio},
+		{"file", []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: "a.pdf"}}, domain.MediaFile},
+		{"empty file", nil, domain.MediaFile},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -561,7 +561,7 @@ func TestClassifyMedia_VoiceWaveformDuration(t *testing.T) {
 		Voice: true, Duration: 15, Waveform: wave,
 	}))
 	require.NotNil(t, m)
-	assert.Equal(t, store.MediaVoice, m.Kind)
+	assert.Equal(t, domain.MediaVoice, m.Kind)
 	assert.Equal(t, 15, m.Duration)
 	assert.Equal(t, wave, m.Waveform)
 }
@@ -571,7 +571,7 @@ func TestClassifyMedia_AudioTitlePerformerDuration(t *testing.T) {
 		Duration: 200, Title: "Song", Performer: "Artist",
 	}))
 	require.NotNil(t, m)
-	assert.Equal(t, store.MediaAudio, m.Kind)
+	assert.Equal(t, domain.MediaAudio, m.Kind)
 	assert.Equal(t, 200, m.Duration)
 	assert.Equal(t, "Song", m.Title)
 	assert.Equal(t, "Artist", m.Performer)
@@ -580,14 +580,14 @@ func TestClassifyMedia_AudioTitlePerformerDuration(t *testing.T) {
 func TestClassifyMedia_VideoDuration(t *testing.T) {
 	m := classifyMedia(docMedia(&tg.DocumentAttributeVideo{Duration: 42.7}))
 	require.NotNil(t, m)
-	assert.Equal(t, store.MediaVideo, m.Kind)
+	assert.Equal(t, domain.MediaVideo, m.Kind)
 	assert.Equal(t, 42, m.Duration)
 }
 
 func TestClassifyMedia_VideoNoteDuration(t *testing.T) {
 	m := classifyMedia(docMedia(&tg.DocumentAttributeVideo{RoundMessage: true, Duration: 8.2}))
 	require.NotNil(t, m)
-	assert.Equal(t, store.MediaVideoNote, m.Kind)
+	assert.Equal(t, domain.MediaVideoNote, m.Kind)
 	assert.Equal(t, 8, m.Duration)
 }
 
@@ -601,7 +601,7 @@ func TestConvertMessage_SetsMediaForPhoto(t *testing.T) {
 	msg, ok := convertMessage(raw, 10)
 	require.True(t, ok)
 	require.NotNil(t, msg.Media)
-	assert.Equal(t, store.MediaPhoto, msg.Media.Kind)
+	assert.Equal(t, domain.MediaPhoto, msg.Media.Kind)
 	require.NotNil(t, msg.Photo) // photo ref still populated
 }
 
@@ -810,7 +810,7 @@ func TestExtractSentMessageIDs_MissingIsZero(t *testing.T) {
 }
 
 func TestSelectMessagesByIDs_KeepsOnlyRequested(t *testing.T) {
-	msgs := []store.Message{{ID: 5}, {ID: 7}, {ID: 9}}
+	msgs := []domain.Message{{ID: 5}, {ID: 7}, {ID: 9}}
 	got := selectMessagesByIDs(msgs, []int{9, 5, 11})
 	require.Len(t, got, 2)
 	assert.Equal(t, 5, got[0].ID)

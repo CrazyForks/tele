@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 var (
@@ -42,7 +42,7 @@ func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(fg).Bold(true)
 }
 
-func buildReactStr(reactions []store.Reaction) string {
+func buildReactStr(reactions []domain.Reaction) string {
 	if len(reactions) == 0 {
 		return ""
 	}

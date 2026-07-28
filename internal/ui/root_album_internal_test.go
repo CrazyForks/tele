@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-func att(name string, kind store.MediaKind) pendingAttachment {
+func att(name string, kind domain.MediaKind) pendingAttachment {
 	return pendingAttachment{name: name, kind: kind, sendAs: kind}
 }
 
@@ -35,27 +34,27 @@ func TestPartitionAlbums(t *testing.T) {
 		},
 		{
 			name: "single file is one group",
-			in:   []pendingAttachment{att("a.jpg", store.MediaPhoto)},
+			in:   []pendingAttachment{att("a.jpg", domain.MediaPhoto)},
 			want: [][]string{{"a.jpg"}},
 		},
 		{
 			name: "photos and videos share one album",
 			in: []pendingAttachment{
-				att("a.jpg", store.MediaPhoto), att("b.mp4", store.MediaVideo),
+				att("a.jpg", domain.MediaPhoto), att("b.mp4", domain.MediaVideo),
 			},
 			want: [][]string{{"a.jpg", "b.mp4"}},
 		},
 		{
 			name: "documents split off, visual group first by first occurrence",
 			in: []pendingAttachment{
-				att("a.jpg", store.MediaPhoto), att("c.pdf", store.MediaFile), att("b.mp4", store.MediaVideo),
+				att("a.jpg", domain.MediaPhoto), att("c.pdf", domain.MediaFile), att("b.mp4", domain.MediaVideo),
 			},
 			want: [][]string{{"a.jpg", "b.mp4"}, {"c.pdf"}},
 		},
 		{
 			name: "group order follows the first occurrence of each class",
 			in: []pendingAttachment{
-				att("c.pdf", store.MediaFile), att("a.jpg", store.MediaPhoto),
+				att("c.pdf", domain.MediaFile), att("a.jpg", domain.MediaPhoto),
 			},
 			want: [][]string{{"c.pdf"}, {"a.jpg"}},
 		},
@@ -74,7 +73,7 @@ func TestPartitionAlbums(t *testing.T) {
 func TestPartitionAlbums_ChunksAtTen(t *testing.T) {
 	in := make([]pendingAttachment, 0, 12)
 	for i := 0; i < 12; i++ {
-		in = append(in, att(fmt.Sprintf("p%02d.jpg", i), store.MediaPhoto))
+		in = append(in, att(fmt.Sprintf("p%02d.jpg", i), domain.MediaPhoto))
 	}
 
 	got := partitionAlbums(in)
@@ -87,10 +86,10 @@ func TestPartitionAlbums_ChunksAtTen(t *testing.T) {
 }
 
 func TestPartitionAlbums_SendAsFileMovesPhotoToDocumentClass(t *testing.T) {
-	photoAsFile := att("a.jpg", store.MediaPhoto)
-	photoAsFile.sendAs = store.MediaFile
+	photoAsFile := att("a.jpg", domain.MediaPhoto)
+	photoAsFile.sendAs = domain.MediaFile
 
-	got := partitionAlbums([]pendingAttachment{photoAsFile, att("b.pdf", store.MediaFile)})
+	got := partitionAlbums([]pendingAttachment{photoAsFile, att("b.pdf", domain.MediaFile)})
 
 	require.Len(t, got, 1, "a photo sent as a file belongs with the documents")
 	assert.Equal(t, []string{"a.jpg", "b.pdf"}, attNames(got[0]))

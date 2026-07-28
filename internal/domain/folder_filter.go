@@ -1,4 +1,4 @@
-package store
+package domain
 
 // ArchiveFolderID is the sentinel filter ID for the Archive virtual
 // folder. Real Telegram filter IDs are positive; 0 is the "All Chats"

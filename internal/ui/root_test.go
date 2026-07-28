@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -26,17 +27,17 @@ import (
 )
 
 type mockTGClient struct {
-	history               []store.Message
+	history               []domain.Message
 	historyErr            error
 	sendFunc              func() int
 	sendErr               error
 	reactionErr           error
 	lastReplyToMsgID      int
 	downloadPhotoFunc     func() (image.Image, error)
-	downloadPhotoFileFunc func(ref store.PhotoRef, dst io.Writer) error
+	downloadPhotoFileFunc func(ref domain.PhotoRef, dst io.Writer) error
 	downloadDocImageFunc  func() (image.Image, error)
 	downloadDocFileFunc   func(dst io.Writer) error
-	refreshFunc           func(msgID int) (store.Message, error)
+	refreshFunc           func(msgID int) (domain.Message, error)
 	lastSendCtx           context.Context
 	sendMediaErr          error
 	uploadErr             error
@@ -49,15 +50,15 @@ type mockTGClient struct {
 	sendAlbumIDs          []int
 	savedDrafts           []savedDraft
 	forwardErr            error
-	lastForwardFrom       store.Peer
-	lastForwardTo         store.Peer
+	lastForwardFrom       domain.Peer
+	lastForwardTo         domain.Peer
 	lastForwardIDs        []int
 	lastSendText          string
-	lastSendEntities      []store.MessageEntity
-	participants          []store.ChatMember
+	lastSendEntities      []domain.MessageEntity
+	participants          []domain.ChatMember
 	sendCount             int
 	lastSearchQuery       string
-	searchResult          []store.Chat
+	searchResult          []domain.Chat
 	searchErr             error
 	readReactionsCalls    int
 	readMentionsCalls     int
@@ -68,27 +69,27 @@ type savedDraft struct {
 	text   string
 }
 
-func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
-func (m *mockTGClient) SearchContacts(_ context.Context, q string, _ int) ([]store.Chat, error) {
+func (m *mockTGClient) GetDialogs(_ context.Context) ([]domain.Chat, error) { return nil, nil }
+func (m *mockTGClient) SearchContacts(_ context.Context, q string, _ int) ([]domain.Chat, error) {
 	m.lastSearchQuery = q
 	return m.searchResult, m.searchErr
 }
-func (m *mockTGClient) GetDialogFilters(_ context.Context) ([]store.FolderFilter, error) {
+func (m *mockTGClient) GetDialogFilters(_ context.Context) ([]domain.FolderFilter, error) {
 	return nil, nil
 }
-func (m *mockTGClient) GetHistory(_ context.Context, _ store.Peer, _ int, _ int) ([]store.Message, error) {
+func (m *mockTGClient) GetHistory(_ context.Context, _ domain.Peer, _ int, _ int) ([]domain.Message, error) {
 	if m.historyErr != nil {
 		return nil, m.historyErr
 	}
 	return m.history, nil
 }
-func (m *mockTGClient) RefreshMessage(_ context.Context, _ store.Peer, msgID int) (store.Message, error) {
+func (m *mockTGClient) RefreshMessage(_ context.Context, _ domain.Peer, msgID int) (domain.Message, error) {
 	if m.refreshFunc != nil {
 		return m.refreshFunc(msgID)
 	}
-	return store.Message{}, nil
+	return domain.Message{}, nil
 }
-func (m *mockTGClient) RefreshMessages(ctx context.Context, _ store.Peer, ids []int) ([]store.Message, error) {
+func (m *mockTGClient) RefreshMessages(ctx context.Context, _ domain.Peer, ids []int) ([]domain.Message, error) {
 	// A real client fails on a cancelled context; the mock must too, or a caller
 	// that cancels its context too early looks healthy in tests (#130).
 	if err := ctx.Err(); err != nil {
@@ -97,7 +98,7 @@ func (m *mockTGClient) RefreshMessages(ctx context.Context, _ store.Peer, ids []
 	if m.refreshFunc == nil {
 		return nil, nil
 	}
-	out := make([]store.Message, 0, len(ids))
+	out := make([]domain.Message, 0, len(ids))
 	for _, id := range ids {
 		msg, err := m.refreshFunc(id)
 		if err != nil {
@@ -107,7 +108,7 @@ func (m *mockTGClient) RefreshMessages(ctx context.Context, _ store.Peer, ids []
 	}
 	return out, nil
 }
-func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error) {
+func (m *mockTGClient) SendMessage(ctx context.Context, _ domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) (int, error) {
 	m.lastSendCtx = ctx
 	m.lastReplyToMsgID = replyToMsgID
 	m.lastSendText = text
@@ -121,7 +122,7 @@ func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, text strin
 	}
 	return 42, nil
 }
-func (m *mockTGClient) GetParticipants(_ context.Context, _ store.Peer) ([]store.ChatMember, error) {
+func (m *mockTGClient) GetParticipants(_ context.Context, _ domain.Peer) ([]domain.ChatMember, error) {
 	return m.participants, nil
 }
 func (m *mockTGClient) SendMedia(_ context.Context, p internaltg.SendMediaParams) (int, error) {
@@ -146,7 +147,7 @@ func (m *mockTGClient) SendAlbum(_ context.Context, p internaltg.SendAlbumParams
 	}
 	return ids, nil
 }
-func (m *mockTGClient) UploadMedia(_ context.Context, _ store.Peer, _ tg.InputMediaClass) (tg.InputMediaClass, error) {
+func (m *mockTGClient) UploadMedia(_ context.Context, _ domain.Peer, _ tg.InputMediaClass) (tg.InputMediaClass, error) {
 	if m.uploadMediaErr != nil {
 		return nil, m.uploadMediaErr
 	}
@@ -166,76 +167,76 @@ func (m *mockTGClient) UploadFile(_ context.Context, p internaltg.UploadParams) 
 	}
 	return &tg.InputFile{ID: 1, Parts: 1, Name: "a.jpg"}, nil
 }
-func (m *mockTGClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
-func (m *mockTGClient) ReadReactions(_ context.Context, _ store.Peer) error {
+func (m *mockTGClient) MarkRead(_ context.Context, _ domain.Peer, _ int) error { return nil }
+func (m *mockTGClient) ReadReactions(_ context.Context, _ domain.Peer) error {
 	m.readReactionsCalls++
 	return nil
 }
-func (m *mockTGClient) ReadMentions(_ context.Context, _ store.Peer) error {
+func (m *mockTGClient) ReadMentions(_ context.Context, _ domain.Peer) error {
 	m.readMentionsCalls++
 	return nil
 }
-func (m *mockTGClient) MarkDialogUnread(_ context.Context, _ store.Peer, _ bool) error {
+func (m *mockTGClient) MarkDialogUnread(_ context.Context, _ domain.Peer, _ bool) error {
 	return nil
 }
-func (m *mockTGClient) SetMuted(_ context.Context, _ store.Peer, _ bool) error { return nil }
-func (m *mockTGClient) AddToFolder(_ context.Context, _ int, _ store.Peer, _ bool) error {
+func (m *mockTGClient) SetMuted(_ context.Context, _ domain.Peer, _ bool) error { return nil }
+func (m *mockTGClient) AddToFolder(_ context.Context, _ int, _ domain.Peer, _ bool) error {
 	return nil
 }
-func (m *mockTGClient) GetArchivedDialogs(_ context.Context) ([]store.Chat, error) {
+func (m *mockTGClient) GetArchivedDialogs(_ context.Context) ([]domain.Chat, error) {
 	return nil, nil
 }
-func (m *mockTGClient) SetArchived(_ context.Context, _ store.Peer, _ bool) error { return nil }
-func (m *mockTGClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.Image, error) {
+func (m *mockTGClient) SetArchived(_ context.Context, _ domain.Peer, _ bool) error { return nil }
+func (m *mockTGClient) DownloadPhoto(_ context.Context, _ domain.PhotoRef) (image.Image, error) {
 	if m.downloadPhotoFunc != nil {
 		return m.downloadPhotoFunc()
 	}
 	return nil, nil
 }
-func (m *mockTGClient) DownloadPhotoToFile(_ context.Context, ref store.PhotoRef, dst io.Writer) error {
+func (m *mockTGClient) DownloadPhotoToFile(_ context.Context, ref domain.PhotoRef, dst io.Writer) error {
 	if m.downloadPhotoFileFunc != nil {
 		return m.downloadPhotoFileFunc(ref, dst)
 	}
 	return nil
 }
-func (m *mockTGClient) DownloadDocument(_ context.Context, _ store.DocumentRef) ([]byte, error) {
+func (m *mockTGClient) DownloadDocument(_ context.Context, _ domain.DocumentRef) ([]byte, error) {
 	return nil, nil
 }
-func (m *mockTGClient) DownloadDocumentToFile(_ context.Context, _ store.DocumentRef, dst io.Writer) error {
+func (m *mockTGClient) DownloadDocumentToFile(_ context.Context, _ domain.DocumentRef, dst io.Writer) error {
 	if m.downloadDocFileFunc != nil {
 		return m.downloadDocFileFunc(dst)
 	}
 	return nil
 }
-func (m *mockTGClient) DownloadDocumentThumb(_ context.Context, _ store.DocumentRef) (image.Image, error) {
+func (m *mockTGClient) DownloadDocumentThumb(_ context.Context, _ domain.DocumentRef) (image.Image, error) {
 	return nil, nil
 }
-func (m *mockTGClient) DownloadDocumentImage(_ context.Context, _ store.DocumentRef) (image.Image, error) {
+func (m *mockTGClient) DownloadDocumentImage(_ context.Context, _ domain.DocumentRef) (image.Image, error) {
 	if m.downloadDocImageFunc != nil {
 		return m.downloadDocImageFunc()
 	}
 	return nil, nil
 }
-func (m *mockTGClient) EditMessage(_ context.Context, _ store.Peer, _ int, _ string, _ []store.MessageEntity) error {
+func (m *mockTGClient) EditMessage(_ context.Context, _ domain.Peer, _ int, _ string, _ []domain.MessageEntity) error {
 	return nil
 }
-func (m *mockTGClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, _ bool) error {
+func (m *mockTGClient) DeleteMessages(_ context.Context, _ domain.Peer, _ []int, _ bool) error {
 	return nil
 }
-func (m *mockTGClient) ForwardMessages(_ context.Context, from store.Peer, to store.Peer, ids []int) error {
+func (m *mockTGClient) ForwardMessages(_ context.Context, from domain.Peer, to domain.Peer, ids []int) error {
 	m.lastForwardFrom = from
 	m.lastForwardTo = to
 	m.lastForwardIDs = ids
 	return m.forwardErr
 }
-func (m *mockTGClient) SendReaction(_ context.Context, _ store.Peer, _ int, _ string) error {
+func (m *mockTGClient) SendReaction(_ context.Context, _ domain.Peer, _ int, _ string) error {
 	return m.reactionErr
 }
 
-func (m *mockTGClient) SetTyping(_ context.Context, _ store.Peer, _ store.TypingAction) error {
+func (m *mockTGClient) SetTyping(_ context.Context, _ domain.Peer, _ domain.TypingAction) error {
 	return nil
 }
-func (m *mockTGClient) SaveDraft(_ context.Context, peer store.Peer, text string) error {
+func (m *mockTGClient) SaveDraft(_ context.Context, peer domain.Peer, text string) error {
 	m.savedDrafts = append(m.savedDrafts, savedDraft{peerID: peer.ID, text: text})
 	return nil
 }
@@ -247,7 +248,7 @@ func TestRoot_SendFailure_SurfacesErrorAndRemovesSentinel(t *testing.T) {
 	mc := &mockTGClient{sendErr: errors.New("offline")}
 	m, st := newRootWithOpenChat(t, mc)
 
-	_, cmd := m.Update(screens.SendMsgRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Text: "hi"})
+	_, cmd := m.Update(screens.SendMsgRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Text: "hi"})
 	require.Len(t, st.Messages(1), 1) // optimistic sentinel inserted
 	require.NotNil(t, cmd)
 
@@ -273,7 +274,7 @@ func TestRoot_ThreadsAppContextIntoCommands(t *testing.T) {
 	m, _ := newRootWithOpenChat(t, mock)
 	m = m.WithContext(appCtx)
 
-	_, cmd := m.Update(screens.SendMsgRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Text: "hi"})
+	_, cmd := m.Update(screens.SendMsgRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Text: "hi"})
 	require.NotNil(t, cmd)
 	cmd() // run the SendMessage cmd
 
@@ -285,7 +286,7 @@ func TestRoot_ThreadsAppContextIntoCommands(t *testing.T) {
 func TestRoot_ReactionFailure_SurfacesError(t *testing.T) {
 	mc := &mockTGClient{reactionErr: errors.New("offline")}
 	m, st := newRootWithOpenChat(t, mc)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hi", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hi", Date: time.Now()})
 	m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 
 	_, cmd := m.Update(components.ReactConfirmedMsg{Emoji: "👍"})
@@ -307,7 +308,7 @@ func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {
 	mc := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
 
-	newMsg := store.Message{ID: 101, ChatID: 1, Photo: &store.PhotoRef{ID: 9}}
+	newMsg := domain.Message{ID: 101, ChatID: 1, Photo: &domain.PhotoRef{ID: 9}}
 	_, cmd := applyEvent(t, m, st, store.Event{Kind: store.EventNewMessage, Message: newMsg})
 	require.NotNil(t, cmd) // download command batched
 }
@@ -315,11 +316,11 @@ func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {
 func TestRoot_Draft_FlushedToServerOnChatSwitch(t *testing.T) {
 	mc := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mc) // chat 1 open
-	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}})
 
 	// Type a draft into chat 1's composer, then switch to chat 2.
 	m = m.SetComposerValueForTest("hello Alice")
-	_, cmd := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}})
+	_, cmd := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}}})
 	require.NotNil(t, cmd)
 	drainMsgs(cmd()) // executes the batched SaveDraft side effect
 
@@ -335,10 +336,10 @@ func TestRoot_Draft_FlushedToServerOnChatSwitch(t *testing.T) {
 func TestRoot_Draft_EmptyComposerNoServerSave(t *testing.T) {
 	mc := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mc) // chat 1 open, composer empty
-	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}})
 
 	// Switch away without typing — no draft change, so no network save.
-	_, cmd := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}})
+	_, cmd := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}}})
 	if cmd != nil {
 		drainMsgs(cmd())
 	}
@@ -359,28 +360,28 @@ func TestPendingDownloadCmds_GIFThumb_FiresDownload(t *testing.T) {
 	mc := &mockTGClient{}
 	m, _ := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
 
-	gif := store.Message{
+	gif := domain.Message{
 		ID: 201, ChatID: 1,
-		Media:    &store.MediaRef{Kind: store.MediaGIF},
-		Document: &store.DocumentRef{ID: 77, ThumbSize: "m"},
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: 77, ThumbSize: "m"},
 	}
-	require.NotNil(t, m.PendingDownloadCmdsForTest([]store.Message{gif}),
+	require.NotNil(t, m.PendingDownloadCmdsForTest([]domain.Message{gif}),
 		"GIF with a thumb must fire a download")
 
-	noThumb := store.Message{
+	noThumb := domain.Message{
 		ID: 202, ChatID: 1,
-		Media:    &store.MediaRef{Kind: store.MediaGIF},
-		Document: &store.DocumentRef{ID: 78}, // no ThumbSize
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: 78}, // no ThumbSize
 	}
-	assert.Nil(t, m.PendingDownloadCmdsForTest([]store.Message{noThumb}),
+	assert.Nil(t, m.PendingDownloadCmdsForTest([]domain.Message{noThumb}),
 		"GIF without a thumb must not fire a download")
 }
 
 func TestDownloadGifFileCmd_EmitsPathOnSuccess(t *testing.T) {
 	mc := &mockTGClient{}
 	docID, path, ok := ui.GifFileReadyForTest(mc,
-		store.Peer{ID: 1, Type: store.PeerUser}, 10,
-		store.DocumentRef{ID: 77, FileName: "anim.mp4"}, t.TempDir())
+		domain.Peer{ID: 1, Type: domain.PeerUser}, 10,
+		domain.DocumentRef{ID: 77, FileName: "anim.mp4"}, t.TempDir())
 	require.True(t, ok, "command must produce a gif-file-ready result")
 	assert.Equal(t, int64(77), docID)
 	assert.NotEmpty(t, path, "downloaded temp path must be set")
@@ -390,7 +391,7 @@ func TestRoot_HistoryChunk_FiresPhotoDownload(t *testing.T) {
 	mc := &mockTGClient{}
 	m, _ := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
 
-	older := []store.Message{{ID: 150, ChatID: 1, Photo: &store.PhotoRef{ID: 5}}}
+	older := []domain.Message{{ID: 150, ChatID: 1, Photo: &domain.PhotoRef{ID: 5}}}
 	_, cmd := m.Update(ui.HistoryChunkMsgForTest(1, older))
 	require.NotNil(t, cmd)
 }
@@ -398,7 +399,7 @@ func TestRoot_HistoryChunk_FiresPhotoDownload(t *testing.T) {
 func TestRoot_ChatOpenFailure_ClearsSpinnerAndShowsError(t *testing.T) {
 	mc := &mockTGClient{historyErr: errors.New("timeout")}
 	st := store.NewMemory()
-	chat := store.Chat{ID: 7, Title: "Bob", Peer: store.Peer{ID: 7, Type: store.PeerUser}}
+	chat := domain.Chat{ID: 7, Title: "Bob", Peer: domain.Peer{ID: 7, Type: domain.PeerUser}}
 	st.SetChat(chat)
 	m := ui.NewRootModel(mc, st, 50, false).WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -428,11 +429,11 @@ func TestDownloadPhotoCmd_RefreshesOnExpiredRef(t *testing.T) {
 			}
 			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 		},
-		refreshFunc: func(msgID int) (store.Message, error) {
-			return store.Message{ID: msgID, ChatID: 7, Photo: &store.PhotoRef{ID: 1, FileReference: []byte("fresh")}}, nil
+		refreshFunc: func(msgID int) (domain.Message, error) {
+			return domain.Message{ID: msgID, ChatID: 7, Photo: &domain.PhotoRef{ID: 1, FileReference: []byte("fresh")}}, nil
 		},
 	}
-	cmd := ui.DownloadPhotoCmdForTest(mc, store.Peer{ID: 7, Type: store.PeerUser}, 100, store.PhotoRef{ID: 1})
+	cmd := ui.DownloadPhotoCmdForTest(mc, domain.Peer{ID: 7, Type: domain.PeerUser}, 100, domain.PhotoRef{ID: 1})
 
 	msgs := drainMsgs(cmd())
 	assert.Equal(t, 2, calls) // retried once after refresh
@@ -454,7 +455,7 @@ func TestDownloadStickerCmd_EmitsPhotoReady(t *testing.T) {
 			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 		},
 	}
-	cmd := ui.DownloadStickerCmdForTest(mc, store.Peer{ID: 7, Type: store.PeerUser}, 100, store.DocumentRef{ID: 555, MimeType: "image/webp"})
+	cmd := ui.DownloadStickerCmdForTest(mc, domain.Peer{ID: 7, Type: domain.PeerUser}, 100, domain.DocumentRef{ID: 555, MimeType: "image/webp"})
 
 	msgs := drainMsgs(cmd())
 	var ready *ui.PhotoReadyMsg
@@ -475,7 +476,7 @@ func TestDownloadStickerCmd_EmitsPhotoReady(t *testing.T) {
 func newRootOnChat(t *testing.T, mc *mockTGClient) (ui.RootModel, store.Store) {
 	t.Helper()
 	st := store.NewMemory()
-	chat := store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	chat := domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
 	st.SetChat(chat)
 	m := ui.NewRootModel(mc, st, 50, false).WithScreen(ui.ScreenMain)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -584,11 +585,11 @@ func TestAttachPickerIsRendered(t *testing.T) {
 
 func TestSendPhotoOptimisticAndConfirm(t *testing.T) {
 	// RefreshMessage supplies the server's media refs after the send confirms.
-	mc := &mockTGClient{refreshFunc: func(msgID int) (store.Message, error) {
-		return store.Message{
+	mc := &mockTGClient{refreshFunc: func(msgID int) (domain.Message, error) {
+		return domain.Message{
 			ID:    msgID,
-			Photo: &store.PhotoRef{ID: 9},
-			Media: &store.MediaRef{Kind: store.MediaPhoto},
+			Photo: &domain.PhotoRef{ID: 9},
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto},
 		}, nil
 	}}
 	m, st := newRootOnChat(t, mc)
@@ -597,7 +598,7 @@ func TestSendPhotoOptimisticAndConfirm(t *testing.T) {
 	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
 	m = nm.(ui.RootModel)
 
-	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Caption: "hi"})
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Caption: "hi"})
 	m = nm.(ui.RootModel)
 
 	msgs := st.Messages(1)
@@ -605,7 +606,7 @@ func TestSendPhotoOptimisticAndConfirm(t *testing.T) {
 	last := msgs[len(msgs)-1]
 	require.NotNil(t, last.LocalMedia)
 	assert.Equal(t, path, last.LocalMedia.Path)
-	assert.Equal(t, store.MediaPhoto, last.LocalMedia.Kind)
+	assert.Equal(t, domain.MediaPhoto, last.LocalMedia.Kind)
 	assert.True(t, last.IsOut)
 	assert.Less(t, last.ID, 0, "optimistic bubble must use a negative sentinel id")
 
@@ -649,7 +650,7 @@ func TestSendPhotoFailureMarksFailed(t *testing.T) {
 	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
 	m = nm.(ui.RootModel)
 
-	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m = nm.(ui.RootModel)
 	require.NotNil(t, cmd)
 	for _, inner := range drainMsgs(cmd()) {
@@ -662,16 +663,16 @@ func TestSendPhotoFailureMarksFailed(t *testing.T) {
 
 	last := st.Messages(1)[0]
 	require.NotNil(t, last.LocalMedia)
-	assert.Equal(t, store.UploadFailed, last.LocalMedia.UploadState)
+	assert.Equal(t, domain.UploadFailed, last.LocalMedia.UploadState)
 }
 
 func TestSendDocumentOptimisticAndConfirm(t *testing.T) {
 	// RefreshMessage supplies the server's document ref after the send confirms.
-	mc := &mockTGClient{refreshFunc: func(msgID int) (store.Message, error) {
-		return store.Message{
+	mc := &mockTGClient{refreshFunc: func(msgID int) (domain.Message, error) {
+		return domain.Message{
 			ID:       msgID,
-			Document: &store.DocumentRef{ID: 9, FileName: "report.pdf", Size: 4096},
-			Media:    &store.MediaRef{Kind: store.MediaFile, FileName: "report.pdf", Size: 4096},
+			Document: &domain.DocumentRef{ID: 9, FileName: "report.pdf", Size: 4096},
+			Media:    &domain.MediaRef{Kind: domain.MediaFile, FileName: "report.pdf", Size: 4096},
 		}, nil
 	}}
 	m, st := newRootOnChat(t, mc)
@@ -681,14 +682,14 @@ func TestSendDocumentOptimisticAndConfirm(t *testing.T) {
 	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
 	m = nm.(ui.RootModel)
 
-	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Caption: "doc"})
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Caption: "doc"})
 	m = nm.(ui.RootModel)
 
 	msgs := st.Messages(1)
 	require.NotEmpty(t, msgs)
 	last := msgs[len(msgs)-1]
 	require.NotNil(t, last.LocalMedia)
-	assert.Equal(t, store.MediaFile, last.LocalMedia.Kind, "document bubble must carry MediaFile kind")
+	assert.Equal(t, domain.MediaFile, last.LocalMedia.Kind, "document bubble must carry MediaFile kind")
 	assert.Less(t, last.ID, 0, "optimistic bubble must use a negative sentinel id")
 
 	// Drive the upload->send->confirm batch and the follow-up refresh command.
@@ -728,11 +729,11 @@ func TestSendDocumentOptimisticAndConfirm(t *testing.T) {
 }
 
 func TestSendMedia_Video_SendsInlineVideoDocument(t *testing.T) {
-	mc := &mockTGClient{refreshFunc: func(msgID int) (store.Message, error) {
-		return store.Message{
+	mc := &mockTGClient{refreshFunc: func(msgID int) (domain.Message, error) {
+		return domain.Message{
 			ID:       msgID,
-			Document: &store.DocumentRef{ID: 9, FileName: "clip.mp4", ThumbSize: "m"},
-			Media:    &store.MediaRef{Kind: store.MediaVideo, FileName: "clip.mp4"},
+			Document: &domain.DocumentRef{ID: 9, FileName: "clip.mp4", ThumbSize: "m"},
+			Media:    &domain.MediaRef{Kind: domain.MediaVideo, FileName: "clip.mp4"},
 		}, nil
 	}}
 	m, st := newRootOnChat(t, mc)
@@ -742,14 +743,14 @@ func TestSendMedia_Video_SendsInlineVideoDocument(t *testing.T) {
 	nm, _ := m.Update(screens.FileSelectedMsg{Path: path})
 	m = nm.(ui.RootModel)
 
-	nm, cmd := m.Update(screens.SendMediaRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Caption: "vid"})
+	nm, cmd := m.Update(screens.SendMediaRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Caption: "vid"})
 	m = nm.(ui.RootModel)
 
 	msgs := st.Messages(1)
 	require.NotEmpty(t, msgs)
 	last := msgs[len(msgs)-1]
 	require.NotNil(t, last.LocalMedia)
-	assert.Equal(t, store.MediaVideo, last.LocalMedia.Kind, "video bubble must carry MediaVideo kind")
+	assert.Equal(t, domain.MediaVideo, last.LocalMedia.Kind, "video bubble must carry MediaVideo kind")
 	assert.Less(t, last.ID, 0, "optimistic bubble must use a negative sentinel id")
 
 	// Drive the upload->send->confirm batch and the follow-up refresh command.
@@ -871,12 +872,12 @@ func TestRoot_FileDownloadDone_ErrorShowsText(t *testing.T) {
 // Selecting a file and pressing the download key starts a download (dispatches a
 // command) without launching an external app.
 func TestRoot_DownloadKey_StartsFileDownload(t *testing.T) {
-	fileMsg := store.Message{
+	fileMsg := domain.Message{
 		ID: 7, ChatID: 1, Date: time.Now(),
-		Media:    &store.MediaRef{Kind: store.MediaFile},
-		Document: &store.DocumentRef{ID: 5, FileName: "report.pdf"},
+		Media:    &domain.MediaRef{Kind: domain.MediaFile},
+		Document: &domain.DocumentRef{ID: 5, FileName: "report.pdf"},
 	}
-	m, _ := newRootOnChat(t, &mockTGClient{history: []store.Message{fileMsg}})
+	m, _ := newRootOnChat(t, &mockTGClient{history: []domain.Message{fileMsg}})
 	_ = m.View() // establish the selected message
 
 	m2, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
@@ -924,8 +925,8 @@ func TestRoot_CtrlC_Quits(t *testing.T) {
 	m = m.WithScreen(ui.ScreenMain)
 	// Settle the animation loops so the returned command is the quit alone, not
 	// batched with an animation re-arm (issue #147).
-	m.ChatList().SetChats([]store.Chat{{ID: 1}})
-	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	m.ChatList().SetChats([]domain.Chat{{ID: 1}})
+	m.Chat().SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	assert.NotNil(t, cmd)
 	msg := cmd()
@@ -936,13 +937,13 @@ func TestRoot_CtrlC_Quits(t *testing.T) {
 func TestRoot_LoadMoreMsg_DispatchesGetHistory(t *testing.T) {
 	mock := &mockTGClient{}
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(mock, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
 	// Set current chat to 1 by sending OpenChatMsg
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	m = newM.(ui.RootModel)
 
@@ -955,12 +956,12 @@ func TestRoot_LoadMoreMsg_DispatchesGetHistory(t *testing.T) {
 }
 
 func TestRoot_LoadMore_GuardsConcurrentRequests(t *testing.T) {
-	mock := &mockTGClient{history: []store.Message{{ID: 1, ChatID: 1, Date: time.Now()}}}
+	mock := &mockTGClient{history: []domain.Message{{ID: 1, ChatID: 1, Date: time.Now()}}}
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(mock, st, 50, false).WithScreen(ui.ScreenMain)
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	m = newM.(ui.RootModel)
 
@@ -984,7 +985,7 @@ func TestRoot_LoadMore_GuardsConcurrentRequests(t *testing.T) {
 
 func TestRoot_SlashKey_ActivatesSearch(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
@@ -994,7 +995,7 @@ func TestRoot_SlashKey_ActivatesSearch(t *testing.T) {
 
 func TestRoot_CloseSearchMsg_DeactivatesSearch(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
@@ -1007,12 +1008,12 @@ func TestRoot_CloseSearchMsg_DeactivatesSearch(t *testing.T) {
 
 func TestRoot_SearchOpenChatMsg_ClosesSearch(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1}})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	m = newM.(ui.RootModel)
-	newM, _ = m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	newM, _ = m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(ui.RootModel)
 	assert.False(t, m.SearchActive())
 }
@@ -1020,8 +1021,8 @@ func TestRoot_SearchOpenChatMsg_ClosesSearch(t *testing.T) {
 func newRootWithTwoChats(t *testing.T) (ui.RootModel, store.Store) {
 	t.Helper()
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
-	st.SetChat(store.Chat{ID: 2, Title: "Bob"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(screens.TransitionToMainMsg{})
@@ -1033,7 +1034,7 @@ func TestRoot_NewMessageEvent_UpdatesChatList(t *testing.T) {
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ChatID: 2, Text: "hi", Date: time.Now()},
+		Message: domain.Message{ChatID: 2, Text: "hi", Date: time.Now()},
 	}
 	newM, _ := applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
@@ -1048,13 +1049,13 @@ func TestRoot_NewMessageEvent_IncrementsUnread(t *testing.T) {
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 1, ChatID: 2, Text: "hi"},
+		Message: domain.Message{ID: 1, ChatID: 2, Text: "hi"},
 	}
 	newM, _ := applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, c := range chats {
 		if c.ID == 2 {
 			chat2 = c
@@ -1068,20 +1069,20 @@ func TestRoot_NewMessageEvent_UnreadPersistsAcrossMultipleEvents(t *testing.T) {
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 1, ChatID: 2, Text: "first"},
+		Message: domain.Message{ID: 1, ChatID: 2, Text: "first"},
 	}
 	newM, _ := applyEvent(t, m, st, evt)
 	m = newM.(ui.RootModel)
 
 	evt2 := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 2, ChatID: 2, Text: "second"},
+		Message: domain.Message{ID: 2, ChatID: 2, Text: "second"},
 	}
 	newM, _ = applyEvent(t, m, st, evt2)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, c := range chats {
 		if c.ID == 2 {
 			chat2 = c
@@ -1095,18 +1096,18 @@ func TestRoot_NewMessageEvent_UnreadPersistsAcrossMultipleEvents(t *testing.T) {
 func TestRoot_NewMessageEvent_CountsUnreadForCurrentChat(t *testing.T) {
 	m, st := newRootWithTwoChats(t)
 
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(ui.RootModel)
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 7, ChatID: 1, Text: "hi"},
+		Message: domain.Message{ID: 7, ChatID: 1, Text: "hi"},
 	}
 	newM, _ = applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
-	var chat1 store.Chat
+	var chat1 domain.Chat
 	for _, c := range chats {
 		if c.ID == 1 {
 			chat1 = c
@@ -1120,13 +1121,13 @@ func TestRoot_NewMessageEvent_NoUnreadForOutgoingMessage(t *testing.T) {
 
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ChatID: 2, Text: "sent from phone", IsOut: true},
+		Message: domain.Message{ChatID: 2, Text: "sent from phone", IsOut: true},
 	}
 	newM, _ := applyEvent(t, m, st, evt)
 	root := newM.(ui.RootModel)
 
 	chats := root.ChatList().Chats()
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, c := range chats {
 		if c.ID == 2 {
 			chat2 = c
@@ -1138,11 +1139,11 @@ func TestRoot_NewMessageEvent_NoUnreadForOutgoingMessage(t *testing.T) {
 func newRootWithOpenChat(t *testing.T, mock *mockTGClient) (ui.RootModel, store.Store) {
 	t.Helper()
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(mock, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	return newM.(ui.RootModel), st
 }
@@ -1152,7 +1153,7 @@ func TestRoot_Send_ShowsSentinelImmediately(t *testing.T) {
 	m, st := newRootWithOpenChat(t, mock)
 
 	_, _ = m.Update(screens.SendMsgRequest{
-		Peer: store.Peer{ID: 1, Type: store.PeerUser},
+		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "hello",
 	})
 
@@ -1168,7 +1169,7 @@ func TestRoot_Send_ConfirmationReplacesSentinel(t *testing.T) {
 	m, st := newRootWithOpenChat(t, mock)
 
 	newM, cmd := m.Update(screens.SendMsgRequest{
-		Peer: store.Peer{ID: 1, Type: store.PeerUser},
+		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "hello",
 	})
 	m = newM.(ui.RootModel)
@@ -1188,7 +1189,7 @@ func TestRoot_Send_FailedSendRemovesSentinel(t *testing.T) {
 	m, st := newRootWithOpenChat(t, mock)
 
 	newM, cmd := m.Update(screens.SendMsgRequest{
-		Peer: store.Peer{ID: 1, Type: store.PeerUser},
+		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "hello",
 	})
 	m = newM.(ui.RootModel)
@@ -1207,9 +1208,9 @@ func TestRootModel_PhotoDownloadDispatchedOnHistory(t *testing.T) {
 	m, _ := newRootWithOpenChat(t, mock)
 	m2, cmd := m.Update(ui.ChatHistoryMsg{
 		ChatID: 1,
-		Messages: []store.Message{
+		Messages: []domain.Message{
 			{ID: 10, ChatID: 1, Text: "hello"},
-			{ID: 11, ChatID: 1, Photo: &store.PhotoRef{ID: 77, ThumbSize: "m"}},
+			{ID: 11, ChatID: 1, Photo: &domain.PhotoRef{ID: 77, ThumbSize: "m"}},
 		},
 	})
 	_ = m2
@@ -1231,7 +1232,7 @@ func TestRoot_Send_ConcurrentSentinelsHaveDistinctIDs(t *testing.T) {
 
 	// Send first message
 	newM, _ := m.Update(screens.SendMsgRequest{
-		Peer: store.Peer{ID: 1, Type: store.PeerUser},
+		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "first",
 	})
 	m = newM.(ui.RootModel)
@@ -1243,7 +1244,7 @@ func TestRoot_Send_ConcurrentSentinelsHaveDistinctIDs(t *testing.T) {
 
 	// Send second message without running any cmds
 	newM, _ = m.Update(screens.SendMsgRequest{
-		Peer: store.Peer{ID: 1, Type: store.PeerUser},
+		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "second",
 	})
 	_ = newM
@@ -1259,7 +1260,7 @@ func TestRoot_Send_ConcurrentSentinelsHaveDistinctIDs(t *testing.T) {
 func TestRoot_Space_OpensContextMenu(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1283,7 +1284,7 @@ func TestRoot_Space_NoMenuWhenNoMessages(t *testing.T) {
 func TestRoot_EscKeepsReply_XClearsIt(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hi", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hi", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1306,7 +1307,7 @@ func TestRoot_EscKeepsReply_XClearsIt(t *testing.T) {
 func TestRoot_EscKeepsEdit_XClearsIt(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 11, ChatID: 1, Text: "mine", IsOut: true, Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 11, ChatID: 1, Text: "mine", IsOut: true, Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1329,7 +1330,7 @@ func TestRoot_EscKeepsEdit_XClearsIt(t *testing.T) {
 func TestRoot_ReactKey_OpensReactionPicker(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 	require.False(t, m.ReactionPickerOpen())
@@ -1342,7 +1343,7 @@ func TestRoot_ReactKey_OpensReactionPicker(t *testing.T) {
 func TestRoot_ForwardKey_OpensPicker(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 	require.False(t, m.SearchActive())
@@ -1355,7 +1356,7 @@ func TestRoot_ForwardKey_OpensPicker(t *testing.T) {
 func TestRoot_ForwardToChat_CallsClient(t *testing.T) {
 	mock := &mockTGClient{}
 	m, _ := newRootWithOpenChat(t, mock)
-	target := store.Peer{ID: 999, Type: store.PeerUser, AccessHash: 7}
+	target := domain.Peer{ID: 999, Type: domain.PeerUser, AccessHash: 7}
 
 	newM, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
 	m = newM.(ui.RootModel)
@@ -1371,7 +1372,7 @@ func TestRoot_ForwardToChat_CallsClient(t *testing.T) {
 func TestRoot_ForwardWithComment_SendsCommentThenForwards(t *testing.T) {
 	mock := &mockTGClient{}
 	m, _ := newRootWithOpenChat(t, mock)
-	target := store.Peer{ID: 999, Type: store.PeerUser, AccessHash: 7}
+	target := domain.Peer{ID: 999, Type: domain.PeerUser, AccessHash: 7}
 
 	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5, Comment: "look at this"})
 	require.NotNil(t, cmd)
@@ -1386,7 +1387,7 @@ func TestRoot_ForwardWithComment_SendsCommentThenForwards(t *testing.T) {
 func TestRoot_ForwardWithoutComment_DoesNotSend(t *testing.T) {
 	mock := &mockTGClient{}
 	m, _ := newRootWithOpenChat(t, mock)
-	target := store.Peer{ID: 999, Type: store.PeerUser}
+	target := domain.Peer{ID: 999, Type: domain.PeerUser}
 
 	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
 	require.NotNil(t, cmd)
@@ -1399,11 +1400,11 @@ func TestRoot_ForwardWithoutComment_DoesNotSend(t *testing.T) {
 func TestRoot_Forward_BumpsTargetChatToTop(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock) // chat 1 is open/current
-	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}})
 	// Source message lives in the open chat; chat 1 has an older last message.
-	st.AppendMessage(store.Message{ID: 7, ChatID: 1, Text: "src", Date: time.Now().Add(-time.Hour)})
+	st.AppendMessage(domain.Message{ID: 7, ChatID: 1, Text: "src", Date: time.Now().Add(-time.Hour)})
 
-	target := store.Peer{ID: 2, Type: store.PeerUser}
+	target := domain.Peer{ID: 2, Type: domain.PeerUser}
 	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 7})
 	require.NotNil(t, cmd)
 	done := cmd()           // run the RPC cmd -> forwardDoneMsg
@@ -1420,7 +1421,7 @@ func TestRoot_Forward_BumpsTargetChatToTop(t *testing.T) {
 func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {
 	mock := &mockTGClient{forwardErr: &telerr.Error{Kind: telerr.Forbidden, Detail: "CHAT_FORWARDS_RESTRICTED"}}
 	m, _ := newRootWithOpenChat(t, mock)
-	target := store.Peer{ID: 999, Type: store.PeerUser}
+	target := domain.Peer{ID: 999, Type: domain.PeerUser}
 
 	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
 	require.NotNil(t, cmd)
@@ -1436,7 +1437,7 @@ func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {
 func TestRoot_ContextMenu_EscCloses(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1460,7 +1461,7 @@ func TestRoot_ContextMenu_EscCloses(t *testing.T) {
 func TestWithKeyMap_RebindOpensContextMenu(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1479,7 +1480,7 @@ func TestWithKeyMap_RebindOpensContextMenu(t *testing.T) {
 func TestRoot_DeleteMsgRequest_RemovesFromStore(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1494,7 +1495,7 @@ func TestRoot_DeleteMsgRequest_RemovesFromStore(t *testing.T) {
 func TestRoot_ContextMenu_QuitKeyDoesNotQuit(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "hello", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1514,7 +1515,7 @@ func TestRoot_ContextMenu_QuitKeyDoesNotQuit(t *testing.T) {
 func TestRoot_ReplyMsgRequest_ClosesMenuAndFocusesComposer(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1534,12 +1535,12 @@ func TestRoot_ReplyMsgRequest_ClosesMenuAndFocusesComposer(t *testing.T) {
 func TestRoot_Send_WithReply_PassesReplyToMsgID(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "original", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
 	_, cmd := m.Update(screens.SendMsgRequest{
-		Peer:         store.Peer{ID: 1, Type: store.PeerUser},
+		Peer:         domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text:         "my reply",
 		ReplyToMsgID: 10,
 	})
@@ -1552,7 +1553,7 @@ func TestRoot_Send_WithReply_PassesReplyToMsgID(t *testing.T) {
 func TestRoot_R_Key_ActivatesReplyMode(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1567,7 +1568,7 @@ func TestRoot_R_Key_ActivatesReplyMode(t *testing.T) {
 func TestRoot_OpenChat_ClearsPendingReply(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
 	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1577,8 +1578,8 @@ func TestRoot_OpenChat_ClearsPendingReply(t *testing.T) {
 	require.Equal(t, 10, m.Chat().ReplyToMsgID(), "reply must be active before switching chat")
 
 	// switch to a different chat
-	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
-	newM, _ = m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}})
+	newM, _ = m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}}})
 	m = newM.(ui.RootModel)
 
 	assert.Equal(t, 0, m.Chat().ReplyToMsgID(), "switching chat must clear pending reply")
@@ -1589,7 +1590,7 @@ func TestRoot_Send_SentinelCarriesReplyToMsgID(t *testing.T) {
 	m, st := newRootWithOpenChat(t, mock)
 
 	_, _ = m.Update(screens.SendMsgRequest{
-		Peer:         store.Peer{ID: 1, Type: store.PeerUser},
+		Peer:         domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text:         "my reply",
 		ReplyToMsgID: 10,
 	})
@@ -1619,13 +1620,13 @@ func TestRoot_l_CyclesFocusRight(t *testing.T) {
 
 func TestRoot_FolderSelectedMsg_FiltersChatList(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, IsContact: true})
-	st.SetChat(store.Chat{ID: 2, Title: "Group", Peer: store.Peer{ID: 2, Type: store.PeerGroup}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, IsContact: true})
+	st.SetChat(domain.Chat{ID: 2, Title: "Group", Peer: domain.Peer{ID: 2, Type: domain.PeerGroup}})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
-	filter := store.FolderFilter{ID: 1, Title: "Contacts", Contacts: true}
-	newM, _ := m.Update(ui.FolderFiltersMsg{Filters: []store.FolderFilter{filter}})
+	filter := domain.FolderFilter{ID: 1, Title: "Contacts", Contacts: true}
+	newM, _ := m.Update(ui.FolderFiltersMsg{Filters: []domain.FolderFilter{filter}})
 	m = newM.(ui.RootModel)
 
 	// Select the Contacts folder
@@ -1642,7 +1643,7 @@ func TestRoot_FolderSelectedMsg_FiltersChatList(t *testing.T) {
 func TestRoot_FolderFiltersMsg_SetsFolders(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	filters := []store.FolderFilter{{ID: 1, Title: "Work"}}
+	filters := []domain.FolderFilter{{ID: 1, Title: "Work"}}
 	newM, _ := m.Update(ui.FolderFiltersMsg{Filters: filters})
 	root := newM.(ui.RootModel)
 	assert.True(t, root.HasFolders())
@@ -1651,7 +1652,7 @@ func TestRoot_FolderFiltersMsg_SetsFolders(t *testing.T) {
 func TestRoot_0_FocusesFolders(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	filters := []store.FolderFilter{{ID: 1, Title: "Work"}}
+	filters := []domain.FolderFilter{{ID: 1, Title: "Work"}}
 	m2, _ := m.Update(ui.FolderFiltersMsg{Filters: filters})
 	root := m2.(ui.RootModel)
 	newM, _ := root.Update(tea.KeyPressMsg{Code: '0', Text: "0"})
@@ -1661,8 +1662,8 @@ func TestRoot_0_FocusesFolders(t *testing.T) {
 
 func TestRoot_FocusNext_DoesNotAutoOpenChat(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
-	st.SetChat(store.Chat{ID: 2, Title: "Bob"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(screens.TransitionToMainMsg{})
@@ -1682,7 +1683,7 @@ func TestRoot_FolderSelectedMsg_FocusesChatList(t *testing.T) {
 	st := store.NewMemory()
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	filters := []store.FolderFilter{{ID: 1, Title: "Work"}}
+	filters := []domain.FolderFilter{{ID: 1, Title: "Work"}}
 	newM, _ := m.Update(ui.FolderFiltersMsg{Filters: filters})
 	m = newM.(ui.RootModel)
 
@@ -1690,7 +1691,7 @@ func TestRoot_FolderSelectedMsg_FocusesChatList(t *testing.T) {
 	m = newM.(ui.RootModel)
 	require.Equal(t, ui.FocusFolders, m.CurrentFocus())
 
-	filter := store.FolderFilter{ID: 1, Title: "Work"}
+	filter := domain.FolderFilter{ID: 1, Title: "Work"}
 	newM, _ = m.Update(screens.FolderSelectedMsg{Filter: &filter})
 	m = newM.(ui.RootModel)
 
@@ -1705,8 +1706,8 @@ func TestRoot_OpenSameChatAgain_OnlyFocusesChatPane(t *testing.T) {
 	m = newM.(ui.RootModel)
 	require.Equal(t, ui.FocusChatList, m.CurrentFocus())
 
-	newM, cmd := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, cmd := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	m = newM.(ui.RootModel)
 
@@ -1717,11 +1718,11 @@ func TestRoot_OpenSameChatAgain_OnlyFocusesChatPane(t *testing.T) {
 func TestRoot_EventDeleteMessages_Channel_RemovesFromCurrentChat(t *testing.T) {
 	m, st := newRootWithTwoChats(t)
 	now := time.Now()
-	st.SetMessages(1, []store.Message{
+	st.SetMessages(1, []domain.Message{
 		{ID: 10, ChatID: 1, Text: "hello", Date: now},
 		{ID: 11, ChatID: 1, Text: "world", Date: now},
 	})
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(ui.RootModel)
 
 	evt := store.Event{
@@ -1742,8 +1743,8 @@ func TestRoot_EventDeleteMessages_NonChannel_TargetsOwningChat(t *testing.T) {
 	now := time.Now()
 	// In the shared pts box message IDs are globally unique, so a delete-without-
 	// chatID resolves to exactly one chat via the store index (issue #72).
-	st.SetMessages(1, []store.Message{{ID: 5, ChatID: 1, Text: "a", Date: now}})
-	st.SetMessages(2, []store.Message{{ID: 6, ChatID: 2, Text: "b", Date: now}})
+	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "a", Date: now}})
+	st.SetMessages(2, []domain.Message{{ID: 6, ChatID: 2, Text: "b", Date: now}})
 
 	evt := store.Event{
 		Kind:   store.EventDeleteMessages,
@@ -1762,11 +1763,11 @@ func TestRoot_ContextMenu_PhotoMessage_ShowsAllThreeActions(t *testing.T) {
 	m, st := newRootWithOpenChat(t, mock)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = newM.(ui.RootModel)
-	st.AppendMessage(store.Message{
+	st.AppendMessage(domain.Message{
 		ID:     10,
 		ChatID: 1,
 		Text:   "photo msg",
-		Photo:  &store.PhotoRef{ID: 77},
+		Photo:  &domain.PhotoRef{ID: 77},
 		Date:   time.Now(),
 	})
 	newM, _ = m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
@@ -1786,7 +1787,7 @@ func TestRoot_ContextMenu_NonMediaMessage_HidesMediaActions(t *testing.T) {
 	m, st := newRootWithOpenChat(t, mock)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = newM.(ui.RootModel)
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "text msg", Date: time.Now()})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "text msg", Date: time.Now()})
 	newM, _ = m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
 	m = newM.(ui.RootModel)
 
@@ -1800,7 +1801,7 @@ func TestRoot_ContextMenu_NonMediaMessage_HidesMediaActions(t *testing.T) {
 
 func TestRoot_EventUserPresence_UpdatesChatOnline(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
@@ -1819,13 +1820,13 @@ func TestRoot_EventUserPresence_UpdatesChatOnline(t *testing.T) {
 
 func TestRoot_EventUserPresence_NoopWhenOnlineUnchanged(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, Online: true})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Online: true})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
 	// Open a chat so the idle logo is hidden; otherwise its tick loop re-arms and
 	// the no-op event would appear to return a command (issue #147).
-	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	m.Chat().SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 
 	newM, cmd := applyEvent(t, m, st, store.Event{
 		Kind:   store.EventUserPresence,
@@ -1842,7 +1843,7 @@ func TestRoot_EventUserPresence_NoopWhenOnlineUnchanged(t *testing.T) {
 
 func TestRoot_EventMuteUpdate_UpdatesStoreMuteFlag(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
@@ -1861,13 +1862,13 @@ func TestRoot_EventMuteUpdate_UpdatesStoreMuteFlag(t *testing.T) {
 
 func TestRoot_EventMuteUpdate_NoopWhenUnchanged(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, IsMuted: true})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, IsMuted: true})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m.ChatList().SetChats(st.Chats())
 	// Open a chat so the idle logo is hidden; otherwise its tick loop re-arms and
 	// the no-op event would appear to return a command (issue #147).
-	m.Chat().SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	m.Chat().SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 
 	newM, cmd := applyEvent(t, m, st, store.Event{
 		Kind:   store.EventMuteUpdate,
@@ -1884,15 +1885,15 @@ func TestRoot_EventMuteUpdate_NoopWhenUnchanged(t *testing.T) {
 
 func TestRoot_EventEditMessage_UpdatesStoredText(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "original"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
 	edited := time.Unix(int64(1700000000), 0)
 	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:    store.EventEditMessage,
-		Message: store.Message{ID: 10, ChatID: 1, Text: "edited", EditDate: &edited},
+		Message: domain.Message{ID: 10, ChatID: 1, Text: "edited", EditDate: &edited},
 	})
 	_ = newM.(ui.RootModel)
 
@@ -1918,7 +1919,7 @@ func TestRoot_ReactionUpdate_BumpsIndicatorOnOtherChat(t *testing.T) {
 	assert.Equal(t, 1, c.UnreadReactionsCount)
 
 	// The chat list reflects the new count.
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, ch := range root.ChatList().Chats() {
 		if ch.ID == 2 {
 			chat2 = ch
@@ -1933,19 +1934,19 @@ func TestRoot_ReactionUpdate_BumpsIndicatorOnOtherChat(t *testing.T) {
 func TestRoot_EditWithReaction_BumpsIndicatorOnOtherChat(t *testing.T) {
 	m, st := newRootWithTwoChats(t)
 	edited := time.Now().Add(-time.Hour)
-	st.AppendMessage(store.Message{ID: 500, ChatID: 2, Text: "fixed typo", EditDate: &edited})
+	st.AppendMessage(domain.Message{ID: 500, ChatID: 2, Text: "fixed typo", EditDate: &edited})
 
 	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind: store.EventEditMessage,
-		Message: store.Message{
+		Message: domain.Message{
 			ID: 500, ChatID: 2, Text: "fixed typo", EditDate: &edited,
-			Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+			Reactions:          []domain.Reaction{{Emoji: "👍", Count: 1}},
 			HasUnreadReactions: true,
 		},
 	})
 	root := newM.(ui.RootModel)
 
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, ch := range root.ChatList().Chats() {
 		if ch.ID == 2 {
 			chat2 = ch
@@ -1957,7 +1958,7 @@ func TestRoot_EditWithReaction_BumpsIndicatorOnOtherChat(t *testing.T) {
 func TestRoot_ReactionUpdate_OnOpenChat_ReadsReactions(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock) // chat 1 open and focused
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, UnreadReactionsCount: 1})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadReactionsCount: 1})
 
 	newM, cmd := applyEvent(t, m, st, store.Event{
 		Kind:            store.EventReactionsUpdate,
@@ -1980,13 +1981,13 @@ func TestRoot_EditWithReaction_OnOpenChat_ReadsReactions(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock) // chat 1 open and focused
 	edited := time.Now().Add(-time.Hour)
-	st.AppendMessage(store.Message{ID: 500, ChatID: 1, Text: "fixed typo", EditDate: &edited})
+	st.AppendMessage(domain.Message{ID: 500, ChatID: 1, Text: "fixed typo", EditDate: &edited})
 
 	_, cmd := applyEvent(t, m, st, store.Event{
 		Kind: store.EventEditMessage,
-		Message: store.Message{
+		Message: domain.Message{
 			ID: 500, ChatID: 1, Text: "fixed typo", EditDate: &edited,
-			Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+			Reactions:          []domain.Reaction{{Emoji: "👍", Count: 1}},
 			HasUnreadReactions: true,
 		},
 	})
@@ -1999,12 +2000,12 @@ func TestRoot_EditWithReaction_OnOpenChat_ReadsReactions(t *testing.T) {
 func TestRoot_OpenChat_ClearsUnreadReactionsOptimistically(t *testing.T) {
 	mock := &mockTGClient{}
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, UnreadReactionsCount: 3})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadReactionsCount: 3})
 	m := ui.NewRootModel(mock, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	_ = newM.(ui.RootModel)
 
@@ -2018,7 +2019,7 @@ func TestRoot_NewMention_BumpsIndicatorOnOtherChat(t *testing.T) {
 	// Chat 2 is not open; an incoming mention there bumps its indicator.
 	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind: store.EventNewMessage,
-		Message: store.Message{
+		Message: domain.Message{
 			ID: 500, ChatID: 2, Mentioned: true, IsOut: false,
 		},
 	})
@@ -2028,7 +2029,7 @@ func TestRoot_NewMention_BumpsIndicatorOnOtherChat(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, 1, c.UnreadMentionsCount)
 
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, ch := range root.ChatList().Chats() {
 		if ch.ID == 2 {
 			chat2 = ch
@@ -2040,12 +2041,12 @@ func TestRoot_NewMention_BumpsIndicatorOnOtherChat(t *testing.T) {
 func TestRoot_OpenChat_ClearsUnreadMentionsOptimistically(t *testing.T) {
 	mock := &mockTGClient{}
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, UnreadMentionsCount: 3})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, UnreadMentionsCount: 3})
 	m := ui.NewRootModel(mock, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
-		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{
+		ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 	}})
 	_ = newM.(ui.RootModel)
 
@@ -2086,7 +2087,7 @@ func TestRoot_Esc_NormalMode_ClosesChatReturnsToChatList(t *testing.T) {
 	m = m.WithScreen(ui.ScreenMain)
 
 	// Open a chat — this sets focus to FocusChat.
-	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(ui.RootModel)
 	require.Equal(t, ui.FocusChat, m.CurrentFocus())
 
@@ -2109,7 +2110,7 @@ func TestRoot_SetTmpDir(t *testing.T) {
 // must not produce a false unread badge when it arrives after the read event.
 func TestRoot_NewMessageEvent_AlreadyReadElsewhere(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{
+	st.SetChat(domain.Chat{
 		ID:             2,
 		Title:          "Bob",
 		ReadInboxMaxID: 100,
@@ -2131,11 +2132,11 @@ func TestRoot_NewMessageEvent_AlreadyReadElsewhere(t *testing.T) {
 	// EventNewMessage for a message already covered by the read pointer
 	newM, _ = applyEvent(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 99, ChatID: 2, Text: "read elsewhere"},
+		Message: domain.Message{ID: 99, ChatID: 2, Text: "read elsewhere"},
 	})
 	root := newM.(ui.RootModel)
 
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, c := range root.ChatList().Chats() {
 		if c.ID == 2 {
 			chat2 = c
@@ -2154,7 +2155,7 @@ func TestRoot_NewMessageEvent_AlreadyReadElsewhere(t *testing.T) {
 func TestRoot_StartupCatchup_ServerReadClearsStaleBadge(t *testing.T) {
 	st := store.NewMemory()
 	// Persisted from previous session: read up to 100, no unread.
-	st.SetChat(store.Chat{ID: 2, Title: "Bob", ReadInboxMaxID: 100, UnreadCount: 0})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", ReadInboxMaxID: 100, UnreadCount: 0})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
@@ -2162,18 +2163,18 @@ func TestRoot_StartupCatchup_ServerReadClearsStaleBadge(t *testing.T) {
 	// GetDialogs completes and before the read ack (which is dropped).
 	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ID: 150, ChatID: 2, Text: "read elsewhere"},
+		Message: domain.Message{ID: 150, ChatID: 2, Text: "read elsewhere"},
 	})
 	m = newM.(ui.RootModel)
 
 	// GetDialogs completes: server reports the chat as already read.
-	st.SetChat(store.Chat{ID: 2, Title: "Bob", ReadInboxMaxID: 150, UnreadCount: 0})
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", ReadInboxMaxID: 150, UnreadCount: 0})
 
 	// Transition rebuilds the chat list from the authoritative store.
 	newM, _ = m.Update(screens.TransitionToMainMsg{})
 	root := newM.(ui.RootModel)
 
-	var chat2 store.Chat
+	var chat2 domain.Chat
 	for _, c := range root.ChatList().Chats() {
 		if c.ID == 2 {
 			chat2 = c
@@ -2184,7 +2185,7 @@ func TestRoot_StartupCatchup_ServerReadClearsStaleBadge(t *testing.T) {
 
 func TestRoot_Space_OpensChatMenu_OnChatList(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "A", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "A", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).
 		WithScreen(ui.ScreenMain).WithFocus(ui.FocusChatList)
 	// TransitionToMainMsg populates the chat list from the store.
@@ -2201,7 +2202,7 @@ func TestRoot_Space_OpensChatMenu_OnChatList(t *testing.T) {
 // pressing it opens the chat under the cursor instead of cycling focus.
 func TestRoot_RebindChatListConfirmToL_OpensChat(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).
 		WithScreen(ui.ScreenMain).WithFocus(ui.FocusChatList)
 	nm, _ := m.Update(screens.TransitionToMainMsg{})
@@ -2224,10 +2225,10 @@ func TestRoot_RebindChatListConfirmToL_OpensChat(t *testing.T) {
 
 func TestRoot_ToggleMute_OptimisticUpdate(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "A", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Title: "A", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
 
-	updated, _ := m.Update(components.ToggleMuteRequest{Peer: store.Peer{ID: 1}, Muted: true})
+	updated, _ := m.Update(components.ToggleMuteRequest{Peer: domain.Peer{ID: 1}, Muted: true})
 	rm := updated.(ui.RootModel)
 	assert.False(t, rm.ChatMenuOpen(), "menu closes after action")
 
@@ -2237,28 +2238,28 @@ func TestRoot_ToggleMute_OptimisticUpdate(t *testing.T) {
 
 func TestRoot_MarkUnread_OptimisticUpdate(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
 
-	m.Update(components.ToggleUnreadRequest{Peer: store.Peer{ID: 1}, Unread: true})
+	m.Update(components.ToggleUnreadRequest{Peer: domain.Peer{ID: 1}, Unread: true})
 	c, _ := st.GetChat(1)
 	assert.True(t, c.UnreadMark)
 }
 
 func TestRoot_ToggleArchive_OptimisticUpdate(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
 
-	m.Update(components.ToggleArchiveRequest{Peer: store.Peer{ID: 1}, Archived: true})
+	m.Update(components.ToggleArchiveRequest{Peer: domain.Peer{ID: 1}, Archived: true})
 	c, _ := st.GetChat(1)
 	assert.True(t, c.IsArchived)
 }
 
 func TestRoot_EventEditMessage_HiddenEdit_DoesNotMarkEdited(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "original"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
@@ -2267,7 +2268,7 @@ func TestRoot_EventEditMessage_HiddenEdit_DoesNotMarkEdited(t *testing.T) {
 	// (issue #118).
 	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind:    store.EventEditMessage,
-		Message: store.Message{ID: 10, ChatID: 1, Text: "original", EditDate: nil},
+		Message: domain.Message{ID: 10, ChatID: 1, Text: "original", EditDate: nil},
 	})
 	_ = newM.(ui.RootModel)
 
@@ -2278,8 +2279,8 @@ func TestRoot_EventEditMessage_HiddenEdit_DoesNotMarkEdited(t *testing.T) {
 
 func TestRoot_EventEditMessage_HiddenEdit_AppliesReactions(t *testing.T) {
 	st := store.NewMemory()
-	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
-	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original"})
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
+	st.AppendMessage(domain.Message{ID: 10, ChatID: 1, Text: "original"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
@@ -2289,9 +2290,9 @@ func TestRoot_EventEditMessage_HiddenEdit_AppliesReactions(t *testing.T) {
 	// while the message must still not be flipped to "edited" (#160, #118).
 	newM, _ := applyEvent(t, m, st, store.Event{
 		Kind: store.EventEditMessage,
-		Message: store.Message{
+		Message: domain.Message{
 			ID: 10, ChatID: 1, Text: "original", EditDate: nil,
-			Reactions: []store.Reaction{{Emoji: "👍", Count: 1}},
+			Reactions: []domain.Reaction{{Emoji: "👍", Count: 1}},
 		},
 	})
 	_ = newM.(ui.RootModel)
@@ -2305,8 +2306,8 @@ func TestRoot_EventEditMessage_HiddenEdit_AppliesReactions(t *testing.T) {
 }
 
 func TestRoot_SearchUsersRequestRunsRPCAndRoutesResult(t *testing.T) {
-	mock := &mockTGClient{searchResult: []store.Chat{
-		{ID: 99, Title: "Zoe", Peer: store.Peer{ID: 99, Type: store.PeerUser}},
+	mock := &mockTGClient{searchResult: []domain.Chat{
+		{ID: 99, Title: "Zoe", Peer: domain.Peer{ID: 99, Type: domain.PeerUser}},
 	}}
 	st := store.NewMemory()
 	m := ui.NewRootModel(mock, st, 20, false).WithScreen(ui.ScreenMain)

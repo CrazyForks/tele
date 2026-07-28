@@ -6,11 +6,10 @@ import (
 	"math"
 
 	"github.com/gotd/td/tg"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
-func (c *GotdClient) MarkDialogUnread(ctx context.Context, peer store.Peer, unread bool) error {
+func (c *GotdClient) MarkDialogUnread(ctx context.Context, peer domain.Peer, unread bool) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -25,7 +24,7 @@ func (c *GotdClient) MarkDialogUnread(ctx context.Context, peer store.Peer, unre
 	})
 }
 
-func (c *GotdClient) SetMuted(ctx context.Context, peer store.Peer, muted bool) error {
+func (c *GotdClient) SetMuted(ctx context.Context, peer domain.Peer, muted bool) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -49,7 +48,7 @@ func (c *GotdClient) SetMuted(ctx context.Context, peer store.Peer, muted bool) 
 // filter with the given ID. It round-trips the raw filter list from the
 // server (rather than rebuilding from the lossy store model) so existing
 // members keep their access hashes.
-func (c *GotdClient) AddToFolder(ctx context.Context, filterID int, peer store.Peer, add bool) error {
+func (c *GotdClient) AddToFolder(ctx context.Context, filterID int, peer domain.Peer, add bool) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err
@@ -81,7 +80,7 @@ func (c *GotdClient) AddToFolder(ctx context.Context, filterID int, peer store.P
 	})
 }
 
-func (c *GotdClient) SetArchived(ctx context.Context, peer store.Peer, archived bool) error {
+func (c *GotdClient) SetArchived(ctx context.Context, peer domain.Peer, archived bool) error {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return err

@@ -7,8 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/media"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -19,8 +19,8 @@ import (
 type pendingAttachment struct {
 	path   string
 	mime   string
-	kind   store.MediaKind
-	sendAs store.MediaKind
+	kind   domain.MediaKind
+	sendAs domain.MediaKind
 	name   string
 	size   int64
 }
@@ -106,7 +106,7 @@ func (m *RootModel) syncAttachmentChips() {
 	items := make([]components.AttachmentChip, 0, len(m.pendingAttachments))
 	toggleable := true
 	for _, a := range m.pendingAttachments {
-		if a.kind != store.MediaPhoto && a.kind != store.MediaVideo {
+		if a.kind != domain.MediaPhoto && a.kind != domain.MediaVideo {
 			toggleable = false
 		}
 		items = append(items, components.AttachmentChip{
@@ -121,7 +121,7 @@ func (m RootModel) PendingAttachmentCount() int { return len(m.pendingAttachment
 
 // PendingAttachmentSendAs reports the first staged part's "send as" kind (test
 // accessor).
-func (m RootModel) PendingAttachmentSendAs() (store.MediaKind, bool) {
+func (m RootModel) PendingAttachmentSendAs() (domain.MediaKind, bool) {
 	if len(m.pendingAttachments) == 0 {
 		return 0, false
 	}
@@ -130,8 +130,8 @@ func (m RootModel) PendingAttachmentSendAs() (store.MediaKind, bool) {
 
 // PendingAttachmentSendAsAll reports every staged part's "send as" kind (test
 // accessor).
-func (m RootModel) PendingAttachmentSendAsAll() []store.MediaKind {
-	out := make([]store.MediaKind, 0, len(m.pendingAttachments))
+func (m RootModel) PendingAttachmentSendAsAll() []domain.MediaKind {
+	out := make([]domain.MediaKind, 0, len(m.pendingAttachments))
 	for _, a := range m.pendingAttachments {
 		out = append(out, a.sendAs)
 	}
@@ -145,16 +145,16 @@ func (m RootModel) toggleSendAs() (RootModel, tea.Cmd) {
 		return m, nil
 	}
 	for _, a := range m.pendingAttachments {
-		if a.kind != store.MediaPhoto && a.kind != store.MediaVideo {
+		if a.kind != domain.MediaPhoto && a.kind != domain.MediaVideo {
 			return m, nil
 		}
 	}
-	toFile := m.pendingAttachments[0].sendAs != store.MediaFile
+	toFile := m.pendingAttachments[0].sendAs != domain.MediaFile
 	next := make([]pendingAttachment, len(m.pendingAttachments))
 	copy(next, m.pendingAttachments)
 	for i := range next {
 		if toFile {
-			next[i].sendAs = store.MediaFile
+			next[i].sendAs = domain.MediaFile
 		} else {
 			next[i].sendAs = next[i].kind
 		}

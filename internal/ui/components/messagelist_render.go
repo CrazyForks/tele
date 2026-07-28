@@ -5,7 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 const indicatorChar = "┃"
@@ -26,7 +26,7 @@ type bubbleMetrics struct {
 
 // renderMessage returns the display lines for a single message bubble.
 // selected: when true, draws the selection indicator bar beside the bubble.
-func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string {
+func (ml *MessageList) renderMessage(msg domain.Message, selected bool) []string {
 	if ml.viewWidth <= 0 {
 		return []string{""}
 	}
@@ -49,7 +49,7 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 // measureBubble computes the finalized bubble geometry and border-row content
 // (timestamp, reactions) for a message, widening as needed for the text, media
 // placeholder/art, forward and reply blocks, and the sender-name title.
-func (ml *MessageList) measureBubble(msg store.Message) bubbleMetrics {
+func (ml *MessageList) measureBubble(msg domain.Message) bubbleMetrics {
 	maxBubbleW := ml.viewWidth * 3 / 4
 	if maxBubbleW < 10 {
 		maxBubbleW = 10
@@ -218,7 +218,7 @@ func (ml *MessageList) measureBubble(msg store.Message) bubbleMetrics {
 // bubbleBorders builds the top and bottom border rows of a message bubble. The
 // top border carries the sender name (incoming group messages); the bottom
 // border carries reactions on the left and the timestamp on the right.
-func (ml *MessageList) bubbleBorders(msg store.Message, m bubbleMetrics) (top, bottom string) {
+func (ml *MessageList) bubbleBorders(msg domain.Message, m bubbleMetrics) (top, bottom string) {
 	b, bs := m.b, m.bs
 
 	// Top border: sender/indicator left-aligned for incoming; plain for outgoing.
@@ -257,7 +257,7 @@ func (ml *MessageList) bubbleBorders(msg store.Message, m bubbleMetrics) (top, b
 // bubbleContentLines builds the interior rows of a message bubble: the forward
 // header (if any), the reply quote block (if a reply), media art or its
 // placeholder (if any), then the wrapped message text.
-func (ml *MessageList) bubbleContentLines(msg store.Message, m bubbleMetrics) []string {
+func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) []string {
 	actualW, innerW, b, bs := m.actualW, m.innerW, m.b, m.bs
 
 	// Content lines: forward header (if any), reply quote block (if reply),
@@ -335,7 +335,7 @@ func (ml *MessageList) bubbleContentLines(msg store.Message, m bubbleMetrics) []
 			if overlay := ml.overlayLabelFor(msg); overlay != "" {
 				sideLines = append(sideLines, labelLine(overlay, actualW, b, bs))
 			}
-		case msg.Media.Kind == store.MediaVoice && msg.Document != nil &&
+		case msg.Media.Kind == domain.MediaVoice && msg.Document != nil &&
 			msg.Document.ID == ml.playingVoiceID:
 			// Voice currently playing: waveform with playhead + live position.
 			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition)
@@ -416,7 +416,7 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 // play/duration overlay (video notes), and a plain timestamp line below
 // (reactions left, time + read status right). Caller must have verified
 // isBareMedia.
-func (ml *MessageList) renderBareMedia(msg store.Message, selected bool) []string {
+func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []string {
 	id, _ := ml.PreviewImageID(msg)
 	img, _ := ml.cachedImage(id)
 	bb := img.Bounds()
@@ -573,7 +573,7 @@ func (ml *MessageList) renderItem(i int, selected bool) []string {
 // renderGroupBubble draws a collapsed album: a mosaic grid when the album grids,
 // otherwise the vertical stack. renderMosaic itself falls back to renderGroupStack
 // when the plan says not to grid.
-func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) []string {
+func (ml *MessageList) renderGroupBubble(parts []domain.Message, selected bool) []string {
 	return ml.renderMosaic(parts, selected)
 }
 
@@ -583,7 +583,7 @@ func (ml *MessageList) renderGroupBubble(parts []store.Message, selected bool) [
 // between adjacent parts, then the shared caption. Previews are scaled down by
 // albumImageRows so the album never spans several screens. It must stay in
 // lock-step with groupHeightStack; TestGroupHeightMatchesRender guards that.
-func (ml *MessageList) renderGroupStack(parts []store.Message, selected bool) []string {
+func (ml *MessageList) renderGroupStack(parts []domain.Message, selected bool) []string {
 	media := groupMediaParts(parts)
 	anchor := parts[0]
 	caption := albumCaption(parts)
@@ -667,7 +667,7 @@ func (ml *MessageList) renderGroupStack(parts []store.Message, selected bool) []
 // not-yet-transmitted rows with blanks so the height is stable while a Kitty
 // placement is still in flight (issue #115). Caller must have verified
 // albumPartHasCachedArt.
-func (ml *MessageList) groupPartArt(msg store.Message, budget int, badge string, m bubbleMetrics) []string {
+func (ml *MessageList) groupPartArt(msg domain.Message, budget int, badge string, m bubbleMetrics) []string {
 	b, bs := m.b, m.bs
 	reserve := ml.albumPartRows(budget, msg)
 	id, _ := ml.PreviewImageID(msg)
@@ -709,7 +709,7 @@ func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
 
 // captionLines wraps the album caption inside the bubble borders, matching the
 // text path of bubbleContentLines.
-func (ml *MessageList) captionLines(text string, entities []store.MessageEntity, m bubbleMetrics, wrapW int) []string {
+func (ml *MessageList) captionLines(text string, entities []domain.MessageEntity, m bubbleMetrics, wrapW int) []string {
 	b, bs := m.b, m.bs
 	rendered := RenderEntities(text, entities)
 	wrapStyle := lipgloss.NewStyle().Width(wrapW)

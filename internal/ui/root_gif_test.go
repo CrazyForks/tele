@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -45,10 +46,10 @@ func TestHandleGifTick_AdvancesAndWraps(t *testing.T) {
 func TestEnsureGifAnimForSelection_NoopWhenAlreadyActive(t *testing.T) {
 	m := NewRootModel(nil, store.NewMemory(), 50, false)
 	m.imageMode = media.ModeKitty
-	m.chat.SetMessages([]store.Message{{
+	m.chat.SetMessages([]domain.Message{{
 		ID:       1,
-		Media:    &store.MediaRef{Kind: store.MediaGIF},
-		Document: &store.DocumentRef{ID: 55, ThumbSize: "m"},
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: 55, ThumbSize: "m"},
 	}})
 	m.gifActiveID = 55 // already animating/downloading this gif
 
@@ -60,10 +61,10 @@ func TestEnsureGifAnimForSelection_NoopWhenAlreadyActive(t *testing.T) {
 func TestEnsureGifAnimForSelection_NoopForNonGif(t *testing.T) {
 	m := NewRootModel(nil, store.NewMemory(), 50, false)
 	m.imageMode = media.ModeKitty
-	m.chat.SetMessages([]store.Message{{
+	m.chat.SetMessages([]domain.Message{{
 		ID:    1,
-		Media: &store.MediaRef{Kind: store.MediaPhoto},
-		Photo: &store.PhotoRef{ID: 9},
+		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo: &domain.PhotoRef{ID: 9},
 	}})
 
 	nm, cmd := m.ensureGifAnimForSelection()
@@ -77,7 +78,7 @@ func TestOpenChat_ClearsGifFrames(t *testing.T) {
 
 	// Switching chats must drop decoded frames so the memory is released and
 	// does not accumulate across chats.
-	nm, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 9, Peer: store.Peer{ID: 9, Type: store.PeerUser}}})
+	nm, _ := m.Update(screens.OpenChatMsg{Chat: domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}}})
 	rm := nm.(RootModel)
 	assert.Empty(t, rm.gifFrames, "switching chats must clear the gif frame cache")
 }

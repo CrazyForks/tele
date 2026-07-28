@@ -1,11 +1,14 @@
 package state
 
-import "github.com/sorokin-vladimir/tele/internal/store"
+import (
+	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
+)
 
 // ApplyIncoming records a newly received message. The second result reports
 // whether the client needs to hear about it at all; Change.UnreadChanged
 // separately reports whether a counter moved.
-func (s *State) ApplyIncoming(msg store.Message) (Change, bool) {
+func (s *State) ApplyIncoming(msg domain.Message) (Change, bool) {
 	unreadChanged := store.ApplyIncomingMessage(s.st, msg)
 	c := Change{
 		Kind:          ChangeNewMessage,
@@ -36,7 +39,7 @@ func (s *State) ApplyIncoming(msg store.Message) (Change, bool) {
 // time and edit_hide is false because the "edited" label should keep showing.
 // Text and reactions are not alternatives, and treating them as such dropped
 // those reactions until the chat was reopened (#199).
-func (s *State) ApplyEdit(msg store.Message) (Change, bool) {
+func (s *State) ApplyEdit(msg domain.Message) (Change, bool) {
 	if msg.EditDate == nil {
 		return s.ApplyReactions(msg.ChatID, msg.ID, msg.Reactions, msg.HasUnreadReactions)
 	}
@@ -60,7 +63,7 @@ func (s *State) ApplyEdit(msg store.Message) (Change, bool) {
 
 // ApplyReactions records the current reaction set for a message and tracks
 // whether the chat's unread-reaction count moved.
-func (s *State) ApplyReactions(chatID int64, msgID int, r []store.Reaction, unread bool) (Change, bool) {
+func (s *State) ApplyReactions(chatID int64, msgID int, r []domain.Reaction, unread bool) (Change, bool) {
 	s.st.UpdateMessageReactions(chatID, msgID, r)
 	changed := false
 	if unread {

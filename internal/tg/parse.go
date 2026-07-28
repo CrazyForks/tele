@@ -6,8 +6,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 func buildNameMap(users []tg.UserClass) map[int64]string {
@@ -57,7 +56,7 @@ func buildChatNameMap(chats []tg.ChatClass) map[int64]string {
 // resolve maps an origin peer id to a display name; it may return "" when the
 // peer is not present in the entity set. Resolution order: origin peer name,
 // then the saved FromName (hidden senders), then the channel post author.
-func forwardInfo(fwd tg.MessageFwdHeader, resolve func(int64) string) *store.ForwardInfo {
+func forwardInfo(fwd tg.MessageFwdHeader, resolve func(int64) string) *domain.ForwardInfo {
 	from := ""
 	if id, ok := fwd.GetFromID(); ok {
 		from = resolve(peerIDFromPeer(id))
@@ -72,20 +71,20 @@ func forwardInfo(fwd tg.MessageFwdHeader, resolve func(int64) string) *store.For
 			from = author
 		}
 	}
-	return &store.ForwardInfo{From: from}
+	return &domain.ForwardInfo{From: from}
 }
 
 // selectMessageByID returns the message with the given id from a parsed slice.
-func selectMessageByID(msgs []store.Message, id int) (store.Message, bool) {
+func selectMessageByID(msgs []domain.Message, id int) (domain.Message, bool) {
 	for _, m := range msgs {
 		if m.ID == id {
 			return m, true
 		}
 	}
-	return store.Message{}, false
+	return domain.Message{}, false
 }
 
-func parseHistory(result tg.MessagesMessagesClass, chatID int64) []store.Message {
+func parseHistory(result tg.MessagesMessagesClass, chatID int64) []domain.Message {
 	var rawMsgs []tg.MessageClass
 	var rawUsers []tg.UserClass
 	var rawChats []tg.ChatClass
@@ -104,7 +103,7 @@ func parseHistory(result tg.MessagesMessagesClass, chatID int64) []store.Message
 	nameMap := buildNameMap(rawUsers)
 	chatNameMap := buildChatNameMap(rawChats)
 
-	out := make([]store.Message, 0, len(rawMsgs))
+	out := make([]domain.Message, 0, len(rawMsgs))
 	for _, raw := range rawMsgs {
 		if msg, ok := convertMessage(raw, chatID); ok {
 			msg.SenderName = nameMap[msg.SenderID]
@@ -171,27 +170,27 @@ func pickThumbSize(sizes []tg.PhotoSizeClass) string {
 
 // classifyMedia maps a Telegram media object to a display-level MediaRef.
 // Returns nil when there is no media to show.
-func classifyMedia(media tg.MessageMediaClass) *store.MediaRef {
+func classifyMedia(media tg.MessageMediaClass) *domain.MediaRef {
 	switch m := media.(type) {
 	case *tg.MessageMediaPhoto:
-		return &store.MediaRef{Kind: store.MediaPhoto}
+		return &domain.MediaRef{Kind: domain.MediaPhoto}
 	case *tg.MessageMediaDocument:
 		return classifyDocument(m)
 	case *tg.MessageMediaGeo, *tg.MessageMediaGeoLive, *tg.MessageMediaVenue:
-		return &store.MediaRef{Kind: store.MediaLocation}
+		return &domain.MediaRef{Kind: domain.MediaLocation}
 	case nil:
 		return nil
 	default:
-		return &store.MediaRef{Kind: store.MediaOther}
+		return &domain.MediaRef{Kind: domain.MediaOther}
 	}
 }
 
 // classifyDocument inspects document attributes by strict priority to decide
 // the media kind. A document can carry several attributes at once.
-func classifyDocument(m *tg.MessageMediaDocument) *store.MediaRef {
+func classifyDocument(m *tg.MessageMediaDocument) *domain.MediaRef {
 	doc, ok := m.Document.(*tg.Document)
 	if !ok {
-		return &store.MediaRef{Kind: store.MediaOther}
+		return &domain.MediaRef{Kind: domain.MediaOther}
 	}
 	var (
 		sticker  *tg.DocumentAttributeSticker
@@ -213,35 +212,35 @@ func classifyDocument(m *tg.MessageMediaDocument) *store.MediaRef {
 	}
 	switch {
 	case sticker != nil:
-		return &store.MediaRef{Kind: store.MediaSticker, Emoji: sticker.Alt}
+		return &domain.MediaRef{Kind: domain.MediaSticker, Emoji: sticker.Alt}
 	case animated:
-		return &store.MediaRef{Kind: store.MediaGIF}
+		return &domain.MediaRef{Kind: domain.MediaGIF}
 	case video != nil && video.RoundMessage:
-		return &store.MediaRef{Kind: store.MediaVideoNote, Duration: int(video.Duration)}
+		return &domain.MediaRef{Kind: domain.MediaVideoNote, Duration: int(video.Duration)}
 	case video != nil:
-		return &store.MediaRef{Kind: store.MediaVideo, Duration: int(video.Duration)}
+		return &domain.MediaRef{Kind: domain.MediaVideo, Duration: int(video.Duration)}
 	case audio != nil && audio.Voice:
-		return &store.MediaRef{
-			Kind:     store.MediaVoice,
+		return &domain.MediaRef{
+			Kind:     domain.MediaVoice,
 			Duration: audio.Duration,
 			Waveform: audio.Waveform,
 		}
 	case audio != nil:
-		return &store.MediaRef{
-			Kind:      store.MediaAudio,
+		return &domain.MediaRef{
+			Kind:      domain.MediaAudio,
 			Duration:  audio.Duration,
 			Title:     audio.Title,
 			Performer: audio.Performer,
 		}
 	default:
-		return &store.MediaRef{Kind: store.MediaFile}
+		return &domain.MediaRef{Kind: domain.MediaFile}
 	}
 }
 
 // buildDocumentRef builds a download-capable reference from a Telegram document,
 // picking the best thumbnail PhotoSize and the filename attribute when present.
-func buildDocumentRef(doc *tg.Document) *store.DocumentRef {
-	ref := &store.DocumentRef{
+func buildDocumentRef(doc *tg.Document) *domain.DocumentRef {
+	ref := &domain.DocumentRef{
 		ID:            doc.ID,
 		AccessHash:    doc.AccessHash,
 		FileReference: doc.FileReference,
@@ -259,16 +258,16 @@ func buildDocumentRef(doc *tg.Document) *store.DocumentRef {
 	return ref
 }
 
-func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
+func convertMessage(raw tg.MessageClass, chatID int64) (domain.Message, bool) {
 	msg, ok := raw.(*tg.Message)
 	if !ok {
-		return store.Message{}, false
+		return domain.Message{}, false
 	}
 	senderID := int64(0)
 	if from, ok := msg.FromID.(*tg.PeerUser); ok {
 		senderID = from.UserID
 	}
-	out := store.Message{
+	out := domain.Message{
 		ID:       msg.ID,
 		ChatID:   chatID,
 		SenderID: senderID,
@@ -298,7 +297,7 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 		if photo, ok := media.Photo.(*tg.Photo); ok && len(photo.Sizes) > 0 {
 			thumb := pickThumbSize(photo.Sizes)
 			if thumb != "" {
-				out.Photo = &store.PhotoRef{
+				out.Photo = &domain.PhotoRef{
 					ID:            photo.ID,
 					AccessHash:    photo.AccessHash,
 					FileReference: photo.FileReference,
@@ -359,15 +358,15 @@ func newestUnreadReaction(mr tg.MessageReactions) (emoji string, date time.Time,
 	return "", date, true
 }
 
-func convertReactions(mr tg.MessageReactions) []store.Reaction {
-	out := make([]store.Reaction, 0, len(mr.Results))
+func convertReactions(mr tg.MessageReactions) []domain.Reaction {
+	out := make([]domain.Reaction, 0, len(mr.Results))
 	for _, rc := range mr.Results {
 		emoji, ok := rc.Reaction.(*tg.ReactionEmoji)
 		if !ok {
 			continue
 		}
 		_, isChosen := rc.GetChosenOrder()
-		out = append(out, store.Reaction{
+		out = append(out, domain.Reaction{
 			Emoji:    emoji.Emoticon,
 			Count:    rc.Count,
 			IsChosen: isChosen,
@@ -376,45 +375,45 @@ func convertReactions(mr tg.MessageReactions) []store.Reaction {
 	return out
 }
 
-func convertEntities(entities []tg.MessageEntityClass) []store.MessageEntity {
+func convertEntities(entities []tg.MessageEntityClass) []domain.MessageEntity {
 	if len(entities) == 0 {
 		return nil
 	}
-	out := make([]store.MessageEntity, 0, len(entities))
+	out := make([]domain.MessageEntity, 0, len(entities))
 	for _, e := range entities {
 		switch v := e.(type) {
 		case *tg.MessageEntityBold:
-			out = append(out, store.MessageEntity{Type: "bold", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "bold", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityItalic:
-			out = append(out, store.MessageEntity{Type: "italic", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "italic", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityCode:
-			out = append(out, store.MessageEntity{Type: "code", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "code", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityPre:
-			out = append(out, store.MessageEntity{Type: "pre", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "pre", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityStrike:
-			out = append(out, store.MessageEntity{Type: "strike", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "strike", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityUnderline:
-			out = append(out, store.MessageEntity{Type: "underline", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "underline", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityTextURL:
-			out = append(out, store.MessageEntity{Type: "text_url", Offset: v.Offset, Length: v.Length, URL: v.URL})
+			out = append(out, domain.MessageEntity{Type: "text_url", Offset: v.Offset, Length: v.Length, URL: v.URL})
 		case *tg.MessageEntityURL:
-			out = append(out, store.MessageEntity{Type: "url", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "url", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityEmail:
-			out = append(out, store.MessageEntity{Type: "email", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "email", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityPhone:
-			out = append(out, store.MessageEntity{Type: "phone", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "phone", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityBankCard:
-			out = append(out, store.MessageEntity{Type: "bank_card", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "bank_card", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityMention:
-			out = append(out, store.MessageEntity{Type: "mention", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "mention", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityMentionName:
-			out = append(out, store.MessageEntity{Type: "mention_name", Offset: v.Offset, Length: v.Length, UserID: v.UserID})
+			out = append(out, domain.MessageEntity{Type: "mention_name", Offset: v.Offset, Length: v.Length, UserID: v.UserID})
 		case *tg.MessageEntityHashtag:
-			out = append(out, store.MessageEntity{Type: "hashtag", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "hashtag", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityCashtag:
-			out = append(out, store.MessageEntity{Type: "cashtag", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "cashtag", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityBotCommand:
-			out = append(out, store.MessageEntity{Type: "bot_command", Offset: v.Offset, Length: v.Length})
+			out = append(out, domain.MessageEntity{Type: "bot_command", Offset: v.Offset, Length: v.Length})
 		}
 	}
 	return out

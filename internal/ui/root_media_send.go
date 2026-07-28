@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/gotd/td/tg"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
@@ -31,7 +31,7 @@ type sentMediaConfirmedMsg struct {
 type sentMediaRefreshedMsg struct {
 	chatID    int64
 	msgID     int
-	refreshed store.Message
+	refreshed domain.Message
 	ok        bool
 }
 
@@ -39,13 +39,13 @@ type sentMediaRefreshedMsg struct {
 // buildMedia are media-specific; #107 (video) and #129 (document) reuse the
 // engine by supplying a different kind + builder.
 type mediaSendJob struct {
-	peer         store.Peer
+	peer         domain.Peer
 	path         string
 	name         string
 	size         int64
-	kind         store.MediaKind
+	kind         domain.MediaKind
 	caption      string
-	entities     []store.MessageEntity
+	entities     []domain.MessageEntity
 	replyToMsgID int
 	buildMedia   func(tg.InputFileClass) tg.InputMediaClass
 	// buildMediaCtx, when set, takes precedence over buildMedia. It runs inside the
@@ -60,9 +60,9 @@ type mediaSendJob struct {
 // (#108) and round (#109) add their cases here. ok=false means not yet supported.
 func mediaBuilderFor(att *pendingAttachment) (func(tg.InputFileClass) tg.InputMediaClass, bool) {
 	switch att.sendAs {
-	case store.MediaPhoto:
+	case domain.MediaPhoto:
 		return internaltg.BuildInputMediaUploadedPhoto, true
-	case store.MediaFile:
+	case domain.MediaFile:
 		name, mime := att.name, att.mime
 		return func(f tg.InputFileClass) tg.InputMediaClass {
 			return internaltg.BuildInputMediaUploadedDocument(f, name, mime)
@@ -79,7 +79,7 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 	m.nextSentinel--
 	sentinelID := m.nextSentinel
 	chatID := m.currentChatID
-	sentinel := store.Message{
+	sentinel := domain.Message{
 		ID:           sentinelID,
 		ChatID:       chatID,
 		Text:         job.caption,
@@ -87,12 +87,12 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 		Date:         time.Now(),
 		IsOut:        true,
 		ReplyToMsgID: job.replyToMsgID,
-		LocalMedia: &store.LocalMedia{
+		LocalMedia: &domain.LocalMedia{
 			Path:        job.path,
 			Kind:        job.kind,
 			FileName:    job.name,
 			Size:        job.size,
-			UploadState: store.UploadUploading,
+			UploadState: domain.UploadUploading,
 		},
 	}
 	m.st.AppendMessage(sentinel)
@@ -213,7 +213,7 @@ func (m RootModel) handleSentMediaConfirmed(msg sentMediaConfirmedMsg) (RootMode
 // refreshSentMediaCmd re-fetches a just-sent message to obtain the server's media
 // refs (the echoed update is suppressed). On error it still reports ok=false so
 // the handler can clear the upload placeholder.
-func refreshSentMediaCmd(ctx context.Context, client internaltg.Client, peer store.Peer, chatID int64, msgID int) tea.Cmd {
+func refreshSentMediaCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, chatID int64, msgID int) tea.Cmd {
 	return func() tea.Msg {
 		refreshed, err := client.RefreshMessage(ctx, peer, msgID)
 		if err != nil {
@@ -243,7 +243,7 @@ func (m RootModel) handleSentMediaRefreshed(msg sentMediaRefreshedMsg) (RootMode
 	// Trigger the image download so the photo renders inline.
 	for _, mm := range m.st.Messages(msg.chatID) {
 		if mm.ID == msg.msgID {
-			return m, m.pendingDownloadCmds([]store.Message{mm})
+			return m, m.pendingDownloadCmds([]domain.Message{mm})
 		}
 	}
 	return m, nil

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 func mustDate(s string) time.Time {
@@ -18,7 +18,7 @@ func mustDate(s string) time.Time {
 	return t
 }
 
-func ids(groups [][]store.Message) [][]int {
+func ids(groups [][]domain.Message) [][]int {
 	out := make([][]int, len(groups))
 	for i, g := range groups {
 		for _, m := range g {
@@ -31,12 +31,12 @@ func ids(groups [][]store.Message) [][]int {
 func TestGroupParts(t *testing.T) {
 	cases := []struct {
 		name string
-		in   []store.Message
+		in   []domain.Message
 		want [][]int
 	}{
 		{
 			name: "no albums: each message is its own group",
-			in: []store.Message{
+			in: []domain.Message{
 				{ID: 1, SenderID: 7},
 				{ID: 2, SenderID: 7},
 			},
@@ -44,7 +44,7 @@ func TestGroupParts(t *testing.T) {
 		},
 		{
 			name: "contiguous same-sender album coalesces",
-			in: []store.Message{
+			in: []domain.Message{
 				{ID: 1, SenderID: 7, GroupedID: 100},
 				{ID: 2, SenderID: 7, GroupedID: 100},
 				{ID: 3, SenderID: 7, GroupedID: 100},
@@ -53,7 +53,7 @@ func TestGroupParts(t *testing.T) {
 		},
 		{
 			name: "album bounded by a plain message",
-			in: []store.Message{
+			in: []domain.Message{
 				{ID: 1, SenderID: 7, GroupedID: 100},
 				{ID: 2, SenderID: 7, GroupedID: 100},
 				{ID: 3, SenderID: 7},
@@ -62,7 +62,7 @@ func TestGroupParts(t *testing.T) {
 		},
 		{
 			name: "different grouped_id does not merge",
-			in: []store.Message{
+			in: []domain.Message{
 				{ID: 1, SenderID: 7, GroupedID: 100},
 				{ID: 2, SenderID: 7, GroupedID: 200},
 			},
@@ -70,7 +70,7 @@ func TestGroupParts(t *testing.T) {
 		},
 		{
 			name: "same grouped_id but different sender does not merge",
-			in: []store.Message{
+			in: []domain.Message{
 				{ID: 1, SenderID: 7, GroupedID: 100},
 				{ID: 2, SenderID: 8, GroupedID: 100},
 			},
@@ -78,7 +78,7 @@ func TestGroupParts(t *testing.T) {
 		},
 		{
 			name: "single remaining part renders as a normal group of one",
-			in: []store.Message{
+			in: []domain.Message{
 				{ID: 1, SenderID: 7, GroupedID: 100},
 			},
 			want: [][]int{{1}},
@@ -106,7 +106,7 @@ func TestGroupParts(t *testing.T) {
 
 func TestBuildItemsGroupsAlbum(t *testing.T) {
 	ml := NewMessageList(20, 40)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, SenderID: 7, GroupedID: 100, Date: mustDate("2026-07-24T10:00:00Z")},
 		{ID: 2, SenderID: 7, GroupedID: 100, Date: mustDate("2026-07-24T10:00:00Z")},
 		{ID: 3, SenderID: 7, GroupedID: 100, Date: mustDate("2026-07-24T10:00:00Z")},
@@ -122,10 +122,10 @@ func TestBuildItemsGroupsAlbum(t *testing.T) {
 }
 
 func TestGroupMediaParts(t *testing.T) {
-	parts := []store.Message{
-		{ID: 1, Photo: &store.PhotoRef{ID: 11}},
+	parts := []domain.Message{
+		{ID: 1, Photo: &domain.PhotoRef{ID: 11}},
 		{ID: 2, Text: "no media"},
-		{ID: 3, Photo: &store.PhotoRef{ID: 33}},
+		{ID: 3, Photo: &domain.PhotoRef{ID: 33}},
 	}
 	got := groupMediaParts(parts)
 	if len(got) != 2 {
@@ -141,11 +141,11 @@ func TestGroupMediaParts(t *testing.T) {
 
 func TestAlbumImageRowsScalesDown(t *testing.T) {
 	ml := NewMessageList(24, 60) // viewHeight 24
-	photo := func(id int64) store.Message {
-		return store.Message{ID: int(id), GroupedID: 100, Photo: &store.PhotoRef{ID: id}}
+	photo := func(id int64) domain.Message {
+		return domain.Message{ID: int(id), GroupedID: 100, Photo: &domain.PhotoRef{ID: id}}
 	}
-	one := ml.albumImageRows([]store.Message{photo(1)})
-	many := ml.albumImageRows([]store.Message{photo(1), photo(2), photo(3), photo(4)})
+	one := ml.albumImageRows([]domain.Message{photo(1)})
+	many := ml.albumImageRows([]domain.Message{photo(1), photo(2), photo(3), photo(4)})
 	if many >= one {
 		t.Fatalf("per-part rows did not shrink: one=%d many=%d", one, many)
 	}
@@ -162,11 +162,11 @@ func TestGroupHeightBoundedByBudget(t *testing.T) {
 	for _, id := range []int64{1, 2, 3, 4} {
 		ml.SetImage(id, image.NewRGBA(image.Rect(0, 0, 600, 800))) // 3:4 portrait
 	}
-	parts := []store.Message{
-		{ID: 1, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 1}},
-		{ID: 2, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 2}},
-		{ID: 3, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 3}},
-		{ID: 4, GroupedID: 100, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 4}, Text: "album caption"},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 100, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 1}},
+		{ID: 2, GroupedID: 100, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 2}},
+		{ID: 3, GroupedID: 100, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 3}},
+		{ID: 4, GroupedID: 100, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 4}, Text: "album caption"},
 	}
 	h := ml.groupHeight(parts)
 	if h > ml.viewHeight {
@@ -179,9 +179,9 @@ func TestGroupHeightBoundedByBudget(t *testing.T) {
 
 func TestRenderGroupBubbleShowsBadgesAndCaption(t *testing.T) {
 	ml := NewMessageList(24, 60)
-	parts := []store.Message{
-		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 1}},
-		{ID: 2, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 2}, Text: "hi album"},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 1}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 2}, Text: "hi album"},
 	}
 	out := strings.Join(ml.renderGroupBubble(parts, false), "\n")
 	if !strings.Contains(out, "[1]") || !strings.Contains(out, "[2]") {
@@ -194,10 +194,10 @@ func TestRenderGroupBubbleShowsBadgesAndCaption(t *testing.T) {
 
 func TestGroupHeightMatchesRender(t *testing.T) {
 	ml := NewMessageList(24, 60)
-	parts := []store.Message{
-		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 1}},
-		{ID: 2, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 2}},
-		{ID: 3, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 3}, Text: "cap"},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 1}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 2}},
+		{ID: 3, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 3}, Text: "cap"},
 	}
 	want := ml.groupHeight(parts)
 	got := len(ml.renderGroupBubble(parts, false))
@@ -208,13 +208,13 @@ func TestGroupHeightMatchesRender(t *testing.T) {
 
 func TestRenderGroupBubbleFileRows(t *testing.T) {
 	ml := NewMessageList(24, 70)
-	parts := []store.Message{
+	parts := []domain.Message{
 		{ID: 1, GroupedID: 100, SenderID: 7,
-			Media:    &store.MediaRef{Kind: store.MediaFile, FileName: "report.pdf", Size: 2048},
-			Document: &store.DocumentRef{ID: 1, FileName: "report.pdf"}},
+			Media:    &domain.MediaRef{Kind: domain.MediaFile, FileName: "report.pdf", Size: 2048},
+			Document: &domain.DocumentRef{ID: 1, FileName: "report.pdf"}},
 		{ID: 2, GroupedID: 100, SenderID: 7,
-			Media:    &store.MediaRef{Kind: store.MediaFile, FileName: "data.csv", Size: 4096},
-			Document: &store.DocumentRef{ID: 2, FileName: "data.csv"}},
+			Media:    &domain.MediaRef{Kind: domain.MediaFile, FileName: "data.csv", Size: 4096},
+			Document: &domain.DocumentRef{ID: 2, FileName: "data.csv"}},
 	}
 	out := strings.Join(ml.renderGroupBubble(parts, false), "\n")
 	if !strings.Contains(out, "report.pdf") || !strings.Contains(out, "data.csv") {
@@ -227,11 +227,11 @@ func TestRenderGroupBubbleFileRows(t *testing.T) {
 
 func TestRenderGroupBubbleBadgeShowsTypeAndContext(t *testing.T) {
 	ml := NewMessageList(24, 70)
-	parts := []store.Message{
-		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 1}},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 1}},
 		{ID: 2, GroupedID: 100, SenderID: 7,
-			Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 34},
-			Document: &store.DocumentRef{ID: 2}},
+			Media:    &domain.MediaRef{Kind: domain.MediaVideo, Duration: 34},
+			Document: &domain.DocumentRef{ID: 2}},
 	}
 	out := strings.Join(ml.renderGroupBubble(parts, false), "\n")
 	if !strings.Contains(out, "[1] 📷 photo") {
@@ -244,9 +244,9 @@ func TestRenderGroupBubbleBadgeShowsTypeAndContext(t *testing.T) {
 
 func TestRenderGroupBubbleBlankLineBetweenItems(t *testing.T) {
 	ml := NewMessageList(24, 60)
-	parts := []store.Message{
-		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 1}},
-		{ID: 2, GroupedID: 100, SenderID: 7, Photo: &store.PhotoRef{ID: 2}},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 1}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Photo: &domain.PhotoRef{ID: 2}},
 	}
 	// A two-part album with no caption must reserve exactly one more line than the
 	// same album rendered without an inter-item separator would: badges + previews
@@ -266,11 +266,11 @@ func TestAlbumPreviewDownscalesNotCrops(t *testing.T) {
 	tall := image.NewRGBA(image.Rect(0, 0, 400, 2000))
 	ml.SetImage(11, tall)
 
-	parts := []store.Message{
+	parts := []domain.Message{
 		{ID: 1, GroupedID: 100, SenderID: 7,
-			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 11}},
 		{ID: 2, GroupedID: 100, SenderID: 7,
-			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 12}},
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 12}},
 	}
 
 	budget := ml.albumImageRows(parts)
@@ -290,10 +290,10 @@ func TestAlbumPreviewDownscalesNotCrops(t *testing.T) {
 func TestAlbumPhotoBoxStableWhenSiblingVideoLoads(t *testing.T) {
 	ml := NewMessageList(24, 80)
 	ml.SetImage(11, image.NewRGBA(image.Rect(0, 0, 400, 300))) // photo already cached
-	parts := []store.Message{
-		{ID: 1, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
-		{ID: 2, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaVideo}, Document: &store.DocumentRef{ID: 22, ThumbSize: "m"}},
-		{ID: 3, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 33}},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaVideo}, Document: &domain.DocumentRef{ID: 22, ThumbSize: "m"}},
+		{ID: 3, GroupedID: 100, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 33}},
 	}
 	ml.SetMessages(parts)
 
@@ -312,9 +312,9 @@ func TestAlbumBadgeFoldedOntoCachedArt(t *testing.T) {
 	ml := NewMessageList(24, 80)
 	ml.SetImage(11, image.NewRGBA(image.Rect(0, 0, 400, 300)))
 	ml.SetImage(22, image.NewRGBA(image.Rect(0, 0, 400, 300)))
-	parts := []store.Message{
-		{ID: 1, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 11}},
-		{ID: 2, GroupedID: 100, SenderID: 7, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 22}},
+	parts := []domain.Message{
+		{ID: 1, GroupedID: 100, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 11}},
+		{ID: 2, GroupedID: 100, SenderID: 7, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 22}},
 	}
 	// Vertical-stack layout specifically (the grid fallback): badge folds onto row 0.
 	out := ml.renderGroupStack(parts, false)
@@ -343,12 +343,12 @@ func TestAlbumBubbleLinesEqualWidthNarrowPane(t *testing.T) {
 	ml := NewMessageList(30, 22)
 	ml.SetImage(11, image.NewRGBA(image.Rect(0, 0, 320, 240))) // video thumb cached
 	ml.SetImage(22, image.NewRGBA(image.Rect(0, 0, 600, 800))) // photo cached
-	parts := []store.Message{
+	parts := []domain.Message{
 		{ID: 1, GroupedID: 100, SenderID: 7,
-			Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 12},
-			Document: &store.DocumentRef{ID: 11, ThumbSize: "m"}},
+			Media:    &domain.MediaRef{Kind: domain.MediaVideo, Duration: 12},
+			Document: &domain.DocumentRef{ID: 11, ThumbSize: "m"}},
 		{ID: 2, GroupedID: 100, SenderID: 7,
-			Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 22}},
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 22}},
 	}
 	lines := ml.renderGroupBubble(parts, false)
 	w0 := lipgloss.Width(lines[0])

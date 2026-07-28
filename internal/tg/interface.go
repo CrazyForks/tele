@@ -6,27 +6,28 @@ import (
 	"io"
 
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // Client is the interface for all Telegram operations.
 // All callers (ui, app) depend on this interface, not on gotd directly.
 type Client interface {
-	GetDialogs(ctx context.Context) ([]store.Chat, error)
+	GetDialogs(ctx context.Context) ([]domain.Chat, error)
 	// SearchContacts queries Telegram (contacts.search) for users matching q,
-	// returning matches as store.Chat with valid peers. Phase 1: users only.
-	SearchContacts(ctx context.Context, q string, limit int) ([]store.Chat, error)
-	GetDialogFilters(ctx context.Context) ([]store.FolderFilter, error)
-	GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error)
+	// returning matches as domain.Chat with valid peers. Phase 1: users only.
+	SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error)
+	GetDialogFilters(ctx context.Context) ([]domain.FolderFilter, error)
+	GetHistory(ctx context.Context, peer domain.Peer, offsetID int, limit int) ([]domain.Message, error)
 	// RefreshMessage re-fetches a single message to obtain fresh media file
 	// references (Telegram FileReferences expire).
-	RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error)
+	RefreshMessage(ctx context.Context, peer domain.Peer, msgID int) (domain.Message, error)
 	// RefreshMessages re-fetches several messages in one round-trip, for the
 	// media refs and grouped_id of a just-sent album.
-	RefreshMessages(ctx context.Context, peer store.Peer, ids []int) ([]store.Message, error)
-	SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error)
+	RefreshMessages(ctx context.Context, peer domain.Peer, ids []int) ([]domain.Message, error)
+	SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) (int, error)
 	// GetParticipants returns mention candidates for a group/channel peer.
-	GetParticipants(ctx context.Context, peer store.Peer) ([]store.ChatMember, error)
+	GetParticipants(ctx context.Context, peer domain.Peer) ([]domain.ChatMember, error)
 	// SendMedia sends a ready-made InputMediaClass via messages.sendMedia,
 	// returning the confirmed message ID. It is type-agnostic: the caller builds
 	// the InputMedia (photo/document/...); SendMedia knows nothing about MIME.
@@ -41,55 +42,55 @@ type Client interface {
 	// UploadMedia converts an uploaded InputFile into a server-side media ref
 	// (messages.uploadMedia). Album parts require it: messages.sendMultiMedia
 	// rejects raw inputMediaUploaded* constructors.
-	UploadMedia(ctx context.Context, peer store.Peer, media tg.InputMediaClass) (tg.InputMediaClass, error)
-	MarkRead(ctx context.Context, peer store.Peer, maxID int) error
+	UploadMedia(ctx context.Context, peer domain.Peer, media tg.InputMediaClass) (tg.InputMediaClass, error)
+	MarkRead(ctx context.Context, peer domain.Peer, maxID int) error
 	// MarkDialogUnread sets or clears the manual unread mark on a dialog.
-	MarkDialogUnread(ctx context.Context, peer store.Peer, unread bool) error
+	MarkDialogUnread(ctx context.Context, peer domain.Peer, unread bool) error
 	// ReadReactions marks all unread reactions in a dialog as read
 	// (messages.readReactions), clearing the unread-reaction indicator server-side.
-	ReadReactions(ctx context.Context, peer store.Peer) error
+	ReadReactions(ctx context.Context, peer domain.Peer) error
 	// ReadMentions marks all unread mentions in a dialog as read
 	// (messages.readMentions), clearing the unread-mention indicator server-side.
-	ReadMentions(ctx context.Context, peer store.Peer) error
+	ReadMentions(ctx context.Context, peer domain.Peer) error
 	// SetMuted mutes (indefinitely) or unmutes a peer's notifications.
-	SetMuted(ctx context.Context, peer store.Peer, muted bool) error
+	SetMuted(ctx context.Context, peer domain.Peer, muted bool) error
 	// AddToFolder adds or removes a peer from an existing dialog filter's
 	// include list.
-	AddToFolder(ctx context.Context, filterID int, peer store.Peer, add bool) error
+	AddToFolder(ctx context.Context, filterID int, peer domain.Peer, add bool) error
 	// GetArchivedDialogs fetches dialogs in the built-in Archive folder
 	// (folder_id 1); every returned chat has IsArchived set.
-	GetArchivedDialogs(ctx context.Context) ([]store.Chat, error)
+	GetArchivedDialogs(ctx context.Context) ([]domain.Chat, error)
 	// SetArchived moves a peer into (archived) or out of the Archive folder.
-	SetArchived(ctx context.Context, peer store.Peer, archived bool) error
-	DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error)
+	SetArchived(ctx context.Context, peer domain.Peer, archived bool) error
+	DownloadPhoto(ctx context.Context, ref domain.PhotoRef) (image.Image, error)
 	// DownloadPhotoToFile streams the raw photo bytes (the size named by
 	// ref.ThumbSize) directly into dst, without decoding. Used to save a photo
 	// to disk at full quality without a lossy re-encode.
-	DownloadPhotoToFile(ctx context.Context, ref store.PhotoRef, dst io.Writer) error
+	DownloadPhotoToFile(ctx context.Context, ref domain.PhotoRef, dst io.Writer) error
 	// DownloadDocument fetches the full document file as raw bytes. Suitable
 	// only for small documents (e.g. voice messages); large files should use
 	// DownloadDocumentToFile to avoid buffering in memory.
-	DownloadDocument(ctx context.Context, ref store.DocumentRef) ([]byte, error)
+	DownloadDocument(ctx context.Context, ref domain.DocumentRef) ([]byte, error)
 	// DownloadDocumentToFile streams the full document directly into dst with
 	// bounded memory, regardless of file size.
-	DownloadDocumentToFile(ctx context.Context, ref store.DocumentRef, dst io.Writer) error
+	DownloadDocumentToFile(ctx context.Context, ref domain.DocumentRef, dst io.Writer) error
 	// DownloadDocumentThumb fetches and decodes the document's thumbnail
 	// (ref.ThumbSize) for an inline preview.
-	DownloadDocumentThumb(ctx context.Context, ref store.DocumentRef) (image.Image, error)
+	DownloadDocumentThumb(ctx context.Context, ref domain.DocumentRef) (image.Image, error)
 	// DownloadDocumentImage fetches the full document file and decodes it as an
 	// image (used for static WEBP stickers; streams the main file, not a thumb).
-	DownloadDocumentImage(ctx context.Context, ref store.DocumentRef) (image.Image, error)
-	DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error
-	EditMessage(ctx context.Context, peer store.Peer, msgID int, text string, entities []store.MessageEntity) error
+	DownloadDocumentImage(ctx context.Context, ref domain.DocumentRef) (image.Image, error)
+	DeleteMessages(ctx context.Context, peer domain.Peer, ids []int, revoke bool) error
+	EditMessage(ctx context.Context, peer domain.Peer, msgID int, text string, entities []domain.MessageEntity) error
 	// ForwardMessages forwards messages by ID from one peer to another via
 	// messages.forwardMessages. Returns ErrForwardRestricted when the source
 	// chat forbids forwarding (content protection).
-	ForwardMessages(ctx context.Context, from store.Peer, to store.Peer, ids []int) error
-	SendReaction(ctx context.Context, peer store.Peer, msgID int, emoji string) error
-	SetTyping(ctx context.Context, peer store.Peer, action store.TypingAction) error
+	ForwardMessages(ctx context.Context, from domain.Peer, to domain.Peer, ids []int) error
+	SendReaction(ctx context.Context, peer domain.Peer, msgID int, emoji string) error
+	SetTyping(ctx context.Context, peer domain.Peer, action domain.TypingAction) error
 	// SaveDraft persists (text != "") or clears (text == "") the message draft
 	// for a peer, synced with Telegram's other clients (#62).
-	SaveDraft(ctx context.Context, peer store.Peer, text string) error
+	SaveDraft(ctx context.Context, peer domain.Peer, text string) error
 	// Updates returns a channel of incoming Telegram events.
 	Updates() <-chan store.Event
 }

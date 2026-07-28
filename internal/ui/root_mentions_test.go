@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -16,7 +17,7 @@ import (
 func newRootOnGroupChat(t *testing.T, mc *mockTGClient) (ui.RootModel, store.Store) {
 	t.Helper()
 	st := store.NewMemory()
-	chat := store.Chat{ID: 5, Title: "Group", Peer: store.Peer{ID: 5, Type: store.PeerSuperGroup}}
+	chat := domain.Chat{ID: 5, Title: "Group", Peer: domain.Peer{ID: 5, Type: domain.PeerSuperGroup}}
 	st.SetChat(chat)
 	m := ui.NewRootModel(mc, st, 50, false).WithScreen(ui.ScreenMain)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -52,7 +53,7 @@ func typeKey(t *testing.T, m ui.RootModel, r rune) ui.RootModel {
 }
 
 func TestMentionPopupOpensAndInserts(t *testing.T) {
-	mc := &mockTGClient{participants: []store.ChatMember{
+	mc := &mockTGClient{participants: []domain.ChatMember{
 		{UserID: 7, Username: "alice", DisplayName: "Alice A"},
 		{UserID: 8, Username: "bob", DisplayName: "Bob B"},
 	}}
@@ -85,8 +86,8 @@ func TestMentionPopupOpensAndInserts(t *testing.T) {
 func TestOutgoingMentionSentinelCarriesEntities(t *testing.T) {
 	mc := &mockTGClient{}
 	m, st := newRootOnGroupChat(t, mc)
-	peer := store.Peer{ID: 5, Type: store.PeerSuperGroup}
-	ents := []store.MessageEntity{{Type: "mention_name", Offset: 0, Length: 5, UserID: 7, AccessHash: 8}}
+	peer := domain.Peer{ID: 5, Type: domain.PeerSuperGroup}
+	ents := []domain.MessageEntity{{Type: "mention_name", Offset: 0, Length: 5, UserID: 7, AccessHash: 8}}
 	nm, _ := m.Update(screens.SendMsgRequest{Peer: peer, Text: "@Ivan hi", Entities: ents})
 	_ = nm.(ui.RootModel)
 
@@ -101,7 +102,7 @@ func TestOutgoingMentionSentinelCarriesEntities(t *testing.T) {
 }
 
 func TestMentionPopupNotOpenedInPrivateChat(t *testing.T) {
-	mc := &mockTGClient{participants: []store.ChatMember{
+	mc := &mockTGClient{participants: []domain.ChatMember{
 		{UserID: 7, Username: "alice", DisplayName: "Alice A"},
 	}}
 	// newRootOnChat opens a 1:1 (PeerUser) chat.

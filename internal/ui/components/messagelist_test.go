@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func makeMessages(n int) []store.Message {
-	msgs := make([]store.Message, n)
+func makeMessages(n int) []domain.Message {
+	msgs := make([]domain.Message, n)
 	now := time.Now()
 	for i := range msgs {
-		msgs[i] = store.Message{ID: i + 1, ChatID: 1, Text: fmt.Sprintf("msg %d", i+1), Date: now}
+		msgs[i] = domain.Message{ID: i + 1, ChatID: 1, Text: fmt.Sprintf("msg %d", i+1), Date: now}
 	}
 	return msgs
 }
@@ -49,7 +49,7 @@ func TestMessageList_Count(t *testing.T) {
 
 func TestMessageList_SelectedBubbleRect_Incoming(t *testing.T) {
 	ml := components.NewMessageList(3, 40) // one message exactly fills the viewport
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	ml.View()
 
 	rect, ok := ml.SelectedBubbleRect()
@@ -62,7 +62,7 @@ func TestMessageList_SelectedBubbleRect_Incoming(t *testing.T) {
 
 func TestMessageList_SelectedBubbleRect_Outgoing(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
 	ml.View()
 
 	rect, ok := ml.SelectedBubbleRect()
@@ -92,8 +92,8 @@ func TestMessageList_ScrollUp_SmallMessage(t *testing.T) {
 func TestMessageList_ScrollUp_LineLevelWithinLargeMessage(t *testing.T) {
 	// Large message (h > viewHeight): entered at lineOffset=h-viewHeight, scrolled line-by-line.
 	ml := components.NewMessageList(3, 80)
-	bigMsg := store.Message{ID: 1, ChatID: 1, Text: "L1\nL2\nL3\nL4\nL5", Date: time.Now()}
-	ml.SetMessages([]store.Message{bigMsg})
+	bigMsg := domain.Message{ID: 1, ChatID: 1, Text: "L1\nL2\nL3\nL4\nL5", Date: time.Now()}
+	ml.SetMessages([]domain.Message{bigMsg})
 	// positionAtBottom → (0, h-viewHeight=4): lineOffset=4
 	assert.Equal(t, 4, ml.LineOffset())
 	ml.ScrollUp() // 4 → 3
@@ -162,7 +162,7 @@ func TestMessageList_OldestID_ZeroWhenEmpty(t *testing.T) {
 func TestMessageList_PrependMessages_PreservesViewStart(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
 	ml.SetMessages(makeMessages(1)) // 1 msg × 3 lines = viewHeight=3 → viewStart=1
-	older := []store.Message{
+	older := []domain.Message{
 		{ID: 10, ChatID: 1, Text: "old1", Date: time.Now()},
 		{ID: 11, ChatID: 1, Text: "old2", Date: time.Now()},
 	}
@@ -178,11 +178,11 @@ func TestMessageList_PrependMessages_PreservesViewStart(t *testing.T) {
 func TestMessageList_PrependMessages_SkipsDuplicateIDs(t *testing.T) {
 	now := time.Now()
 	ml := components.NewMessageList(10, 40)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 10, ChatID: 1, Text: "a", Date: now},
 		{ID: 11, ChatID: 1, Text: "b", Date: now},
 	})
-	older := []store.Message{
+	older := []domain.Message{
 		{ID: 8, ChatID: 1, Text: "old1", Date: now},
 		{ID: 9, ChatID: 1, Text: "old2", Date: now},
 	}
@@ -200,12 +200,12 @@ func TestMessageList_PrependMessages_SkipsDuplicateIDs(t *testing.T) {
 func TestMessageList_PrependMessages_PartialOverlap(t *testing.T) {
 	now := time.Now()
 	ml := components.NewMessageList(10, 40)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 10, ChatID: 1, Text: "a", Date: now},
 		{ID: 11, ChatID: 1, Text: "b", Date: now},
 	})
 	// 7,8,9 are new; 10 repeats the current oldest.
-	older := []store.Message{
+	older := []domain.Message{
 		{ID: 7, ChatID: 1, Text: "old0", Date: now},
 		{ID: 8, ChatID: 1, Text: "old1", Date: now},
 		{ID: 9, ChatID: 1, Text: "old2", Date: now},
@@ -219,8 +219,8 @@ func TestMessageList_PrependMessages_PartialOverlap(t *testing.T) {
 func TestMessageList_LargeMessage_ShowsBottomPortion(t *testing.T) {
 	// Single message taller than viewport: should show the bottom portion by default.
 	ml := components.NewMessageList(3, 80)
-	bigMsg := store.Message{ID: 1, ChatID: 1, Text: "L1\nL2\nL3\nL4\nL5", Date: time.Now()}
-	ml.SetMessages([]store.Message{bigMsg})
+	bigMsg := domain.Message{ID: 1, ChatID: 1, Text: "L1\nL2\nL3\nL4\nL5", Date: time.Now()}
+	ml.SetMessages([]domain.Message{bigMsg})
 	// lineOffset > 0: some top lines are hidden
 	assert.Greater(t, ml.LineOffset(), 0)
 	view := ml.View()
@@ -230,8 +230,8 @@ func TestMessageList_LargeMessage_ShowsBottomPortion(t *testing.T) {
 
 func TestMessageList_LargeMessage_ScrollUpRevealsTopLines(t *testing.T) {
 	ml := components.NewMessageList(3, 80)
-	bigMsg := store.Message{ID: 1, ChatID: 1, Text: "L1\nL2\nL3\nL4\nL5", Date: time.Now()}
-	ml.SetMessages([]store.Message{bigMsg})
+	bigMsg := domain.Message{ID: 1, ChatID: 1, Text: "L1\nL2\nL3\nL4\nL5", Date: time.Now()}
+	ml.SetMessages([]domain.Message{bigMsg})
 	initialOffset := ml.LineOffset()
 	for i := 0; i < initialOffset; i++ {
 		ml.ScrollUp()
@@ -296,13 +296,13 @@ func TestMessageList_ScrollToFirstUnread_AllUnread(t *testing.T) {
 
 func TestMessageList_View_RendersEntityStyledText(t *testing.T) {
 	ml := components.NewMessageList(5, 80)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{
 			ID:     1,
 			ChatID: 1,
 			Text:   "hello",
 			Date:   time.Now(),
-			Entities: []store.MessageEntity{
+			Entities: []domain.MessageEntity{
 				{Type: "bold", Offset: 0, Length: 5},
 			},
 		},
@@ -314,24 +314,24 @@ func TestMessageList_View_RendersEntityStyledText(t *testing.T) {
 
 func TestMessageList_PhotoPlaceholderInView(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	msg := store.Message{
+	msg := domain.Message{
 		ID:    1,
-		Media: &store.MediaRef{Kind: store.MediaPhoto},
-		Photo: &store.PhotoRef{ID: 42},
+		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo: &domain.PhotoRef{ID: 42},
 	}
-	ml.SetMessages([]store.Message{msg})
+	ml.SetMessages([]domain.Message{msg})
 	view := ml.View()
 	require.Contains(t, view, "📷 photo", "should show placeholder when image not loaded")
 }
 
 func TestMessageList_SetImage_UpdatesView(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	msg := store.Message{
+	msg := domain.Message{
 		ID:    1,
-		Media: &store.MediaRef{Kind: store.MediaPhoto},
-		Photo: &store.PhotoRef{ID: 99},
+		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo: &domain.PhotoRef{ID: 99},
 	}
-	ml.SetMessages([]store.Message{msg})
+	ml.SetMessages([]domain.Message{msg})
 	before := ml.View()
 
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
@@ -421,7 +421,7 @@ func TestMessageList_SelectedMessageID_FirstContentCutOff_SelectsNext(t *testing
 func TestMessageList_Indicator_Incoming_ShowsBar(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
 	plain := stripANSI(ml.View())
 	assert.Contains(t, plain, "┃")
 }
@@ -429,7 +429,7 @@ func TestMessageList_Indicator_Incoming_ShowsBar(t *testing.T) {
 func TestMessageList_Indicator_Outgoing_ShowsBar(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now(), IsOut: true}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now(), IsOut: true}})
 	plain := stripANSI(ml.View())
 	assert.Contains(t, plain, "┃")
 }
@@ -437,7 +437,7 @@ func TestMessageList_Indicator_Outgoing_ShowsBar(t *testing.T) {
 func TestMessageList_Indicator_HiddenWhenShowIndicatorFalse(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(false)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
 	plain := stripANSI(ml.View())
 	assert.NotContains(t, plain, "┃")
 }
@@ -446,7 +446,7 @@ func TestMessageList_Indicator_SpansAllContentLines(t *testing.T) {
 	// multiline message: bar should appear on every content line, not just the first
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "line1\nline2\nline3", Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "line1\nline2\nline3", Date: time.Now()}})
 	plain := stripANSI(ml.View())
 	assert.Equal(t, 3, strings.Count(plain, "┃"))
 }
@@ -455,7 +455,7 @@ func TestMessageList_Indicator_OnlyOnSelectedMessage(t *testing.T) {
 	// 3 messages all visible; only the selected one gets the bar
 	ml := components.NewMessageList(20, 80)
 	ml.SetShowIndicator(true)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "a", Date: time.Now()},
 		{ID: 2, ChatID: 1, Text: "b", Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "c", Date: time.Now()},
@@ -467,13 +467,13 @@ func TestMessageList_Indicator_OnlyOnSelectedMessage(t *testing.T) {
 
 func TestMessageList_SelectedMessageIsOut_Outgoing(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
 	assert.True(t, ml.SelectedMessageIsOut())
 }
 
 func TestMessageList_SelectedMessageIsOut_Incoming(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: false, Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: false, Date: time.Now()}})
 	assert.False(t, ml.SelectedMessageIsOut())
 }
 
@@ -484,25 +484,25 @@ func TestMessageList_SelectedMessageIsOut_NoMessages(t *testing.T) {
 
 func TestMessageList_MsgHeight_ReplyFound_ShowsGlyph(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	orig := store.Message{ID: 1, ChatID: 1, Text: "original text", Date: time.Now()}
-	reply := store.Message{ID: 2, ChatID: 1, Text: "reply", Date: time.Now(), ReplyToMsgID: 1}
-	ml.SetMessages([]store.Message{orig, reply})
+	orig := domain.Message{ID: 1, ChatID: 1, Text: "original text", Date: time.Now()}
+	reply := domain.Message{ID: 2, ChatID: 1, Text: "reply", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]domain.Message{orig, reply})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "▌")
 }
 
 func TestMessageList_MsgHeight_ReplyNotFound_ShowsPlaceholder(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	reply := store.Message{ID: 2, ChatID: 1, Text: "reply", Date: time.Now(), ReplyToMsgID: 99}
-	ml.SetMessages([]store.Message{reply})
+	reply := domain.Message{ID: 2, ChatID: 1, Text: "reply", Date: time.Now(), ReplyToMsgID: 99}
+	ml.SetMessages([]domain.Message{reply})
 	view := ml.View()
 	assert.Contains(t, stripANSI(view), "Original not available")
 }
 
 func TestMessageList_View_ReplyToSelfNotInBuffer_ShowsPlaceholder(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	reply := store.Message{ID: 5, ChatID: 1, Text: "hi", Date: time.Now(), ReplyToMsgID: 1}
-	ml.SetMessages([]store.Message{reply})
+	reply := domain.Message{ID: 5, ChatID: 1, Text: "hi", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]domain.Message{reply})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "Original not available")
 	assert.NotContains(t, view, "▌ ?")
@@ -510,14 +510,14 @@ func TestMessageList_View_ReplyToSelfNotInBuffer_ShowsPlaceholder(t *testing.T) 
 
 func TestMessageList_View_ReplyShowsQuoteBlock(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	orig := store.Message{
+	orig := domain.Message{
 		ID:         1,
 		ChatID:     1,
 		SenderName: "Alice",
 		Text:       "Sure, let me check that",
 		Date:       time.Now(),
 	}
-	reply := store.Message{
+	reply := domain.Message{
 		ID:           2,
 		ChatID:       1,
 		SenderName:   "Bob",
@@ -525,7 +525,7 @@ func TestMessageList_View_ReplyShowsQuoteBlock(t *testing.T) {
 		Date:         time.Now(),
 		ReplyToMsgID: 1,
 	}
-	ml.SetMessages([]store.Message{orig, reply})
+	ml.SetMessages([]domain.Message{orig, reply})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "▌")
 	assert.Contains(t, view, "Alice")
@@ -536,9 +536,9 @@ func TestMessageList_View_ReplyShowsQuoteBlock(t *testing.T) {
 func TestMessageList_View_ReplySnippetTruncated(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	longText := strings.Repeat("x", 200)
-	orig := store.Message{ID: 1, ChatID: 1, SenderName: "A", Text: longText, Date: time.Now()}
-	reply := store.Message{ID: 2, ChatID: 1, Text: "ok", Date: time.Now(), ReplyToMsgID: 1}
-	ml.SetMessages([]store.Message{orig, reply})
+	orig := domain.Message{ID: 1, ChatID: 1, SenderName: "A", Text: longText, Date: time.Now()}
+	reply := domain.Message{ID: 2, ChatID: 1, Text: "ok", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]domain.Message{orig, reply})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "▌")
 	assert.Contains(t, view, "…")
@@ -547,14 +547,14 @@ func TestMessageList_View_ReplySnippetTruncated(t *testing.T) {
 func TestMessageList_GroupChat_LongSenderName_NoBubbleOverflow(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	ml.SetIsGroup(true)
-	msg := store.Message{
+	msg := domain.Message{
 		ID:         1,
 		ChatID:     1,
 		SenderName: "VeryLongSenderNameThatExceedsText",
 		Text:       "ok",
 		Date:       time.Now(),
 	}
-	ml.SetMessages([]store.Message{msg})
+	ml.SetMessages([]domain.Message{msg})
 	view := stripANSI(ml.View())
 	// The top border must contain the sender name and end with the corner glyph.
 	var topLine string
@@ -608,8 +608,8 @@ func TestMessageList_ScrollToMessage_Empty(t *testing.T) {
 
 func TestMessageList_SelectedMessageReplyToMsgID_IsReply(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Now(), ReplyToMsgID: 42}
-	ml.SetMessages([]store.Message{msg})
+	msg := domain.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Now(), ReplyToMsgID: 42}
+	ml.SetMessages([]domain.Message{msg})
 	assert.Equal(t, 42, ml.SelectedMessageReplyToMsgID())
 }
 
@@ -629,9 +629,9 @@ func TestMessageList_SetImage_AtBottom_ReanchorsToBottom(t *testing.T) {
 	// After image loads the photo message expands to ~30 lines; the newest message
 	// must remain visible (re-anchored to new natural bottom).
 	ml := components.NewMessageList(10, 80)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
-		{ID: 2, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 2, ChatID: 1, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 42}, Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
@@ -645,9 +645,9 @@ func TestMessageList_SetImage_AtBottom_ReanchorsToBottom(t *testing.T) {
 func TestMessageList_SetKnownImages_AtBottom_ReanchorsToBottom(t *testing.T) {
 	// Same as SetImage case but via bulk load.
 	ml := components.NewMessageList(10, 80)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
-		{ID: 2, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 2, ChatID: 1, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 42}, Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
@@ -663,12 +663,12 @@ func TestMessageList_SetKnownImages_AtBottom_ReanchorsToBottom(t *testing.T) {
 func TestMessageList_SetImage_ScrolledUp_DoesNotReanchor(t *testing.T) {
 	// When user has scrolled up, SetImage must not snap back to bottom.
 	ml := components.NewMessageList(9, 80)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
 		{ID: 2, ChatID: 1, Text: "msg 2", Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
 		{ID: 4, ChatID: 1, Text: "msg 4", Date: time.Now()},
-		{ID: 5, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 5, ChatID: 1, Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 42}, Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
 	ml.ScrollUp()
@@ -686,9 +686,9 @@ func TestMessageList_SetImage_ScrolledUp_DoesNotReanchor(t *testing.T) {
 func TestMessageList_View_ReplySnippetFirstLineOnly(t *testing.T) {
 	// viewHeight=5 fits only the reply bubble (5 lines), hiding orig from the viewport.
 	ml := components.NewMessageList(5, 80)
-	orig := store.Message{ID: 1, ChatID: 1, SenderName: "Alice", Text: "line1\nline2\nline3", Date: time.Now()}
-	reply := store.Message{ID: 2, ChatID: 1, Text: "ok", Date: time.Now(), ReplyToMsgID: 1}
-	ml.SetMessages([]store.Message{orig, reply})
+	orig := domain.Message{ID: 1, ChatID: 1, SenderName: "Alice", Text: "line1\nline2\nline3", Date: time.Now()}
+	reply := domain.Message{ID: 2, ChatID: 1, Text: "ok", Date: time.Now(), ReplyToMsgID: 1}
+	ml.SetMessages([]domain.Message{orig, reply})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "line1")
 	assert.NotContains(t, view, "line2")
@@ -697,7 +697,7 @@ func TestMessageList_View_ReplySnippetFirstLineOnly(t *testing.T) {
 func TestMessageList_EditedMessage_ShowsEditedLabel(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "hello", Date: now, IsOut: true, EditDate: &now},
 	})
 	assert.Contains(t, ml.View(), "edited")
@@ -706,7 +706,7 @@ func TestMessageList_EditedMessage_ShowsEditedLabel(t *testing.T) {
 func TestMessageList_NotEdited_NoEditedLabel(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "normal", Date: now, IsOut: true},
 	})
 	assert.NotContains(t, ml.View(), "edited")
@@ -714,15 +714,15 @@ func TestMessageList_NotEdited_NoEditedLabel(t *testing.T) {
 
 func TestMessageList_DateSeparator_FirstMessageHasSeparator(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
-	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)}
-	ml.SetMessages([]store.Message{msg})
+	msg := domain.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)}
+	ml.SetMessages([]domain.Message{msg})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "May 18")
 }
 
 func TestMessageList_DateSeparator_AppearsOnDayBoundary(t *testing.T) {
 	ml := components.NewMessageList(40, 40)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "yesterday", Date: time.Date(2026, 5, 17, 23, 0, 0, 0, time.UTC)},
 		{ID: 2, ChatID: 1, Text: "today", Date: time.Date(2026, 5, 18, 9, 0, 0, 0, time.UTC)},
 	}
@@ -734,7 +734,7 @@ func TestMessageList_DateSeparator_AppearsOnDayBoundary(t *testing.T) {
 
 func TestMessageList_DateSeparator_SameDayNoExtra(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "a", Date: time.Date(2026, 5, 18, 9, 0, 0, 0, time.UTC)},
 		{ID: 2, ChatID: 1, Text: "b", Date: time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)},
 	}
@@ -746,8 +746,8 @@ func TestMessageList_DateSeparator_SameDayNoExtra(t *testing.T) {
 func TestMessageList_DateSeparator_TodayLabel(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	now := time.Now()
-	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: now}
-	ml.SetMessages([]store.Message{msg})
+	msg := domain.Message{ID: 1, ChatID: 1, Text: "hi", Date: now}
+	ml.SetMessages([]domain.Message{msg})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "Today")
 }
@@ -755,8 +755,8 @@ func TestMessageList_DateSeparator_TodayLabel(t *testing.T) {
 func TestMessageList_DateSeparator_CurrentYearNotTodayShowsDate(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	yesterday := time.Now().AddDate(0, 0, -1)
-	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: yesterday}
-	ml.SetMessages([]store.Message{msg})
+	msg := domain.Message{ID: 1, ChatID: 1, Text: "hi", Date: yesterday}
+	ml.SetMessages([]domain.Message{msg})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, yesterday.Format("January 2"))
 	assert.NotContains(t, view, "Today")
@@ -764,8 +764,8 @@ func TestMessageList_DateSeparator_CurrentYearNotTodayShowsDate(t *testing.T) {
 
 func TestMessageList_DateSeparator_PreviousYearWithYear(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
-	msg := store.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Date(2025, 3, 7, 12, 0, 0, 0, time.UTC)}
-	ml.SetMessages([]store.Message{msg})
+	msg := domain.Message{ID: 1, ChatID: 1, Text: "hi", Date: time.Date(2025, 3, 7, 12, 0, 0, 0, time.UTC)}
+	ml.SetMessages([]domain.Message{msg})
 	view := stripANSI(ml.View())
 	assert.Contains(t, view, "March 7, 2025")
 }
@@ -773,9 +773,9 @@ func TestMessageList_DateSeparator_PreviousYearWithYear(t *testing.T) {
 func TestMessageList_ReactionsRenderedOnBottomBorder(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "hello", Date: now, IsOut: false,
-			Reactions: []store.Reaction{
+			Reactions: []domain.Reaction{
 				{Emoji: "❤️", Count: 3, IsChosen: false},
 				{Emoji: "👍", Count: 1, IsChosen: false},
 			}},
@@ -790,7 +790,7 @@ func TestMessageList_ReactionsRenderedOnBottomBorder(t *testing.T) {
 func TestMessageList_NoReactions_NoSeparator(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "hello", Date: now, IsOut: false},
 	})
 	v := ml.View()
@@ -800,7 +800,7 @@ func TestMessageList_NoReactions_NoSeparator(t *testing.T) {
 func TestMessageList_ReplyBubble_NameFitsWidth(t *testing.T) {
 	ml := components.NewMessageList(40, 80)
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, SenderName: "Aleksandra Petrovna", Text: "hi", Date: now},
 		{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 1, Date: now},
 	}
@@ -829,7 +829,7 @@ func TestMessageList_ReplyBubble_LongNameTruncated(t *testing.T) {
 	const longName = "Александра Александровна Петровна Захаренко"
 	ml := components.NewMessageList(40, 40)
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, SenderName: longName, Text: "hi", Date: now},
 		{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 1, Date: now},
 	}
@@ -849,9 +849,9 @@ func TestMessageList_ReplyBubble_LongNameTruncated(t *testing.T) {
 func TestMessageList_ForwardBubble_ShowsLabelAndName(t *testing.T) {
 	ml := components.NewMessageList(40, 80)
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "hey check this", Date: now,
-			Forward: &store.ForwardInfo{From: "Bob Smith"}},
+			Forward: &domain.ForwardInfo{From: "Bob Smith"}},
 	}
 	ml.SetMessages(msgs)
 	view := ml.View()
@@ -863,9 +863,9 @@ func TestMessageList_ForwardBubble_ShowsLabelAndName(t *testing.T) {
 func TestMessageList_ForwardBubble_HiddenSender(t *testing.T) {
 	ml := components.NewMessageList(40, 80)
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "hey", Date: now,
-			Forward: &store.ForwardInfo{From: ""}},
+			Forward: &domain.ForwardInfo{From: ""}},
 	}
 	ml.SetMessages(msgs)
 	view := ml.View()
@@ -878,9 +878,9 @@ func TestMessageList_ForwardBubble_LongNameNoOverflow(t *testing.T) {
 	const longName = "Александр Александрович Длинноимённый Захаренко"
 	ml := components.NewMessageList(40, 40)
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "ok", Date: now,
-			Forward: &store.ForwardInfo{From: longName}},
+			Forward: &domain.ForwardInfo{From: longName}},
 	}
 	ml.SetMessages(msgs)
 	view := ml.View()
@@ -898,9 +898,9 @@ func TestMessageList_ForwardBubble_LongNameNoOverflow(t *testing.T) {
 func TestMessageList_ForwardBubble_HasBlankLineSeparator(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "forwarded body", Date: now,
-			Forward: &store.ForwardInfo{From: "Bob Smith"}},
+			Forward: &domain.ForwardInfo{From: "Bob Smith"}},
 	}
 	ml.SetMessages(msgs)
 	lines := strings.Split(stripANSI(ml.View()), "\n")
@@ -926,8 +926,8 @@ func TestMessageList_ForwardBubble_HasBlankLineSeparator(t *testing.T) {
 func TestMessageList_ForwardBubble_NoBlankLineWhenEmpty(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
-	msgs := []store.Message{
-		{ID: 1, ChatID: 1, Date: now, Forward: &store.ForwardInfo{From: "Bob Smith"}},
+	msgs := []domain.Message{
+		{ID: 1, ChatID: 1, Date: now, Forward: &domain.ForwardInfo{From: "Bob Smith"}},
 	}
 	ml.SetMessages(msgs)
 	lines := strings.Split(stripANSI(ml.View()), "\n")
@@ -948,10 +948,10 @@ func TestMessageList_ReplyBubble_WidensToShowSnippet(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
 	const origText = "This is a fairly long original message worth reading"
-	orig := store.Message{ID: 1, ChatID: 1, SenderName: "Alice", Text: origText, Date: now}
+	orig := domain.Message{ID: 1, ChatID: 1, SenderName: "Alice", Text: origText, Date: now}
 	// A short reply must not squeeze the quoted original down to nothing.
-	reply := store.Message{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 1, Date: now}
-	ml.SetMessages([]store.Message{orig, reply})
+	reply := domain.Message{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 1, Date: now}
+	ml.SetMessages([]domain.Message{orig, reply})
 	view := stripANSI(ml.View())
 
 	assert.Contains(t, view, origText,
@@ -962,7 +962,7 @@ func TestMessageList_ReplyBubble_WidensToShowSnippet(t *testing.T) {
 
 func TestMessageList_NoForward_NoForwardedLabel(t *testing.T) {
 	ml := components.NewMessageList(40, 80)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "plain", Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
@@ -971,7 +971,7 @@ func TestMessageList_NoForward_NoForwardedLabel(t *testing.T) {
 
 func TestMessageList_ReplyBubble_NilOrig_ShowsPlaceholder(t *testing.T) {
 	ml := components.NewMessageList(40, 80)
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 2, ChatID: 1, Text: "ok", ReplyToMsgID: 999, Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
@@ -981,15 +981,15 @@ func TestMessageList_ReplyBubble_NilOrig_ShowsPlaceholder(t *testing.T) {
 
 func TestMessageList_View_PhotoTextHasBlankLineSeparator(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	msg := store.Message{
+	msg := domain.Message{
 		ID:     1,
 		ChatID: 1,
-		Media:  &store.MediaRef{Kind: store.MediaPhoto},
-		Photo:  &store.PhotoRef{ID: 77},
+		Media:  &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo:  &domain.PhotoRef{ID: 77},
 		Text:   "caption text",
 		Date:   time.Now(),
 	}
-	ml.SetMessages([]store.Message{msg})
+	ml.SetMessages([]domain.Message{msg})
 	view := stripANSI(ml.View())
 	lines := strings.Split(view, "\n")
 
@@ -1014,9 +1014,9 @@ func TestMessageList_View_PhotoTextHasBlankLineSeparator(t *testing.T) {
 func TestMessageList_View_ReplyHasBlankLineSeparator(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()
-	orig := store.Message{ID: 1, ChatID: 1, SenderName: "Alice", Text: "original text", Date: now}
-	reply := store.Message{ID: 2, ChatID: 1, Text: "reply body", ReplyToMsgID: 1, Date: now}
-	ml.SetMessages([]store.Message{orig, reply})
+	orig := domain.Message{ID: 1, ChatID: 1, SenderName: "Alice", Text: "original text", Date: now}
+	reply := domain.Message{ID: 2, ChatID: 1, Text: "reply body", ReplyToMsgID: 1, Date: now}
+	ml.SetMessages([]domain.Message{orig, reply})
 	view := stripANSI(ml.View())
 	lines := strings.Split(view, "\n")
 
@@ -1059,7 +1059,7 @@ func TestMessageList_GroupChat_SenderColors_DifferentIDs(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetIsGroup(true)
 	now := time.Now()
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, SenderID: 0, SenderName: "Alice", Text: "msg1", Date: now},
 		{ID: 2, ChatID: 1, SenderID: 1, SenderName: "Bob", Text: "msg2", Date: now},
 	})
@@ -1089,7 +1089,7 @@ func TestMessageList_GroupChat_SenderColors_SameID(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetIsGroup(true)
 	now := time.Now()
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, SenderID: 42, SenderName: "Alice", Text: "first", Date: now},
 		{ID: 2, ChatID: 1, SenderID: 42, SenderName: "Alice", Text: "second", Date: now},
 	})
@@ -1111,7 +1111,7 @@ func TestMessageList_GroupChat_SenderColors_SameID(t *testing.T) {
 func TestMessageList_ReplyPreview_GlyphAndName_SenderColor(t *testing.T) {
 	now := time.Now()
 	ml := components.NewMessageList(40, 80)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, SenderID: 5, SenderName: "Carol", Text: "original", Date: now},
 		{ID: 2, ChatID: 1, Text: "reply", ReplyToMsgID: 1, Date: now},
 	})
@@ -1137,7 +1137,7 @@ func TestMessageList_ReplyPreview_GlyphAndName_SenderColor(t *testing.T) {
 
 func TestMessageList_SenderColor_DarkVsLight(t *testing.T) {
 	now := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, SenderID: 0, SenderName: "Alice", Text: "hi", Date: now},
 	}
 
@@ -1179,7 +1179,7 @@ func TestMessageList_ReplyPreview_CJKSenderNameTruncated(t *testing.T) {
 	// the current rune-based code does NOT truncate. runewidth-based code must.
 	now := time.Now()
 	ml := components.NewMessageList(40, 80)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, SenderID: 5, SenderName: strings.Repeat("中", 30), Text: "original", Date: now},
 		{ID: 2, ChatID: 1, Text: "reply", ReplyToMsgID: 1, Date: now},
 	})
@@ -1233,7 +1233,7 @@ func TestMessageList_NoUnreadSeparator_BeforeOwnOutgoingMessage(t *testing.T) {
 	now := time.Now()
 	ml := components.NewMessageList(20, 40)
 	ml.SetInboxReadMaxID(3)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "read", Date: now},
 		{ID: 2, ChatID: 1, Text: "read", Date: now},
 		{ID: 3, ChatID: 1, Text: "read", Date: now},
@@ -1249,7 +1249,7 @@ func TestMessageList_UnreadSeparator_AnchorsToFirstIncoming_SkippingOutgoing(t *
 	now := time.Now()
 	ml := components.NewMessageList(20, 40)
 	ml.SetInboxReadMaxID(3)
-	ml.SetMessages([]store.Message{
+	ml.SetMessages([]domain.Message{
 		{ID: 3, ChatID: 1, Text: "read", Date: now},
 		{ID: 4, ChatID: 1, Text: "my reply", Date: now, IsOut: true},
 		{ID: 5, ChatID: 1, Text: "incoming unread", Date: now},
@@ -1278,7 +1278,7 @@ func TestMessageList_UnreadSepAppearsAfterDateSep_WhenFirstUnreadStartsNewDay(t 
 	ml := components.NewMessageList(30, 40)
 	yesterday := time.Now().Add(-24 * time.Hour)
 	today := time.Now()
-	msgs := []store.Message{
+	msgs := []domain.Message{
 		{ID: 1, ChatID: 1, Text: "read msg", Date: yesterday},
 		{ID: 2, ChatID: 1, Text: "unread msg", Date: today},
 	}
@@ -1294,22 +1294,22 @@ func TestMessageList_UnreadSepAppearsAfterDateSep_WhenFirstUnreadStartsNewDay(t 
 
 func TestMessageList_MediaPlaceholders(t *testing.T) {
 	cases := []struct {
-		kind store.MediaKind
+		kind domain.MediaKind
 		want string
 	}{
-		{store.MediaPhoto, "📷 photo"},
-		{store.MediaVideo, "🎥 video"},
-		{store.MediaVideoNote, "⭕ video note"},
-		{store.MediaVoice, "🎤 voice"},
-		{store.MediaAudio, "🎵 audio"},
-		{store.MediaGIF, "🎞 GIF"},
-		{store.MediaFile, "📎 file"},
-		{store.MediaLocation, "📍 location"},
-		{store.MediaOther, "📦 media"},
+		{domain.MediaPhoto, "📷 photo"},
+		{domain.MediaVideo, "🎥 video"},
+		{domain.MediaVideoNote, "⭕ video note"},
+		{domain.MediaVoice, "🎤 voice"},
+		{domain.MediaAudio, "🎵 audio"},
+		{domain.MediaGIF, "🎞 GIF"},
+		{domain.MediaFile, "📎 file"},
+		{domain.MediaLocation, "📍 location"},
+		{domain.MediaOther, "📦 media"},
 	}
 	for _, tc := range cases {
 		ml := components.NewMessageList(20, 80)
-		ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: tc.kind}}})
+		ml.SetMessages([]domain.Message{{ID: 1, Media: &domain.MediaRef{Kind: tc.kind}}})
 		assert.Contains(t, ml.View(), tc.want)
 	}
 }
@@ -1318,7 +1318,7 @@ func TestMessageList_MediaOnlyBubble_BordersAligned(t *testing.T) {
 	// A media-only message (no text/reactions) must still size its bubble to the
 	// placeholder label, so every rendered bubble line has the same width.
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: store.MediaVoice}}})
+	ml.SetMessages([]domain.Message{{ID: 1, Media: &domain.MediaRef{Kind: domain.MediaVoice}}})
 	var widths []int
 	for _, line := range strings.Split(strings.TrimRight(stripANSI(ml.View()), "\n"), "\n") {
 		if strings.TrimSpace(line) == "" {
@@ -1335,11 +1335,11 @@ func TestMessageList_MediaOnlyBubble_BordersAligned(t *testing.T) {
 func TestMessageList_StaticSticker_RendersBorderless(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetImageMode(media.ModeKitty)
-	ml.SetMessages([]store.Message{{
+	ml.SetMessages([]domain.Message{{
 		ID:       1,
 		Date:     time.Date(2026, 6, 14, 8, 40, 0, 0, time.UTC),
-		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
-		Document: &store.DocumentRef{ID: 555, MimeType: "image/webp"},
+		Media:    &domain.MediaRef{Kind: domain.MediaSticker, Emoji: "🐱"},
+		Document: &domain.DocumentRef{ID: 555, MimeType: "image/webp"},
 	}})
 	ml.SetImage(555, image.NewRGBA(image.Rect(0, 0, 64, 64)))
 	view := ml.View()
@@ -1352,11 +1352,11 @@ func TestMessageList_StaticSticker_RendersBorderless(t *testing.T) {
 func TestMessageList_VideoNote_RendersBorderless(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetImageMode(media.ModeKitty)
-	ml.SetMessages([]store.Message{{
+	ml.SetMessages([]domain.Message{{
 		ID:       1,
 		Date:     time.Date(2026, 6, 14, 8, 51, 0, 0, time.UTC),
-		Media:    &store.MediaRef{Kind: store.MediaVideoNote, Duration: 8},
-		Document: &store.DocumentRef{ID: 77, ThumbSize: "m"},
+		Media:    &domain.MediaRef{Kind: domain.MediaVideoNote, Duration: 8},
+		Document: &domain.DocumentRef{ID: 77, ThumbSize: "m"},
 	}})
 	ml.SetImage(77, image.NewRGBA(image.Rect(0, 0, 64, 64)))
 	view := ml.View()
@@ -1370,12 +1370,12 @@ func TestMediaBoxForID_StickerUsesStickerCap(t *testing.T) {
 	// Tall viewport so a 512x512 image is width-bound, not height-bound.
 	ml := components.NewMessageList(60, 200)
 	ml.SetImageMode(media.ModeKitty)
-	sticker := store.Message{
+	sticker := domain.Message{
 		ID:       1,
-		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
-		Document: &store.DocumentRef{ID: 555, MimeType: "image/webp"},
+		Media:    &domain.MediaRef{Kind: domain.MediaSticker, Emoji: "🐱"},
+		Document: &domain.DocumentRef{ID: 555, MimeType: "image/webp"},
 	}
-	ml.SetMessages([]store.Message{sticker})
+	ml.SetMessages([]domain.Message{sticker})
 
 	// Transmit sizing (MediaBoxForID) must match the sticker render cap, otherwise
 	// the Kitty placement is never marked ready at the rendered width and the
@@ -1393,10 +1393,10 @@ func TestMediaBoxForID_StickerUsesStickerCap(t *testing.T) {
 func TestMediaBoxForID_VideoNoteUsesCompactCap(t *testing.T) {
 	ml := components.NewMessageList(60, 200)
 	ml.SetImageMode(media.ModeKitty)
-	ml.SetMessages([]store.Message{{
+	ml.SetMessages([]domain.Message{{
 		ID:       1,
-		Media:    &store.MediaRef{Kind: store.MediaVideoNote, Duration: 5},
-		Document: &store.DocumentRef{ID: 88, ThumbSize: "m"},
+		Media:    &domain.MediaRef{Kind: domain.MediaVideoNote, Duration: 5},
+		Document: &domain.DocumentRef{ID: 88, ThumbSize: "m"},
 	}})
 	// Round video notes render borderless at their own cap: larger than stickers,
 	// smaller than the full photo width.
@@ -1426,10 +1426,10 @@ func TestCompactMediaCols_SmallerThanPhoto(t *testing.T) {
 }
 
 func TestPreviewImageID_StaticStickerKittyOnly(t *testing.T) {
-	stickerMsg := store.Message{
+	stickerMsg := domain.Message{
 		ID:       1,
-		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
-		Document: &store.DocumentRef{ID: 555, MimeType: "image/webp"},
+		Media:    &domain.MediaRef{Kind: domain.MediaSticker, Emoji: "🐱"},
+		Document: &domain.DocumentRef{ID: 555, MimeType: "image/webp"},
 	}
 
 	// Block-art mode (default): no inline image.
@@ -1447,10 +1447,10 @@ func TestPreviewImageID_StaticStickerKittyOnly(t *testing.T) {
 	}
 
 	// Animated sticker (tgs) in Kitty: still no inline image.
-	tgsMsg := store.Message{
+	tgsMsg := domain.Message{
 		ID:       2,
-		Media:    &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"},
-		Document: &store.DocumentRef{ID: 777, MimeType: "application/x-tgsticker"},
+		Media:    &domain.MediaRef{Kind: domain.MediaSticker, Emoji: "🐱"},
+		Document: &domain.DocumentRef{ID: 777, MimeType: "application/x-tgsticker"},
 	}
 	if _, ok := mlKitty.PreviewImageIDForTest(tgsMsg); ok {
 		t.Fatal("animated sticker must not preview even in Kitty mode")
@@ -1459,21 +1459,21 @@ func TestPreviewImageID_StaticStickerKittyOnly(t *testing.T) {
 
 func TestMessageList_StickerPlaceholder_UsesAltEmoji(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"}}})
+	ml.SetMessages([]domain.Message{{ID: 1, Media: &domain.MediaRef{Kind: domain.MediaSticker, Emoji: "🐱"}}})
 	assert.Contains(t, ml.View(), "🐱 sticker")
 }
 
 func TestMessageList_StickerPlaceholder_NoEmojiFallback(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: store.MediaSticker}}})
+	ml.SetMessages([]domain.Message{{ID: 1, Media: &domain.MediaRef{Kind: domain.MediaSticker}}})
 	assert.Contains(t, ml.View(), "sticker")
 }
 
 func TestMessageList_VoiceWaveform(t *testing.T) {
 	// Waveform packing samples [31,1,31] -> LE {0x1F, 0x7C}; renders block bars.
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{
-		Kind: store.MediaVoice, Duration: 15, Waveform: []byte{0x1F, 0x7C},
+	ml.SetMessages([]domain.Message{{ID: 1, Media: &domain.MediaRef{
+		Kind: domain.MediaVoice, Duration: 15, Waveform: []byte{0x1F, 0x7C},
 	}}})
 	view := ml.View()
 	assert.Contains(t, view, "🎤")
@@ -1483,18 +1483,18 @@ func TestMessageList_VoiceWaveform(t *testing.T) {
 
 func TestMessageList_VideoPlaceholder_ShowsDuration(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1,
-		Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 42},
-		Document: &store.DocumentRef{ID: 99, ThumbSize: "m"},
+	ml.SetMessages([]domain.Message{{ID: 1,
+		Media:    &domain.MediaRef{Kind: domain.MediaVideo, Duration: 42},
+		Document: &domain.DocumentRef{ID: 99, ThumbSize: "m"},
 	}})
 	assert.Contains(t, ml.View(), "🎥 video 0:42")
 }
 
 func TestMessageList_VideoThumbnail_ShowsPlayOverlay(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1,
-		Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 42},
-		Document: &store.DocumentRef{ID: 99, ThumbSize: "m"},
+	ml.SetMessages([]domain.Message{{ID: 1,
+		Media:    &domain.MediaRef{Kind: domain.MediaVideo, Duration: 42},
+		Document: &domain.DocumentRef{ID: 99, ThumbSize: "m"},
 	}})
 	// Inject the downloaded thumbnail under the document id.
 	ml.SetImage(99, image.NewRGBA(image.Rect(0, 0, 16, 12)))
@@ -1505,9 +1505,9 @@ func TestMessageList_VideoThumbnail_ShowsPlayOverlay(t *testing.T) {
 
 func TestMessageList_VoicePlayback_ShowsLivePosition(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1,
-		Media:    &store.MediaRef{Kind: store.MediaVoice, Duration: 15, Waveform: []byte{0x1F, 0x7C}},
-		Document: &store.DocumentRef{ID: 55},
+	ml.SetMessages([]domain.Message{{ID: 1,
+		Media:    &domain.MediaRef{Kind: domain.MediaVoice, Duration: 15, Waveform: []byte{0x1F, 0x7C}},
+		Document: &domain.DocumentRef{ID: 55},
 	}})
 	assert.Contains(t, ml.View(), "0:15", "total duration before playback")
 
@@ -1517,9 +1517,9 @@ func TestMessageList_VoicePlayback_ShowsLivePosition(t *testing.T) {
 
 func TestMessageList_VideoNoteThumbnail_ShowsPlayOverlay(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1,
-		Media:    &store.MediaRef{Kind: store.MediaVideoNote, Duration: 8},
-		Document: &store.DocumentRef{ID: 77, ThumbSize: "m"},
+	ml.SetMessages([]domain.Message{{ID: 1,
+		Media:    &domain.MediaRef{Kind: domain.MediaVideoNote, Duration: 8},
+		Document: &domain.DocumentRef{ID: 77, ThumbSize: "m"},
 	}})
 	ml.SetImage(77, image.NewRGBA(image.Rect(0, 0, 12, 12)))
 	view := ml.View()
@@ -1529,8 +1529,8 @@ func TestMessageList_VideoNoteThumbnail_ShowsPlayOverlay(t *testing.T) {
 
 func TestMessageList_AudioMetadata(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
-	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{
-		Kind: store.MediaAudio, Duration: 200, Title: "Song", Performer: "Artist",
+	ml.SetMessages([]domain.Message{{ID: 1, Media: &domain.MediaRef{
+		Kind: domain.MediaAudio, Duration: 200, Title: "Song", Performer: "Artist",
 	}}})
 	view := ml.View()
 	assert.Contains(t, view, "Song")
@@ -1540,9 +1540,9 @@ func TestMessageList_AudioMetadata(t *testing.T) {
 
 func TestMessageList_ScrollInfo_TopAndBottom(t *testing.T) {
 	ml := components.NewMessageList(5, 40) // viewHeight 5
-	msgs := make([]store.Message, 0, 30)
+	msgs := make([]domain.Message, 0, 30)
 	for i := 1; i <= 30; i++ {
-		msgs = append(msgs, store.Message{ID: i, Text: "line"})
+		msgs = append(msgs, domain.Message{ID: i, Text: "line"})
 	}
 	ml.SetMessages(msgs) // anchors at bottom
 
@@ -1559,10 +1559,10 @@ func TestMessageList_ScrollInfo_TopAndBottom(t *testing.T) {
 
 func TestMessageList_SelectedMessagePhoto(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages([]store.Message{{
+	ml.SetMessages([]domain.Message{{
 		ID: 1, ChatID: 1, Date: time.Now(),
-		Media: &store.MediaRef{Kind: store.MediaPhoto},
-		Photo: &store.PhotoRef{ID: 77, FullThumbSize: "y"},
+		Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+		Photo: &domain.PhotoRef{ID: 77, FullThumbSize: "y"},
 	}})
 	ml.View()
 
@@ -1573,7 +1573,7 @@ func TestMessageList_SelectedMessagePhoto(t *testing.T) {
 
 func TestMessageList_SelectedMessagePhoto_NotAPhoto(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	ml.View()
 
 	_, ok := ml.SelectedMessagePhoto()
@@ -1584,27 +1584,27 @@ func TestMessageList_SelectedMessagePhoto_NotAPhoto(t *testing.T) {
 // document-backed media (video, note, voice, audio, gif, file), but NOT
 // stickers and NOT photos.
 func TestMessageList_SelectedMessageDownloadDoc(t *testing.T) {
-	doc := &store.DocumentRef{ID: 5}
+	doc := &domain.DocumentRef{ID: 5}
 	cases := []struct {
 		name     string
-		msg      store.Message
+		msg      domain.Message
 		wantOK   bool
-		wantKind store.MediaKind
+		wantKind domain.MediaKind
 	}{
-		{"video", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaVideo}, Document: doc}, true, store.MediaVideo},
-		{"video note", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaVideoNote}, Document: doc}, true, store.MediaVideoNote},
-		{"voice", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaVoice}, Document: doc}, true, store.MediaVoice},
-		{"audio", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaAudio}, Document: doc}, true, store.MediaAudio},
-		{"gif", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaGIF}, Document: doc}, true, store.MediaGIF},
-		{"file", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaFile}, Document: doc}, true, store.MediaFile},
-		{"sticker excluded", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaSticker}, Document: doc}, false, 0},
-		{"photo excluded", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 9}}, false, 0},
-		{"text excluded", store.Message{ID: 1, Date: time.Now(), Text: "hi"}, false, 0},
+		{"video", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaVideo}, Document: doc}, true, domain.MediaVideo},
+		{"video note", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaVideoNote}, Document: doc}, true, domain.MediaVideoNote},
+		{"voice", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaVoice}, Document: doc}, true, domain.MediaVoice},
+		{"audio", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaAudio}, Document: doc}, true, domain.MediaAudio},
+		{"gif", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaGIF}, Document: doc}, true, domain.MediaGIF},
+		{"file", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaFile}, Document: doc}, true, domain.MediaFile},
+		{"sticker excluded", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaSticker}, Document: doc}, false, 0},
+		{"photo excluded", domain.Message{ID: 1, Date: time.Now(), Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 9}}, false, 0},
+		{"text excluded", domain.Message{ID: 1, Date: time.Now(), Text: "hi"}, false, 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			ml := components.NewMessageList(3, 40)
-			ml.SetMessages([]store.Message{c.msg})
+			ml.SetMessages([]domain.Message{c.msg})
 			ml.View()
 
 			ref, kind, ok := ml.SelectedMessageDownloadDoc()
@@ -1619,9 +1619,9 @@ func TestMessageList_SelectedMessageDownloadDoc(t *testing.T) {
 
 func heightTestList() *components.MessageList {
 	ml := components.NewMessageList(5, 40)
-	msgs := make([]store.Message, 0, 10)
+	msgs := make([]domain.Message, 0, 10)
 	for i := 1; i <= 10; i++ {
-		msgs = append(msgs, store.Message{ID: i, Text: "hello world", Date: time.Now()})
+		msgs = append(msgs, domain.Message{ID: i, Text: "hello world", Date: time.Now()})
 	}
 	ml.SetMessages(msgs)
 	return ml
@@ -1657,9 +1657,9 @@ func TestMessageList_ItemHeights_InvalidatedOnEdit(t *testing.T) {
 
 	// Edit message 5 to span many wrapped lines; total height must grow, proving
 	// the cache was invalidated rather than serving the stale single-line height.
-	edited := make([]store.Message, 0, 10)
+	edited := make([]domain.Message, 0, 10)
 	for i := 1; i <= 10; i++ {
-		m := store.Message{ID: i, Text: "hello world", Date: time.Now()}
+		m := domain.Message{ID: i, Text: "hello world", Date: time.Now()}
 		if i == 5 {
 			m.Text = strings.Repeat("word ", 200)
 		}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // escapable lists the characters a backslash may escape. A backslash before any
@@ -51,7 +51,7 @@ func UTF16ToRuneIndex(s string, utf16Offset int) int {
 type builder struct {
 	sb   strings.Builder
 	u16  int
-	ents []store.MessageEntity
+	ents []domain.MessageEntity
 }
 
 func (b *builder) writeString(s string) {
@@ -62,7 +62,7 @@ func (b *builder) writeString(s string) {
 // Parse converts markdown-ish source into plain text plus Telegram entities.
 // It is total: malformed markup degrades to literal text and never errors,
 // because a chat composer must not refuse to send over syntax.
-func Parse(src string) (string, []store.MessageEntity) {
+func Parse(src string) (string, []domain.MessageEntity) {
 	b := &builder{}
 	parseBlocks(b, src)
 	return b.sb.String(), b.ents
@@ -87,7 +87,7 @@ func parseBlocks(b *builder, src string) {
 				sep()
 				start := b.u16
 				b.writeString(strings.Join(lines[i+1:close], "\n"))
-				b.ents = append(b.ents, store.MessageEntity{
+				b.ents = append(b.ents, domain.MessageEntity{
 					Type:     "pre",
 					Offset:   start,
 					Length:   b.u16 - start,
@@ -241,7 +241,7 @@ func parseInline(b *builder, rs []rune) {
 			if end := findCodeSpanEnd(rs, i); end > i+1 {
 				start := b.u16
 				b.writeString(string(rs[i+1 : end]))
-				b.ents = append(b.ents, store.MessageEntity{
+				b.ents = append(b.ents, domain.MessageEntity{
 					Type: "code", Offset: start, Length: b.u16 - start,
 				})
 				i = end + 1
@@ -257,7 +257,7 @@ func parseInline(b *builder, rs []rune) {
 			if end := findCloser(rs, i+len(m.tok), m.tok); end >= 0 {
 				start := b.u16
 				parseInline(b, rs[i+len(m.tok):end])
-				b.ents = append(b.ents, store.MessageEntity{
+				b.ents = append(b.ents, domain.MessageEntity{
 					Type: m.typ, Offset: start, Length: b.u16 - start,
 				})
 				i = end + len(m.tok)
@@ -268,7 +268,7 @@ func parseInline(b *builder, rs []rune) {
 			if linkText, target, next, ok := linkAt(rs, i); ok {
 				start := b.u16
 				parseInline(b, linkText)
-				b.ents = append(b.ents, store.MessageEntity{
+				b.ents = append(b.ents, domain.MessageEntity{
 					Type: "text_url", Offset: start, Length: b.u16 - start, URL: target,
 				})
 				i = next
@@ -294,7 +294,7 @@ type renderSpan struct {
 // mentions from its pending list, so inventing markup for them would double up.
 // Server-detected types (url, email, hashtag, …) are skipped for the same
 // reason — they come back on their own.
-func Render(text string, entities []store.MessageEntity) string {
+func Render(text string, entities []domain.MessageEntity) string {
 	runes := []rune(text)
 	n := len(runes)
 

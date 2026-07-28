@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -19,9 +20,9 @@ func newState(t *testing.T) (*state.State, store.Store) {
 
 func TestApplyIncoming_AppendsCountsAndReportsChange(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, Title: "A"})
+	st.SetChat(domain.Chat{ID: 1, Title: "A"})
 
-	chg, ok := s.ApplyIncoming(store.Message{ID: 5, ChatID: 1, Text: "hi"})
+	chg, ok := s.ApplyIncoming(domain.Message{ID: 5, ChatID: 1, Text: "hi"})
 
 	require.True(t, ok)
 	assert.Equal(t, state.ChangeNewMessage, chg.Kind)
@@ -37,9 +38,9 @@ func TestApplyIncoming_AppendsCountsAndReportsChange(t *testing.T) {
 // but no counter moved, so the folder bar must not be recomputed.
 func TestApplyIncoming_ReadElsewhereReportsNoUnreadChange(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, ReadInboxMaxID: 10})
+	st.SetChat(domain.Chat{ID: 1, ReadInboxMaxID: 10})
 
-	chg, ok := s.ApplyIncoming(store.Message{ID: 5, ChatID: 1})
+	chg, ok := s.ApplyIncoming(domain.Message{ID: 5, ChatID: 1})
 
 	require.True(t, ok, "the message is still news to the client")
 	assert.False(t, chg.UnreadChanged)
@@ -48,9 +49,9 @@ func TestApplyIncoming_ReadElsewhereReportsNoUnreadChange(t *testing.T) {
 
 func TestApplyIncoming_OutgoingDoesNotCount(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
+	st.SetChat(domain.Chat{ID: 1})
 
-	chg, ok := s.ApplyIncoming(store.Message{ID: 5, ChatID: 1, IsOut: true})
+	chg, ok := s.ApplyIncoming(domain.Message{ID: 5, ChatID: 1, IsOut: true})
 
 	require.True(t, ok)
 	assert.False(t, chg.UnreadChanged)
@@ -61,11 +62,11 @@ func TestApplyIncoming_OutgoingDoesNotCount(t *testing.T) {
 // A real content edit carries an EditDate and rewrites the text.
 func TestApplyEdit_RealEditUpdatesText(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
-	st.AppendMessage(store.Message{ID: 5, ChatID: 1, Text: "before"})
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Text: "before"})
 	when := time.Now()
 
-	chg, ok := s.ApplyEdit(store.Message{ID: 5, ChatID: 1, Text: "after", EditDate: &when})
+	chg, ok := s.ApplyEdit(domain.Message{ID: 5, ChatID: 1, Text: "after", EditDate: &when})
 
 	require.True(t, ok)
 	assert.Equal(t, state.ChangeMessageEdited, chg.Kind)
@@ -78,13 +79,13 @@ func TestApplyEdit_RealEditUpdatesText(t *testing.T) {
 // reactions ride along in the same payload and must not be dropped (#199).
 func TestApplyEdit_AlreadyEditedMessageStillAppliesReactions(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
+	st.SetChat(domain.Chat{ID: 1})
 	edited := time.Now().Add(-time.Hour)
-	st.AppendMessage(store.Message{ID: 5, ChatID: 1, Text: "fixed typo", EditDate: &edited})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Text: "fixed typo", EditDate: &edited})
 
-	chg, ok := s.ApplyEdit(store.Message{
+	chg, ok := s.ApplyEdit(domain.Message{
 		ID: 5, ChatID: 1, Text: "fixed typo", EditDate: &edited,
-		Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+		Reactions:          []domain.Reaction{{Emoji: "👍", Count: 1}},
 		HasUnreadReactions: true,
 	})
 
@@ -102,12 +103,12 @@ func TestApplyEdit_AlreadyEditedMessageStillAppliesReactions(t *testing.T) {
 // #160), so it surfaces as a reactions change, not an edit.
 func TestApplyEdit_HiddenEditSurfacesAsReactions(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
-	st.AppendMessage(store.Message{ID: 5, ChatID: 1, Text: "hi"})
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Text: "hi"})
 
-	chg, ok := s.ApplyEdit(store.Message{
+	chg, ok := s.ApplyEdit(domain.Message{
 		ID: 5, ChatID: 1, Text: "hi",
-		Reactions:          []store.Reaction{{Emoji: "👍", Count: 1}},
+		Reactions:          []domain.Reaction{{Emoji: "👍", Count: 1}},
 		HasUnreadReactions: true,
 	})
 
@@ -121,15 +122,15 @@ func TestApplyEdit_HiddenEditSurfacesAsReactions(t *testing.T) {
 
 func TestApplyReactions_TracksUnreadOnce(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
-	st.AppendMessage(store.Message{ID: 5, ChatID: 1})
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
 
-	chg, ok := s.ApplyReactions(1, 5, []store.Reaction{{Emoji: "👍", Count: 1}}, true)
+	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, true)
 	require.True(t, ok)
 	assert.True(t, chg.UnreadReactionChanged)
 
 	// Same message again: the count is already tracked.
-	chg, ok = s.ApplyReactions(1, 5, []store.Reaction{{Emoji: "👍", Count: 2}}, true)
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 2}}, true)
 	require.True(t, ok)
 	assert.False(t, chg.UnreadReactionChanged)
 	c, _ := st.GetChat(1)
@@ -138,9 +139,9 @@ func TestApplyReactions_TracksUnreadOnce(t *testing.T) {
 
 func TestApplyDelete_WithChatID(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1})
-	st.AppendMessage(store.Message{ID: 5, ChatID: 1})
-	st.AppendMessage(store.Message{ID: 6, ChatID: 1})
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
+	st.AppendMessage(domain.Message{ID: 6, ChatID: 1})
 
 	chg, ok := s.ApplyDelete(1, []int{5})
 
@@ -156,8 +157,8 @@ func TestApplyDelete_WithChatID(t *testing.T) {
 // to its owning chat through its index (#72).
 func TestApplyDelete_WithoutChatIDResolvesThroughStore(t *testing.T) {
 	s, st := newState(t)
-	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
-	st.AppendMessage(store.Message{ID: 5, ChatID: 1})
+	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
 
 	chg, ok := s.ApplyDelete(0, []int{5})
 

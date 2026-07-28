@@ -5,15 +5,15 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func makeTestChats() []store.Chat {
-	return []store.Chat{
+func makeTestChats() []domain.Chat {
+	return []domain.Chat{
 		{ID: 1, Title: "Alice"},
 		{ID: 2, Title: "Bob"},
 		{ID: 3, Title: "Charlie"},
@@ -55,7 +55,7 @@ func TestChatList_Context(t *testing.T) {
 func TestChatList_ShowsUnreadBadge(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Alice", UnreadCount: 3},
 		{ID: 2, Title: "Bob", UnreadCount: 0},
 	})
@@ -67,7 +67,7 @@ func TestChatList_ShowsUnreadBadge(t *testing.T) {
 func TestChatList_Badge99Plus(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Spam", UnreadCount: 150}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Spam", UnreadCount: 150}})
 	view := m.View()
 	assert.Contains(t, view, "[99+]")
 }
@@ -75,7 +75,7 @@ func TestChatList_Badge99Plus(t *testing.T) {
 func TestChatList_NoBadgeWhenZero(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Quiet", UnreadCount: 0}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Quiet", UnreadCount: 0}})
 	view := m.View()
 	assert.NotContains(t, view, "[0]")
 }
@@ -83,7 +83,7 @@ func TestChatList_NoBadgeWhenZero(t *testing.T) {
 func TestChatList_ManualUnread_ShowsDotBadge(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Marked", UnreadMark: true, UnreadCount: 0},
 	})
 	view := m.View()
@@ -94,7 +94,7 @@ func TestChatList_ManualUnread_ShowsDotBadge(t *testing.T) {
 func TestChatList_ManualUnread_NumericBadgeWinsWithCount(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Both", UnreadMark: true, UnreadCount: 5},
 	})
 	view := m.View()
@@ -105,7 +105,7 @@ func TestChatList_ManualUnread_NumericBadgeWinsWithCount(t *testing.T) {
 func TestChatList_Muted_ShowsMarker(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Quiet", IsMuted: true},
 	})
 	view := m.View()
@@ -115,7 +115,7 @@ func TestChatList_Muted_ShowsMarker(t *testing.T) {
 func TestChatList_ShowsReactionIndicator(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 1}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 1}})
 	view := m.View()
 	assert.Contains(t, view, "♥")
 }
@@ -123,7 +123,7 @@ func TestChatList_ShowsReactionIndicator(t *testing.T) {
 func TestChatList_ReactionIndicatorWithCount(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 3}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 3}})
 	view := m.View()
 	assert.Contains(t, view, "♥3")
 }
@@ -131,7 +131,7 @@ func TestChatList_ReactionIndicatorWithCount(t *testing.T) {
 func TestChatList_NoReactionIndicatorWhenZero(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 0}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 0}})
 	view := m.View()
 	assert.NotContains(t, view, "♥")
 }
@@ -139,7 +139,7 @@ func TestChatList_NoReactionIndicatorWhenZero(t *testing.T) {
 func TestChatList_ReactionAndUnreadBadgeCoexist(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadCount: 2, UnreadReactionsCount: 1}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadCount: 2, UnreadReactionsCount: 1}})
 	view := m.View()
 	assert.Contains(t, view, "♥")
 	assert.Contains(t, view, "[2]")
@@ -148,7 +148,7 @@ func TestChatList_ReactionAndUnreadBadgeCoexist(t *testing.T) {
 func TestChatList_MutedReactionUnread_AllRender(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", IsMuted: true, UnreadCount: 5, UnreadReactionsCount: 1}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", IsMuted: true, UnreadCount: 5, UnreadReactionsCount: 1}})
 	view := m.View()
 	assert.Contains(t, view, "×")
 	assert.Contains(t, view, "♥")
@@ -158,7 +158,7 @@ func TestChatList_MutedReactionUnread_AllRender(t *testing.T) {
 func TestChatList_ShowsMentionIndicator(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadMentionsCount: 1}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadMentionsCount: 1}})
 	view := m.View()
 	assert.Contains(t, view, "@")
 }
@@ -166,7 +166,7 @@ func TestChatList_ShowsMentionIndicator(t *testing.T) {
 func TestChatList_MentionIndicatorWithCount(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadMentionsCount: 3}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadMentionsCount: 3}})
 	view := m.View()
 	assert.Contains(t, view, "@3")
 }
@@ -174,7 +174,7 @@ func TestChatList_MentionIndicatorWithCount(t *testing.T) {
 func TestChatList_NoMentionIndicatorWhenZero(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadMentionsCount: 0}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadMentionsCount: 0}})
 	view := m.View()
 	assert.NotContains(t, view, "@")
 }
@@ -182,7 +182,7 @@ func TestChatList_NoMentionIndicatorWhenZero(t *testing.T) {
 func TestChatList_MentionReactionUnread_AllRender(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadCount: 5, UnreadReactionsCount: 1, UnreadMentionsCount: 2}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "Alice", UnreadCount: 5, UnreadReactionsCount: 1, UnreadMentionsCount: 2}})
 	view := m.View()
 	assert.Contains(t, view, "♥")
 	assert.Contains(t, view, "@2")
@@ -192,7 +192,7 @@ func TestChatList_MentionReactionUnread_AllRender(t *testing.T) {
 func TestChatList_NotMuted_NoMarker(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Loud", IsMuted: false, UnreadCount: 3},
 	})
 	view := m.View()
@@ -202,7 +202,7 @@ func TestChatList_NotMuted_NoMarker(t *testing.T) {
 func TestChatList_MutedUnread_WidthConsistent(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(30, 20)
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Plain", UnreadCount: 5},
 		{ID: 2, Title: "Muted", UnreadCount: 5, IsMuted: true},
 		{ID: 3, Title: "Mark", UnreadMark: true},
@@ -222,7 +222,7 @@ func TestChatList_SetChats_PreservesCursorByID(t *testing.T) {
 	assert.Equal(t, 0, m.Cursor())
 
 	// Reorder: A moves to index 1. Cursor must follow A to index 1.
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 2, Title: "Bob"},
 		{ID: 1, Title: "Alice"},
 		{ID: 3, Title: "Charlie"},
@@ -239,7 +239,7 @@ func TestChatList_SetChats_CursorClampsWhenChatRemoved(t *testing.T) {
 	m = newPane.(*screens.ChatListModel)
 	assert.Equal(t, 2, m.Cursor())
 
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Alice"},
 		{ID: 2, Title: "Bob"},
 	})
@@ -283,7 +283,7 @@ func TestChatList_SetChats_PreservesActiveIdxByID(t *testing.T) {
 	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionConfirm})
 	m = newPane.(*screens.ChatListModel)
 	require.Equal(t, 1, m.ActiveIdx())
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 2, Title: "Bob"},
 		{ID: 1, Title: "Alice"},
 		{ID: 3, Title: "Charlie"},
@@ -349,9 +349,9 @@ func TestChatList_SelectedChat_ReturnsActiveItem(t *testing.T) {
 func TestChatList_View_OnlineUserShowsDot(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
-		{ID: 1, Title: "Alice", Peer: store.Peer{Type: store.PeerUser}, Online: true},
-		{ID: 2, Title: "Bob", Peer: store.Peer{Type: store.PeerUser}, Online: false},
+	m.SetChats([]domain.Chat{
+		{ID: 1, Title: "Alice", Peer: domain.Peer{Type: domain.PeerUser}, Online: true},
+		{ID: 2, Title: "Bob", Peer: domain.Peer{Type: domain.PeerUser}, Online: false},
 	})
 	view := m.View()
 	assert.Contains(t, view, "●")
@@ -360,7 +360,7 @@ func TestChatList_View_OnlineUserShowsDot(t *testing.T) {
 func TestChatList_LongTitleShowsEllipsis(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(20, 10)
-	m.SetChats([]store.Chat{{ID: 1, Title: strings.Repeat("x", 50)}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: strings.Repeat("x", 50)}})
 	view := m.View()
 	assert.Contains(t, view, "…")
 }
@@ -368,7 +368,7 @@ func TestChatList_LongTitleShowsEllipsis(t *testing.T) {
 func TestChatList_EmojiTitleBadgeWidthConsistent(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(30, 10)
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 1, Title: "Plain title", UnreadCount: 5},
 		{ID: 2, Title: "Emoji 🌐 title", UnreadCount: 5},
 	})
@@ -382,8 +382,8 @@ func TestChatList_EmojiTitleBadgeWidthConsistent(t *testing.T) {
 func TestChatList_View_OfflineUserNoDot(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
-		{ID: 1, Title: "Alice", Peer: store.Peer{Type: store.PeerUser}, Online: false},
+	m.SetChats([]domain.Chat{
+		{ID: 1, Title: "Alice", Peer: domain.Peer{Type: domain.PeerUser}, Online: false},
 	})
 	view := m.View()
 	assert.NotContains(t, view, "●")
@@ -392,8 +392,8 @@ func TestChatList_View_OfflineUserNoDot(t *testing.T) {
 func TestChatList_View_GroupNoDot(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)
-	m.SetChats([]store.Chat{
-		{ID: 1, Title: "Team", Peer: store.Peer{Type: store.PeerGroup}, Online: true},
+	m.SetChats([]domain.Chat{
+		{ID: 1, Title: "Team", Peer: domain.Peer{Type: domain.PeerGroup}, Online: true},
 	})
 	view := m.View()
 	assert.NotContains(t, view, "●")
@@ -402,9 +402,9 @@ func TestChatList_View_GroupNoDot(t *testing.T) {
 func TestChatList_View_OnlineDotWidthConsistent(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(30, 20)
-	m.SetChats([]store.Chat{
-		{ID: 1, Title: "Alice", Peer: store.Peer{Type: store.PeerUser}, Online: true},
-		{ID: 2, Title: "Bob", Peer: store.Peer{Type: store.PeerUser}, Online: false},
+	m.SetChats([]domain.Chat{
+		{ID: 1, Title: "Alice", Peer: domain.Peer{Type: domain.PeerUser}, Online: true},
+		{ID: 2, Title: "Bob", Peer: domain.Peer{Type: domain.PeerUser}, Online: false},
 	})
 	lines := strings.Split(m.View(), "\n")
 	require.GreaterOrEqual(t, len(lines), 2)
@@ -415,7 +415,7 @@ func TestChatList_View_OnlineDotWidthConsistent(t *testing.T) {
 
 func TestChatList_CursorChat(t *testing.T) {
 	m := screens.NewChatListModel()
-	m.SetChats([]store.Chat{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}})
+	m.SetChats([]domain.Chat{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}})
 	m.SetCursorByID(2)
 	c, ok := m.CursorChat()
 	require.True(t, ok)
@@ -425,9 +425,9 @@ func TestChatList_CursorChat(t *testing.T) {
 func TestChatList_CursorViewportRow_Scrolled(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(20, 3) // 3 visible rows
-	chats := make([]store.Chat, 10)
+	chats := make([]domain.Chat, 10)
 	for i := range chats {
-		chats[i] = store.Chat{ID: int64(i + 1)}
+		chats[i] = domain.Chat{ID: int64(i + 1)}
 	}
 	m.SetChats(chats)
 	m.SetCursorByID(6) // index 5: start = 5-3+1 = 3, row = 5-3 = 2
@@ -436,9 +436,9 @@ func TestChatList_CursorViewportRow_Scrolled(t *testing.T) {
 
 func TestChatListModel_ScrollInfo(t *testing.T) {
 	m := screens.NewChatListModel()
-	chats := make([]store.Chat, 20)
+	chats := make([]domain.Chat, 20)
 	for i := range chats {
-		chats[i] = store.Chat{ID: int64(i + 1), Title: "c"}
+		chats[i] = domain.Chat{ID: int64(i + 1), Title: "c"}
 	}
 	m.SetChats(chats)
 	m.SetSize(20, 5) // 5 visible rows
@@ -458,9 +458,9 @@ func TestChatListModel_ScrollInfo(t *testing.T) {
 func TestChatIndexAtViewportRow_NoScroll(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(20, 10)
-	chats := make([]store.Chat, 5)
+	chats := make([]domain.Chat, 5)
 	for i := range chats {
-		chats[i] = store.Chat{ID: int64(i + 1), Peer: store.Peer{ID: int64(i + 1), Type: store.PeerUser}}
+		chats[i] = domain.Chat{ID: int64(i + 1), Peer: domain.Peer{ID: int64(i + 1), Type: domain.PeerUser}}
 	}
 	m.SetChats(chats)
 
@@ -480,9 +480,9 @@ func TestChatIndexAtViewportRow_NoScroll(t *testing.T) {
 func TestChatIndexAtViewportRow_Scrolled(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(20, 3) // viewport height 3
-	chats := make([]store.Chat, 10)
+	chats := make([]domain.Chat, 10)
 	for i := range chats {
-		chats[i] = store.Chat{ID: int64(i + 1), Peer: store.Peer{ID: int64(i + 1), Type: store.PeerUser}}
+		chats[i] = domain.Chat{ID: int64(i + 1), Peer: domain.Peer{ID: int64(i + 1), Type: domain.PeerUser}}
 	}
 	m.SetChats(chats)
 	m.SetCursor(9) // scrolled to bottom: start = 9-3+1 = 7

@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
@@ -84,8 +84,8 @@ func TestRetransmitTick_StaleGenerationIsIgnored(t *testing.T) {
 	m.chat.SetSize(80, 24)
 	// Settle the animation loops (chats loaded, a chat open) so the only command
 	// under test is the retransmit, not an animation re-arm (issue #147).
-	m.chatList.SetChats([]store.Chat{{ID: 1}})
-	m.chat.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	m.chatList.SetChats([]domain.Chat{{ID: 1}})
+	m.chat.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	// Seed one live placement so the reset has a placement to delete by id (#94).
 	m.kittyStore.IDFor(500)
 	m.kittyLive = map[int64]bool{500: true}
@@ -110,13 +110,13 @@ func TestReconcileKitty_TransmitsOnlyVisible(t *testing.T) {
 	m.chat.SetSize(80, 12) // small viewport: only a couple of photos fit
 
 	const total = 40
-	msgs := make([]store.Message, 0, total)
+	msgs := make([]domain.Message, 0, total)
 	for i := 0; i < total; i++ {
 		pid := int64(100 + i)
-		msgs = append(msgs, store.Message{
+		msgs = append(msgs, domain.Message{
 			ID: i + 1, ChatID: 1,
-			Media: &store.MediaRef{Kind: store.MediaPhoto},
-			Photo: &store.PhotoRef{ID: pid},
+			Media: &domain.MediaRef{Kind: domain.MediaPhoto},
+			Photo: &domain.PhotoRef{ID: pid},
 			Date:  time.Now(),
 		})
 		m.imageCache.Add(pid, image.NewRGBA(image.Rect(0, 0, 320, 320)))

@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/gotd/td/tg"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
@@ -30,7 +30,7 @@ const (
 // photo the user chose to send as a file travels with the documents.
 func albumClassOf(a pendingAttachment) albumClass {
 	switch a.sendAs {
-	case store.MediaPhoto, store.MediaVideo:
+	case domain.MediaPhoto, domain.MediaVideo:
 		return classVisual
 	default:
 		return classDocument
@@ -80,10 +80,10 @@ type albumPart struct {
 // and leaves cancellation meaningful.
 type albumSend struct {
 	serial       int
-	peer         store.Peer
+	peer         domain.Peer
 	chatID       int64
 	caption      string
-	entities     []store.MessageEntity
+	entities     []domain.MessageEntity
 	replyToMsgID int
 	groups       [][]albumPart
 	group        int // index of the group currently uploading
@@ -119,7 +119,7 @@ type albumGroupSentMsg struct {
 type albumRefreshedMsg struct {
 	serial int
 	ids    []int
-	msgs   []store.Message
+	msgs   []domain.Message
 }
 
 // StatusBarTransferActive reports whether the status bar shows a transfer
@@ -128,7 +128,7 @@ func (m RootModel) StatusBarTransferActive() bool { return m.statusBar.DownloadA
 
 // startAlbumSend stages one optimistic bubble per file, then starts the
 // sequential upload pipeline. The caller clears the staged queue.
-func (m RootModel) startAlbumSend(peer store.Peer, caption string, entities []store.MessageEntity, replyToMsgID int) (RootModel, tea.Cmd) {
+func (m RootModel) startAlbumSend(peer domain.Peer, caption string, entities []domain.MessageEntity, replyToMsgID int) (RootModel, tea.Cmd) {
 	if m.tgClient == nil || m.st == nil || len(m.pendingAttachments) == 0 {
 		return m, nil
 	}
@@ -155,14 +155,14 @@ func (m RootModel) startAlbumSend(peer store.Peer, caption string, entities []st
 			// Without this the caption vanishes until the chat is reloaded.
 			var (
 				partText     string
-				partEntities []store.MessageEntity
+				partEntities []domain.MessageEntity
 				partReplyTo  int
 			)
 			if first {
 				partText, partEntities, partReplyTo = caption, entities, replyToMsgID
 				first = false
 			}
-			m.st.AppendMessage(store.Message{
+			m.st.AppendMessage(domain.Message{
 				ID:           sentinelID,
 				ChatID:       chatID,
 				Text:         partText,
@@ -170,12 +170,12 @@ func (m RootModel) startAlbumSend(peer store.Peer, caption string, entities []st
 				ReplyToMsgID: partReplyTo,
 				Date:         time.Now(),
 				IsOut:        true,
-				LocalMedia: &store.LocalMedia{
+				LocalMedia: &domain.LocalMedia{
 					Path:        a.path,
 					Kind:        a.sendAs,
 					FileName:    a.name,
 					Size:        a.size,
-					UploadState: store.UploadUploading,
+					UploadState: domain.UploadUploading,
 				},
 			})
 			as.totalBytes += a.size
@@ -277,7 +277,7 @@ func (m RootModel) uploadNextAlbumPartCmd() tea.Cmd {
 			return albumPartUploadedMsg{serial: serial, err: err}
 		}
 		var uploaded tg.InputMediaClass
-		if att.sendAs == store.MediaVideo {
+		if att.sendAs == domain.MediaVideo {
 			uploaded, err = videoBuildMediaCtx(att.path, att.name, att.mime)(ctx, client, f)
 			if err != nil {
 				return albumPartUploadedMsg{serial: serial, err: err}
@@ -484,7 +484,7 @@ func (m RootModel) handleAlbumRefreshed(msg albumRefreshedMsg) (RootModel, tea.C
 	for _, r := range msg.msgs {
 		want[r.ID] = struct{}{}
 	}
-	var fresh []store.Message
+	var fresh []domain.Message
 	for _, mm := range m.st.Messages(chatID) {
 		if _, ok := want[mm.ID]; ok {
 			fresh = append(fresh, mm)

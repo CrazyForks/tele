@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
@@ -41,7 +42,7 @@ func (m RootModel) handleChange(chg state.Change) (RootModel, tea.Cmd) {
 		}
 		if chg.ChatID == m.currentChatID {
 			m.chat.SetMessages(m.st.Messages(m.currentChatID))
-			cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]store.Message{chg.Message})}
+			cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]domain.Message{chg.Message})}
 			if m.focus == FocusChat && chg.Message.Mentioned {
 				cmds = append(cmds, m.readMentionsCmd(chg.ChatID))
 			}
@@ -160,14 +161,14 @@ func (m RootModel) handleChange(chg state.Change) (RootModel, tea.Cmd) {
 // notifyOpenMsg is emitted when a notify toast is clicked: it dismisses the
 // toast and opens the target chat (#59 click-to-open).
 type notifyOpenMsg struct {
-	chat   store.Chat
+	chat   domain.Chat
 	serial int
 }
 
 // showInAppNotify adds a top-right notify toast for an incoming message in an
 // inactive chat and returns its auto-dismiss command. The whole toast is a
 // click target that opens the chat. Respects the notification-preview setting.
-func (m RootModel) showInAppNotify(msg store.Message) tea.Cmd {
+func (m RootModel) showInAppNotify(msg domain.Message) tea.Cmd {
 	chat, _ := m.st.GetChat(msg.ChatID)
 	title := "New message"
 	if chat.Title != "" {

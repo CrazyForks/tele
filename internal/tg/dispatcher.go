@@ -10,6 +10,7 @@ import (
 
 	"github.com/gotd/td/tg"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -299,30 +300,30 @@ func setupDispatcher(
 	// because pts gaps cause updates.Manager to silently drop these events.
 }
 
-func convertTypingAction(a tg.SendMessageActionClass) store.TypingAction {
+func convertTypingAction(a tg.SendMessageActionClass) domain.TypingAction {
 	switch a.(type) {
 	case *tg.SendMessageTypingAction:
-		return store.TypingActionTyping
+		return domain.TypingActionTyping
 	case *tg.SendMessageRecordAudioAction:
-		return store.TypingActionRecordAudio
+		return domain.TypingActionRecordAudio
 	case *tg.SendMessageUploadAudioAction:
-		return store.TypingActionUploadAudio
+		return domain.TypingActionUploadAudio
 	case *tg.SendMessageRecordVideoAction:
-		return store.TypingActionRecordVideo
+		return domain.TypingActionRecordVideo
 	case *tg.SendMessageUploadVideoAction:
-		return store.TypingActionUploadVideo
+		return domain.TypingActionUploadVideo
 	case *tg.SendMessageUploadPhotoAction:
-		return store.TypingActionUploadPhoto
+		return domain.TypingActionUploadPhoto
 	case *tg.SendMessageUploadDocumentAction:
-		return store.TypingActionUploadDocument
+		return domain.TypingActionUploadDocument
 	case *tg.SendMessageChooseStickerAction:
-		return store.TypingActionChooseSticker
+		return domain.TypingActionChooseSticker
 	case *tg.SendMessageRecordRoundAction:
-		return store.TypingActionRecordRound
+		return domain.TypingActionRecordRound
 	case *tg.SendMessageCancelAction:
-		return store.TypingActionCancel
+		return domain.TypingActionCancel
 	default:
-		return store.TypingActionUnknown
+		return domain.TypingActionUnknown
 	}
 }
 

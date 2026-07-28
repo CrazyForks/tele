@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/gotd/td/tg"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,7 +79,7 @@ func TestBuildSendMultiMediaRequest_Entities(t *testing.T) {
 	items := []AlbumItem{{
 		Media:    &tg.InputMediaPhoto{},
 		Caption:  "bold",
-		Entities: []store.MessageEntity{{Type: "bold", Offset: 0, Length: 4}},
+		Entities: []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 4}},
 	}}
 	req := buildSendMultiMediaRequest(&tg.InputPeerEmpty{}, items, []int64{1}, 0)
 	require.Len(t, req.MultiMedia[0].Entities, 1)

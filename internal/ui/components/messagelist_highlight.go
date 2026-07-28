@@ -4,7 +4,7 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // HighlightMessage starts an info (amber) fade highlight on the bubble with the
@@ -50,7 +50,7 @@ func (ml *MessageList) HighlightStep() int { return ml.highlightStep }
 // bubbleBorderFg returns the border color for a message bubble: the normal
 // outgoing/incoming tone, replaced by a faded accent while this message is the
 // active highlight target.
-func (ml *MessageList) bubbleBorderFg(msg store.Message) color.Color {
+func (ml *MessageList) bubbleBorderFg(msg domain.Message) color.Color {
 	var borderFg color.Color
 	if msg.IsOut {
 		borderFg = lipgloss.Color("25")

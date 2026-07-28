@@ -7,12 +7,12 @@ import (
 	"charm.land/lipgloss/v2"
 	lipcompat "charm.land/lipgloss/v2/compat"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 // MentionSelectedMsg is emitted when the user picks a member from the popup.
-type MentionSelectedMsg struct{ Member store.ChatMember }
+type MentionSelectedMsg struct{ Member domain.ChatMember }
 
 // CloseMentionPopupMsg is emitted when the popup is dismissed without a pick.
 type CloseMentionPopupMsg struct{}
@@ -38,8 +38,8 @@ var (
 // MentionPopup is a keyboard-driven autocomplete overlay listing chat members
 // for the composer's @mention trigger.
 type MentionPopup struct {
-	all      []store.ChatMember
-	filtered []store.ChatMember
+	all      []domain.ChatMember
+	filtered []domain.ChatMember
 	cursor   int
 	offset   int // index of the first rendered row (scroll window top)
 	loading  bool
@@ -51,7 +51,7 @@ func NewMentionPopup() *MentionPopup { return &MentionPopup{} }
 func (p *MentionPopup) SetWidth(w int)    { p.width = w }
 func (p *MentionPopup) SetLoading(v bool) { p.loading = v }
 
-func (p *MentionPopup) SetMembers(all []store.ChatMember) {
+func (p *MentionPopup) SetMembers(all []domain.ChatMember) {
 	p.all = all
 	p.filtered = all
 	p.cursor = 0
@@ -78,7 +78,7 @@ func (p *MentionPopup) Filter(query string) {
 		p.offset = 0
 		return
 	}
-	out := make([]store.ChatMember, 0, len(p.all))
+	out := make([]domain.ChatMember, 0, len(p.all))
 	for _, m := range p.all {
 		if strings.Contains(strings.ToLower(m.Username), q) ||
 			strings.Contains(strings.ToLower(m.DisplayName), q) {
@@ -90,8 +90,8 @@ func (p *MentionPopup) Filter(query string) {
 	p.offset = 0
 }
 
-func (p *MentionPopup) Filtered() []store.ChatMember { return p.filtered }
-func (p *MentionPopup) Empty() bool                  { return len(p.filtered) == 0 }
+func (p *MentionPopup) Filtered() []domain.ChatMember { return p.filtered }
+func (p *MentionPopup) Empty() bool                   { return len(p.filtered) == 0 }
 
 func (p *MentionPopup) Update(msg tea.Msg) (*MentionPopup, tea.Cmd) {
 	kp, ok := msg.(tea.KeyPressMsg)

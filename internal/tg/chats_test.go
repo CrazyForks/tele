@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +16,7 @@ func TestConvertUser_ToChat(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, int64(100), chat.ID)
 	assert.Equal(t, "Alice B", chat.Title)
-	assert.Equal(t, store.PeerUser, chat.Peer.Type)
+	assert.Equal(t, domain.PeerUser, chat.Peer.Type)
 	assert.Equal(t, int64(42), chat.Peer.AccessHash)
 }
 
@@ -26,7 +26,7 @@ func TestConvertChat_ToChat(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, int64(200), chat.ID)
 	assert.Equal(t, "My Group", chat.Title)
-	assert.Equal(t, store.PeerGroup, chat.Peer.Type)
+	assert.Equal(t, domain.PeerGroup, chat.Peer.Type)
 }
 
 func TestConvertChannel_ToChat(t *testing.T) {
@@ -34,7 +34,7 @@ func TestConvertChannel_ToChat(t *testing.T) {
 	chat, ok := convertChannel(ch)
 	require.True(t, ok)
 	assert.Equal(t, int64(300), chat.ID)
-	assert.Equal(t, store.PeerChannel, chat.Peer.Type)
+	assert.Equal(t, domain.PeerChannel, chat.Peer.Type)
 	assert.Equal(t, int64(99), chat.Peer.AccessHash)
 }
 
@@ -44,7 +44,7 @@ func TestConvertUser_Bot(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, int64(101), chat.ID)
 	assert.Equal(t, "MyBot", chat.Title)
-	assert.Equal(t, store.PeerUser, chat.Peer.Type)
+	assert.Equal(t, domain.PeerUser, chat.Peer.Type)
 	assert.Equal(t, int64(55), chat.Peer.AccessHash)
 }
 
@@ -53,11 +53,11 @@ func TestConvertUser_Self(t *testing.T) {
 	chat, ok := convertUser(user)
 	require.True(t, ok)
 	assert.Equal(t, "Saved Messages", chat.Title)
-	assert.Equal(t, store.PeerUser, chat.Peer.Type)
+	assert.Equal(t, domain.PeerUser, chat.Peer.Type)
 }
 
 func TestParseDialogs_IncludesBots(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	c := &GotdClient{peers: make(map[int64]domain.Peer)}
 	bot := &tg.User{ID: 42, FirstName: "CoolBot", Bot: true, AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 42},
@@ -75,7 +75,7 @@ func TestParseDialogs_IncludesBots(t *testing.T) {
 }
 
 func TestParseDialogs_IncludesSavedMessages(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	c := &GotdClient{peers: make(map[int64]domain.Peer)}
 	self := &tg.User{ID: 1, FirstName: "Me", Self: true, AccessHash: 7}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 1},
@@ -93,7 +93,7 @@ func TestParseDialogs_IncludesSavedMessages(t *testing.T) {
 }
 
 func TestParseDialogs_UnreadCount(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	c := &GotdClient{peers: make(map[int64]domain.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:        &tg.PeerUser{UserID: 7},
@@ -112,7 +112,7 @@ func TestParseDialogs_UnreadCount(t *testing.T) {
 }
 
 func TestParseDialogs_UnreadReactionsCount(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	c := &GotdClient{peers: make(map[int64]domain.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:                 &tg.PeerUser{UserID: 7},
@@ -131,7 +131,7 @@ func TestParseDialogs_UnreadReactionsCount(t *testing.T) {
 }
 
 func TestParseDialogs_ExtractsDraft(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	c := &GotdClient{peers: make(map[int64]domain.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 7},
@@ -150,7 +150,7 @@ func TestParseDialogs_ExtractsDraft(t *testing.T) {
 }
 
 func TestParseDialogs_EmptyDraft(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	c := &GotdClient{peers: make(map[int64]domain.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{Peer: &tg.PeerUser{UserID: 7}, TopMessage: 1}
 	dialog.SetDraft(&tg.DraftMessageEmpty{})
@@ -165,7 +165,7 @@ func TestParseDialogs_EmptyDraft(t *testing.T) {
 }
 
 func TestParseDialogs_SetsArchivedFlag(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	c := &GotdClient{peers: make(map[int64]domain.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 7},
@@ -195,7 +195,7 @@ func TestParseDialogs_SetsArchivedFlag(t *testing.T) {
 	out := c.parseDialogs(result)
 	require.Len(t, out, 2)
 
-	byID := map[int64]store.Chat{}
+	byID := map[int64]domain.Chat{}
 	for _, c := range out {
 		byID[c.ID] = c
 	}

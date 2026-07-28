@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -22,19 +22,19 @@ type sentMsgConfirmedMsg struct {
 type reactionFailedMsg struct {
 	chatID    int64
 	msgID     int
-	reactions []store.Reaction
+	reactions []domain.Reaction
 }
 
 type deleteMsgFailedMsg struct {
 	chatID   int64
 	msgID    int
-	messages []store.Message
+	messages []domain.Message
 }
 
 type editMsgFailedMsg struct {
 	chatID   int64
 	msgID    int
-	messages []store.Message
+	messages []domain.Message
 }
 
 type forwardDoneMsg struct {
@@ -45,7 +45,7 @@ type forwardDoneMsg struct {
 	err error
 	// On success, bump the target chat in the list with this preview message.
 	bumpChatID int64
-	lastMsg    store.Message
+	lastMsg    domain.Message
 }
 
 func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd) {
@@ -54,7 +54,7 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 	}
 	m.nextSentinel--
 	sentinelID := m.nextSentinel
-	sentinel := store.Message{
+	sentinel := domain.Message{
 		ID:           sentinelID,
 		ChatID:       m.currentChatID,
 		Text:         msg.Text,
@@ -178,7 +178,7 @@ func (m RootModel) flushCurrentDraftCmd() tea.Cmd {
 
 // saveDraftCmd returns a managed Cmd that saves (or clears, when text == "")
 // the draft for a peer via the Telegram client. nil client → nil Cmd.
-func (m RootModel) saveDraftCmd(peer store.Peer, text string) tea.Cmd {
+func (m RootModel) saveDraftCmd(peer domain.Peer, text string) tea.Cmd {
 	if m.tgClient == nil {
 		return nil
 	}
@@ -219,7 +219,7 @@ func (m RootModel) handleReactConfirmed(msg components.ReactConfirmedMsg) (RootM
 	msgID := m.reactionTargetID
 	emoji := msg.Emoji
 	currentReactions := m.st.Messages(chatID)
-	var msgReactions []store.Reaction
+	var msgReactions []domain.Reaction
 	for _, sm := range currentReactions {
 		if sm.ID == msgID {
 			msgReactions = sm.Reactions
@@ -237,7 +237,7 @@ func (m RootModel) handleReactConfirmed(msg components.ReactConfirmedMsg) (RootM
 	if alreadyChosen {
 		sendEmoji = ""
 	}
-	origReactions := make([]store.Reaction, len(msgReactions))
+	origReactions := make([]domain.Reaction, len(msgReactions))
 	copy(origReactions, msgReactions)
 	newReactions := buildOptimisticReactions(msgReactions, emoji)
 	m.st.UpdateMessageReactions(chatID, msgID, newReactions)
@@ -312,7 +312,7 @@ func (m RootModel) handleDeleteMsgFailed(msg deleteMsgFailedMsg) (RootModel, tea
 	return m.flashRollback(msg.msgID, toast)
 }
 
-func buildOptimisticReactions(current []store.Reaction, emoji string) []store.Reaction {
+func buildOptimisticReactions(current []domain.Reaction, emoji string) []domain.Reaction {
 	alreadyChosen := false
 	for _, r := range current {
 		if r.Emoji == emoji && r.IsChosen {
@@ -320,7 +320,7 @@ func buildOptimisticReactions(current []store.Reaction, emoji string) []store.Re
 			break
 		}
 	}
-	out := make([]store.Reaction, 0, len(current)+1)
+	out := make([]domain.Reaction, 0, len(current)+1)
 	emojiFound := false
 	for _, r := range current {
 		nr := r
@@ -346,7 +346,7 @@ func buildOptimisticReactions(current []store.Reaction, emoji string) []store.Re
 		out = append(out, nr)
 	}
 	if !alreadyChosen && !emojiFound && emoji != "" {
-		out = append(out, store.Reaction{Emoji: emoji, Count: 1, IsChosen: true})
+		out = append(out, domain.Reaction{Emoji: emoji, Count: 1, IsChosen: true})
 	}
 	return out
 }
@@ -499,7 +499,7 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 	// Build the optimistic last-message preview for the target chat from the
 	// forwarded source message, so the target can bubble up the list on success
 	// (the real message arrives later via the update stream / on next open).
-	preview := store.Message{ChatID: msg.ToPeer.ID, IsOut: true, Date: time.Now()}
+	preview := domain.Message{ChatID: msg.ToPeer.ID, IsOut: true, Date: time.Now()}
 	for _, sm := range m.st.Messages(m.currentChatID) {
 		if sm.ID == msg.MsgID {
 			preview.Text = sm.Text

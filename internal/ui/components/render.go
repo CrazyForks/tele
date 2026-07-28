@@ -7,8 +7,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	lipcompat "charm.land/lipgloss/v2/compat"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // Adaptive entity colors, readable on dark and light backgrounds; resolved via
@@ -89,7 +89,7 @@ func applyEntityStyle(s lipgloss.Style, typ string) lipgloss.Style {
 // style into one combined lipgloss.Style, so overlapping/nested entities compose
 // correctly. text_url runs are additionally wrapped in an OSC 8 hyperlink.
 // Unknown types pass through as plain text.
-func RenderEntities(text string, entities []store.MessageEntity) string {
+func RenderEntities(text string, entities []domain.MessageEntity) string {
 	if len(entities) == 0 {
 		return text
 	}

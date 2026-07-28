@@ -3,7 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -12,7 +12,7 @@ import (
 // dropping any chunk entries whose IDs already appear in existing. Duplicate
 // in-flight loads (issue #120) or overlapping server pages would otherwise seed
 // duplicate messages into the store that the message list rebuilds from.
-func prependOlder(older, existing []store.Message) []store.Message {
+func prependOlder(older, existing []domain.Message) []domain.Message {
 	if len(existing) == 0 {
 		return older
 	}
@@ -20,7 +20,7 @@ func prependOlder(older, existing []store.Message) []store.Message {
 	for _, m := range existing {
 		seen[m.ID] = struct{}{}
 	}
-	combined := make([]store.Message, 0, len(older)+len(existing))
+	combined := make([]domain.Message, 0, len(older)+len(existing))
 	for _, m := range older {
 		if _, dup := seen[m.ID]; dup {
 			continue

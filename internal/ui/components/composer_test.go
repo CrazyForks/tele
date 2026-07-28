@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +20,7 @@ func TestComposerAttachmentChip(t *testing.T) {
 	c := components.NewComposer(60)
 	base := c.VisualHeight()
 
-	c.SetAttachment("pic.jpg", 2100000, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment("pic.jpg", 2100000, domain.MediaPhoto, domain.MediaPhoto, true)
 	if !c.HasAttachment() {
 		t.Fatal("HasAttachment = false after SetAttachment")
 	}
@@ -49,7 +49,7 @@ func TestComposerAttachmentChip_Video(t *testing.T) {
 
 	// Native video, currently sending as video: the toggle must read "Video"
 	// (not "Photo") and bracket the selected Video option.
-	c.SetAttachment("clip.mov", 5_000_000, store.MediaVideo, store.MediaVideo, true)
+	c.SetAttachment("clip.mov", 5_000_000, domain.MediaVideo, domain.MediaVideo, true)
 	v := c.View()
 	if !strings.Contains(v, "[Video]") {
 		t.Fatalf("video chip must label+bracket the Video option:\n%s", v)
@@ -59,7 +59,7 @@ func TestComposerAttachmentChip_Video(t *testing.T) {
 	}
 
 	// Toggled to file: the alternative must still read "Video", File bracketed.
-	c.SetAttachment("clip.mov", 5_000_000, store.MediaVideo, store.MediaFile, true)
+	c.SetAttachment("clip.mov", 5_000_000, domain.MediaVideo, domain.MediaFile, true)
 	v = c.View()
 	if !strings.Contains(v, "Video") || !strings.Contains(v, "[File]") {
 		t.Fatalf("toggled-to-file video chip want 'Video [File]':\n%s", v)
@@ -73,7 +73,7 @@ func TestComposerAttachmentChip_TruncatesToWidth(t *testing.T) {
 	const width = 40
 	c := components.NewComposer(width)
 	longName := "a_very_long_filename_that_overflows_the_box.png"
-	c.SetAttachment(longName, 2_100_000, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment(longName, 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
 	v := c.View()
 
 	for _, ln := range strings.Split(v, "\n") {
@@ -96,7 +96,7 @@ func TestComposerAttachmentChip_TruncatesToWidth(t *testing.T) {
 func TestComposerAttachmentChip_FitsWideNoTruncate(t *testing.T) {
 	const width = 80
 	c := components.NewComposer(width)
-	c.SetAttachment("pic.jpg", 2_100_000, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment("pic.jpg", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
 	v := c.View()
 
 	for _, ln := range strings.Split(v, "\n") {
@@ -117,7 +117,7 @@ func TestComposerAttachmentChip_ExtremeNarrow_NoOverflow(t *testing.T) {
 	// a fallback and the box must still not overflow (#162).
 	const width = 10
 	c := components.NewComposer(width)
-	c.SetAttachment("photo.png", 2_100_000, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment("photo.png", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
 	v := c.View()
 
 	for _, ln := range strings.Split(v, "\n") {
@@ -357,7 +357,7 @@ func TestMentionQueryDetection(t *testing.T) {
 func TestApplyMentionUsername(t *testing.T) {
 	c := components.NewComposer(40)
 	c.SetValue("hi @al")
-	c.ApplyMention(store.ChatMember{UserID: 5, Username: "alice", DisplayName: "Alice A"})
+	c.ApplyMention(domain.ChatMember{UserID: 5, Username: "alice", DisplayName: "Alice A"})
 	if v := c.Value(); v != "hi @alice " {
 		t.Fatalf("want 'hi @alice ', got %q", v)
 	}
@@ -373,7 +373,7 @@ func TestApplyMentionUsername(t *testing.T) {
 func TestApplyMentionNameAndResolve(t *testing.T) {
 	c := components.NewComposer(40)
 	c.SetValue("hi @iv")
-	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
+	c.ApplyMention(domain.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
 	if v := c.Value(); v != "hi @Ivan P " {
 		t.Fatalf("want 'hi @Ivan P ', got %q", v)
 	}
@@ -391,7 +391,7 @@ func TestApplyMentionNameAndResolve(t *testing.T) {
 func TestResolveDroppedMention(t *testing.T) {
 	c := components.NewComposer(40)
 	c.SetValue("@iv")
-	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
+	c.ApplyMention(domain.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
 	c.SetValue("nothing here") // user erased the mention
 	_, ents := c.ResolveEntities()
 	if len(ents) != 0 {
@@ -411,7 +411,7 @@ func TestPastedTokenNotAnEntity(t *testing.T) {
 func TestResetClearsPending(t *testing.T) {
 	c := components.NewComposer(40)
 	c.SetValue("@iv")
-	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
+	c.ApplyMention(domain.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
 	c.Reset()
 	c.SetValue("Ivan P") // same text, but pending cleared
 	_, ents := c.ResolveEntities()
@@ -424,7 +424,7 @@ func TestResolvePrefixNameNotMatchedInsideLonger(t *testing.T) {
 	c := components.NewComposer(60)
 	// Insert the longer name first, then type a distinct trailing word.
 	c.SetValue("@Iv")
-	c.ApplyMention(store.ChatMember{UserID: 20, AccessHash: 2, DisplayName: "Ivan Petrov"})
+	c.ApplyMention(domain.ChatMember{UserID: 20, AccessHash: 2, DisplayName: "Ivan Petrov"})
 	// Value is now "@Ivan Petrov "; a pending "@Ivan P" prefix must NOT match here.
 	text, ents := c.ResolveEntities()
 	if len(ents) != 1 {
@@ -438,9 +438,9 @@ func TestResolvePrefixNameNotMatchedInsideLonger(t *testing.T) {
 func TestResolveTwoPrefixNamesMapToCorrectUsers(t *testing.T) {
 	c := components.NewComposer(60)
 	c.SetValue("@An")
-	c.ApplyMention(store.ChatMember{UserID: 1, AccessHash: 1, DisplayName: "Anna"})
+	c.ApplyMention(domain.ChatMember{UserID: 1, AccessHash: 1, DisplayName: "Anna"})
 	c.SetValue(c.Value() + "@An")
-	c.ApplyMention(store.ChatMember{UserID: 2, AccessHash: 2, DisplayName: "Ann"})
+	c.ApplyMention(domain.ChatMember{UserID: 2, AccessHash: 2, DisplayName: "Ann"})
 	// Value: "@Anna @Ann "
 	text, ents := c.ResolveEntities()
 	if len(ents) != 2 {
@@ -536,7 +536,7 @@ func utf16Count(s string) int { return len(utf16.Encode([]rune(s))) }
 // must track Telegram's 1024 caption cap rather than the 4096 message cap.
 func TestComposer_CounterUsesCaptionLimit(t *testing.T) {
 	c := components.NewComposer(60)
-	c.SetAttachment("photo.png", 1024, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment("photo.png", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
 	c.SetValue(strings.Repeat("a", 900)) // remaining 124 of 1024, within counterShowAt
 
 	assert.Contains(t, stripANSI(c.View()), "124")
@@ -548,7 +548,7 @@ func TestComposer_CounterUsesCaptionLimit(t *testing.T) {
 func TestComposer_CounterGoesNegativeOverLimit(t *testing.T) {
 	c := components.NewComposer(60)
 	c.SetValue(strings.Repeat("a", 2000))
-	c.SetAttachment("photo.png", 1024, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment("photo.png", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
 
 	require.True(t, c.OverLimit())
 	assert.Contains(t, stripANSI(c.View()), "-976")
@@ -618,7 +618,7 @@ func TestComposer_CounterReachesZeroExactlyWhenInputStops(t *testing.T) {
 func TestComposer_CaptionLimitIsEnforcedAt1024(t *testing.T) {
 	c := components.NewComposer(60)
 	c.Focus()
-	c.SetAttachment("photo.png", 1024, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment("photo.png", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
 	c.SetValue(strings.Repeat("a", 1023))
 
 	c = typeRune(c, 'a')
@@ -635,7 +635,7 @@ func TestComposer_DeletionWorksWhileOverLimit(t *testing.T) {
 	c := components.NewComposer(60)
 	c.Focus()
 	c.SetValue(strings.Repeat("a", 2000))
-	c.SetAttachment("photo.png", 1024, store.MediaPhoto, store.MediaPhoto, true)
+	c.SetAttachment("photo.png", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
 	require.True(t, c.OverLimit(), "2000 chars with an attachment is over the 1024 caption limit")
 
 	c, _ = c.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
@@ -815,12 +815,12 @@ func TestResolveEntitiesPlainTextStaysEntityFree(t *testing.T) {
 func TestResolveEntitiesMentionOffsetsSurviveMarkerStripping(t *testing.T) {
 	c := components.NewComposer(40)
 	c.SetValue("@")
-	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
+	c.ApplyMention(domain.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
 	c.SetValue("**жирно** " + c.Value())
 	text, ents := c.ResolveEntities()
 	assert.Equal(t, "жирно @Ivan P", text)
 
-	var mention store.MessageEntity
+	var mention domain.MessageEntity
 	for _, e := range ents {
 		if e.Type == "mention_name" {
 			mention = e
@@ -835,7 +835,7 @@ func TestResolveEntitiesMentionOffsetsSurviveMarkerStripping(t *testing.T) {
 func TestResolveEntitiesMentionInsideBold(t *testing.T) {
 	c := components.NewComposer(40)
 	c.SetValue("@")
-	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
+	c.ApplyMention(domain.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
 	c.SetValue("**" + strings.TrimSpace(c.Value()) + "**")
 	_, ents := c.ResolveEntities()
 	require.Len(t, ents, 2)
@@ -846,13 +846,13 @@ func TestResolveEntitiesMentionInsideBold(t *testing.T) {
 
 func TestSetSourceShowsMarkers(t *testing.T) {
 	c := components.NewComposer(40)
-	c.SetSource("привет важно", []store.MessageEntity{{Type: "bold", Offset: 7, Length: 5}})
+	c.SetSource("привет важно", []domain.MessageEntity{{Type: "bold", Offset: 7, Length: 5}})
 	assert.Equal(t, "привет **важно**", c.Value())
 }
 
 func TestSetSourceRoundTripsThroughResolve(t *testing.T) {
 	c := components.NewComposer(40)
-	ents := []store.MessageEntity{{Type: "bold", Offset: 7, Length: 5}}
+	ents := []domain.MessageEntity{{Type: "bold", Offset: 7, Length: 5}}
 	c.SetSource("привет важно", ents)
 	text, got := c.ResolveEntities()
 	assert.Equal(t, "привет важно", text)
@@ -862,7 +862,7 @@ func TestSetSourceRoundTripsThroughResolve(t *testing.T) {
 
 func TestSetSourceSeedsMentionsSoTheySurviveEditing(t *testing.T) {
 	c := components.NewComposer(40)
-	c.SetSource("@Ivan P привет", []store.MessageEntity{
+	c.SetSource("@Ivan P привет", []domain.MessageEntity{
 		{Type: "mention_name", Offset: 0, Length: 7, UserID: 7, AccessHash: 8},
 	})
 	assert.Equal(t, "@Ivan P привет", c.Value())
@@ -876,7 +876,7 @@ func TestSetSourceSeedsMentionsSoTheySurviveEditing(t *testing.T) {
 func TestAttachments_SingleFileKeepsOneLine(t *testing.T) {
 	c := components.NewComposer(60)
 	c.SetAttachments([]components.AttachmentChip{
-		{Name: "photo.jpg", Size: 2100000, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "photo.jpg", Size: 2100000, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
 	}, true)
 
 	view := c.View()
@@ -888,9 +888,9 @@ func TestAttachments_SingleFileKeepsOneLine(t *testing.T) {
 func TestAttachments_ThreeFilesAreListedAndNumbered(t *testing.T) {
 	c := components.NewComposer(60)
 	c.SetAttachments([]components.AttachmentChip{
-		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
-		{Name: "b.jpg", Size: 20, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
-		{Name: "c.jpg", Size: 30, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "a.jpg", Size: 10, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
+		{Name: "b.jpg", Size: 20, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
+		{Name: "c.jpg", Size: 30, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
 	}, true)
 
 	view := c.View()
@@ -904,7 +904,7 @@ func TestAttachments_FourFilesCollapseToSummary(t *testing.T) {
 	c := components.NewComposer(60)
 	items := []components.AttachmentChip{}
 	for _, n := range []string{"a.jpg", "b.jpg", "c.jpg", "d.jpg"} {
-		items = append(items, components.AttachmentChip{Name: n, Size: 1024, Kind: store.MediaPhoto, SendAs: store.MediaPhoto})
+		items = append(items, components.AttachmentChip{Name: n, Size: 1024, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto})
 	}
 	c.SetAttachments(items, true)
 
@@ -916,8 +916,8 @@ func TestAttachments_FourFilesCollapseToSummary(t *testing.T) {
 func TestAttachments_MixedKindsHideToggle(t *testing.T) {
 	c := components.NewComposer(60)
 	c.SetAttachments([]components.AttachmentChip{
-		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
-		{Name: "b.pdf", Size: 20, Kind: store.MediaFile, SendAs: store.MediaFile},
+		{Name: "a.jpg", Size: 10, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
+		{Name: "b.pdf", Size: 20, Kind: domain.MediaFile, SendAs: domain.MediaFile},
 	}, false)
 
 	assert.NotContains(t, c.View(), "Send as:")
@@ -926,8 +926,8 @@ func TestAttachments_MixedKindsHideToggle(t *testing.T) {
 func TestAttachments_NarrowWidthDoesNotTearBorder(t *testing.T) {
 	c := components.NewComposer(24)
 	c.SetAttachments([]components.AttachmentChip{
-		{Name: "a-very-long-file-name-indeed.jpg", Size: 2100000, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
-		{Name: "another-very-long-name.jpg", Size: 2100000, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "a-very-long-file-name-indeed.jpg", Size: 2100000, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
+		{Name: "another-very-long-name.jpg", Size: 2100000, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
 	}, true)
 
 	for _, line := range strings.Split(c.View(), "\n") {
@@ -938,13 +938,13 @@ func TestAttachments_NarrowWidthDoesNotTearBorder(t *testing.T) {
 func TestAttachments_VisualHeightGrowsWithList(t *testing.T) {
 	c := components.NewComposer(60)
 	c.SetAttachments([]components.AttachmentChip{
-		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "a.jpg", Size: 10, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
 	}, true)
 	one := c.VisualHeight()
 
 	c.SetAttachments([]components.AttachmentChip{
-		{Name: "a.jpg", Size: 10, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
-		{Name: "b.jpg", Size: 20, Kind: store.MediaPhoto, SendAs: store.MediaPhoto},
+		{Name: "a.jpg", Size: 10, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
+		{Name: "b.jpg", Size: 20, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
 	}, true)
 
 	assert.Equal(t, one+1, c.VisualHeight())

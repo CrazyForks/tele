@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -106,9 +107,9 @@ type RootModel struct {
 	openPicker        *components.OpenPicker
 	reactionTargetID  int
 	mentionPopup      *components.MentionPopup
-	mentionMembers    map[int64][]store.ChatMember
+	mentionMembers    map[int64][]domain.ChatMember
 	folderBar         *screens.FoldersModel
-	activeFilter      *store.FolderFilter
+	activeFilter      *domain.FolderFilter
 	logo              components.LogoLoader
 	typingSerial      int
 	// msgHighlightSerial guards the jump-to message-highlight fade loop so a
@@ -177,7 +178,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		imageCache:        imagecache.New(thumbCacheCap),
 		fullImageCache:    imagecache.New(fullCacheCap),
 		gifFrames:         make(map[int64][]image.Image),
-		mentionMembers:    make(map[int64][]store.ChatMember),
+		mentionMembers:    make(map[int64][]domain.ChatMember),
 		kittyStore:        media.NewKittyStore(),
 		kittyLive:         make(map[int64]bool),
 		logo:              components.NewLogoLoader(80),
@@ -371,7 +372,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entities:     msg.Entities,
 			replyToMsgID: msg.ReplyToMsgID,
 		}
-		if att.sendAs == store.MediaVideo {
+		if att.sendAs == domain.MediaVideo {
 			job.buildMediaCtx = videoBuildMediaCtx(att.path, att.name, att.mime)
 		} else {
 			build, ok := mediaBuilderFor(att)

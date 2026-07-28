@@ -6,7 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -49,7 +49,7 @@ func TestChatComposerPlaceholder(t *testing.T) {
 
 	// Attachment context (focused, no reply/edit).
 	m.ClearPendingAction()
-	m.SetAttachment("pic.jpg", 1000, store.MediaPhoto, store.MediaPhoto, true)
+	m.SetAttachment("pic.jpg", 1000, domain.MediaPhoto, domain.MediaPhoto, true)
 	m.FocusComposer()
 	if got := m.ComposerPlaceholder(); got != "Add a caption…" {
 		t.Fatalf("attachment placeholder = %q, want %q", got, "Add a caption…")
@@ -72,7 +72,7 @@ func TestChatModel_LoadError_ClearedByEmptyString(t *testing.T) {
 
 func TestChat_View_ShowsMessages(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{
+	m.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "hello world", Date: time.Now()},
 	})
 	assert.Contains(t, m.View(), "hello world")
@@ -80,7 +80,7 @@ func TestChat_View_ShowsMessages(t *testing.T) {
 
 func TestChatModel_SelectedBubbleRect_AfterView(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	m.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
 	m.View() // populates the rect cache
 
 	rect, ok := m.SelectedBubbleRect()
@@ -104,7 +104,7 @@ func TestChat_Context(t *testing.T) {
 
 func TestChat_SendMessage_EmitsRequest(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	// focus composer
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
@@ -123,12 +123,12 @@ func TestChat_SendMessage_EmitsRequest(t *testing.T) {
 
 func TestChat_SendMessage_CarriesMentionEntities(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerChannel}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerChannel}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
 	m.SetComposerValue("hi @iv")
-	m.ApplyComposerMention(store.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
+	m.ApplyComposerMention(domain.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
 	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	_ = newPane
 	require.NotNil(t, cmd)
@@ -141,11 +141,11 @@ func TestChat_SendMessage_CarriesMentionEntities(t *testing.T) {
 
 func TestChatModel_LoadMoreMsg_OnUpAtTop(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 42, Title: "Test"}
+	chat := &domain.Chat{ID: 42, Title: "Test"}
 	m.SetChat(chat)
-	msgs := make([]store.Message, 3)
+	msgs := make([]domain.Message, 3)
 	for i := range msgs {
-		msgs[i] = store.Message{ID: i + 1, ChatID: 42, Text: "msg", Date: time.Now()}
+		msgs[i] = domain.Message{ID: i + 1, ChatID: 42, Text: "msg", Date: time.Now()}
 	}
 	m.SetMessages(msgs)
 	// 3 messages in ~20-row window → viewStart=0 → AtTop()
@@ -160,9 +160,9 @@ func TestChatModel_LoadMoreMsg_OnUpAtTop(t *testing.T) {
 
 func TestChatModel_LoadMoreMsg_OnGoTop(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Title: "X"}
+	chat := &domain.Chat{ID: 10, Title: "X"}
 	m.SetChat(chat)
-	msgs := []store.Message{{ID: 5, ChatID: 10, Text: "hi", Date: time.Now()}}
+	msgs := []domain.Message{{ID: 5, ChatID: 10, Text: "hi", Date: time.Now()}}
 	m.SetMessages(msgs)
 	_, cmd := m.Update(keys.ActionMsg{Action: keys.ActionGoTop})
 	require.NotNil(t, cmd)
@@ -175,11 +175,11 @@ func TestChatModel_LoadMoreMsg_OnGoTop(t *testing.T) {
 
 func TestChatModel_NoLoadMore_WhenNotAtTop(t *testing.T) {
 	m := screens.NewChatModel(80, 3) // height=3 so viewport is small
-	chat := &store.Chat{ID: 1, Title: "Y"}
+	chat := &domain.Chat{ID: 1, Title: "Y"}
 	m.SetChat(chat)
-	msgs := make([]store.Message, 10)
+	msgs := make([]domain.Message, 10)
 	for i := range msgs {
-		msgs[i] = store.Message{ID: i + 1, ChatID: 1, Text: "m", Date: time.Now()}
+		msgs[i] = domain.Message{ID: i + 1, ChatID: 1, Text: "m", Date: time.Now()}
 	}
 	m.SetMessages(msgs) // with height=3, viewStart = 10-3=7 → not at top
 	_, cmd := m.Update(keys.ActionMsg{Action: keys.ActionUp})
@@ -192,13 +192,13 @@ func TestChatModel_NoLoadMore_WhenNotAtTop(t *testing.T) {
 
 func TestChat_Indicator_VisibleByDefault(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	m.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
 	assert.Contains(t, m.View(), "┃")
 }
 
 func TestChat_Indicator_HiddenWhenComposerFocused(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	m.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
 
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -211,7 +211,7 @@ func TestChat_Indicator_HiddenWhenComposerFocused(t *testing.T) {
 
 func TestChat_CursorUp_SelectsOlderMessage(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{
+	m.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "first", Date: time.Now()},
 		{ID: 2, ChatID: 1, Text: "second", Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "third", Date: time.Now()},
@@ -224,8 +224,8 @@ func TestChat_CursorUp_SelectsOlderMessage(t *testing.T) {
 
 func TestChat_CursorUp_LoadsMoreAtOldest(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetChat(&store.Chat{ID: 42, Title: "Test"})
-	m.SetMessages([]store.Message{
+	m.SetChat(&domain.Chat{ID: 42, Title: "Test"})
+	m.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 42, Text: "first", Date: time.Now()},
 		{ID: 2, ChatID: 42, Text: "second", Date: time.Now()},
 	})
@@ -240,7 +240,7 @@ func TestChat_CursorUp_LoadsMoreAtOldest(t *testing.T) {
 
 func TestChat_SelectedMessageID_ReturnsLastVisible(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{
+	m.SetMessages([]domain.Message{
 		{ID: 1, ChatID: 1, Text: "first", Date: time.Now()},
 		{ID: 2, ChatID: 1, Text: "second", Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "third", Date: time.Now()},
@@ -250,13 +250,13 @@ func TestChat_SelectedMessageID_ReturnsLastVisible(t *testing.T) {
 
 func TestChat_SelectedMessageIsOut_Outgoing(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
+	m.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: true, Date: time.Now()}})
 	assert.True(t, m.SelectedMessageIsOut())
 }
 
 func TestChat_SelectedMessageIsOut_Incoming(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: false, Date: time.Now()}})
+	m.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", IsOut: false, Date: time.Now()}})
 	assert.False(t, m.SelectedMessageIsOut())
 }
 
@@ -293,7 +293,7 @@ func TestChat_ActionNormal_UnfocusesButKeepsReplyState(t *testing.T) {
 
 func TestChat_SendMessage_CarriesReplyToMsgID(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -310,7 +310,7 @@ func TestChat_SendMessage_CarriesReplyToMsgID(t *testing.T) {
 
 func TestChat_SendMessage_TrimsSurroundingWhitespace(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -325,7 +325,7 @@ func TestChat_SendMessage_TrimsSurroundingWhitespace(t *testing.T) {
 
 func TestChat_SendMessage_WhitespaceOnly_NotSent(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -337,7 +337,7 @@ func TestChat_SendMessage_WhitespaceOnly_NotSent(t *testing.T) {
 
 func TestChat_SendMessage_PreservesInternalBlankLines(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -352,11 +352,11 @@ func TestChat_SendMessage_PreservesInternalBlankLines(t *testing.T) {
 
 func TestChat_SendMedia_TrimsCaption(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
-	m.SetAttachment("pic.jpg", 1000, store.MediaPhoto, store.MediaPhoto, true)
+	m.SetAttachment("pic.jpg", 1000, domain.MediaPhoto, domain.MediaPhoto, true)
 	m.SetComposerValue("  nice photo \n")
 	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	_ = newPane
@@ -385,7 +385,7 @@ func TestChat_ActionNormal_UnfocusesButKeepsEditState(t *testing.T) {
 
 func TestChat_EditMode_EmitsEditSendRequest(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -402,7 +402,7 @@ func TestChat_EditMode_EmitsEditSendRequest(t *testing.T) {
 
 func TestChat_EditMode_ClearsStateAfterSend(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -415,7 +415,7 @@ func TestChat_EditMode_ClearsStateAfterSend(t *testing.T) {
 
 func TestChat_SendMessage_ClearsReplyStateAfterSend(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -428,7 +428,7 @@ func TestChat_SendMessage_ClearsReplyStateAfterSend(t *testing.T) {
 
 func TestChat_AltEnter_DoesNotSend(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -444,7 +444,7 @@ func TestChat_AltEnter_DoesNotSend(t *testing.T) {
 
 func TestChat_ShiftEnter_DoesNotSend(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -543,7 +543,7 @@ func collectBatchMsgs(cmd tea.Cmd) []tea.Msg {
 
 func TestChatModel_Typing_EmitsSetTypingRequest_OnKeystroke(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -556,7 +556,7 @@ func TestChatModel_Typing_EmitsSetTypingRequest_OnKeystroke(t *testing.T) {
 	var found bool
 	for _, msg := range msgs {
 		if req, ok := msg.(screens.SetTypingRequest); ok {
-			assert.Equal(t, store.TypingActionTyping, req.Action)
+			assert.Equal(t, domain.TypingActionTyping, req.Action)
 			assert.Equal(t, int64(10), req.Peer.ID)
 			found = true
 		}
@@ -581,7 +581,7 @@ func TestChatModel_Typing_NoRequestIfNoChatSet(t *testing.T) {
 
 func TestChatModel_Typing_ThrottlesTo4Seconds(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -610,7 +610,7 @@ func TestChatModel_Typing_ThrottlesTo4Seconds(t *testing.T) {
 
 func TestChatModel_Typing_CancelOnSend(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -624,7 +624,7 @@ func TestChatModel_Typing_CancelOnSend(t *testing.T) {
 	msgs := collectBatchMsgs(cmd)
 	var found bool
 	for _, msg := range msgs {
-		if req, ok := msg.(screens.SetTypingRequest); ok && req.Action == store.TypingActionCancel {
+		if req, ok := msg.(screens.SetTypingRequest); ok && req.Action == domain.TypingActionCancel {
 			found = true
 		}
 	}
@@ -633,7 +633,7 @@ func TestChatModel_Typing_CancelOnSend(t *testing.T) {
 
 func TestChatModel_Typing_CancelOnEscape(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
@@ -647,13 +647,13 @@ func TestChatModel_Typing_CancelOnEscape(t *testing.T) {
 	msg := cmd()
 	req, ok := msg.(screens.SetTypingRequest)
 	require.True(t, ok, "escape after typing must emit SetTypingRequest, got %T", msg)
-	assert.Equal(t, store.TypingActionCancel, req.Action)
+	assert.Equal(t, domain.TypingActionCancel, req.Action)
 }
 
 func TestChatModel_Draft_IsolatedPerChat(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chatA := &store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
-	chatB := &store.Chat{ID: 2, Peer: store.Peer{ID: 2, Type: store.PeerUser}}
+	chatA := &domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
+	chatB := &domain.Chat{ID: 2, Peer: domain.Peer{ID: 2, Type: domain.PeerUser}}
 
 	m.SetChat(chatA)
 	m.SetComposerValue("draft for A")
@@ -674,7 +674,7 @@ func TestChatModel_Draft_IsolatedPerChat(t *testing.T) {
 
 func TestChatModel_Draft_SurvivesChatClose(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 7, Peer: store.Peer{ID: 7, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}}
 
 	m.SetChat(chat)
 	m.SetComposerValue("unsent text")
@@ -690,7 +690,7 @@ func TestChatModel_Draft_SurvivesChatClose(t *testing.T) {
 
 func TestChatModel_SeedDraft_PopulatesEmptyChat(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 5, Peer: store.Peer{ID: 5, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 5, Peer: domain.Peer{ID: 5, Type: domain.PeerUser}}
 
 	// Server-known draft seeded before opening the chat (e.g. from the dialog list).
 	m.SeedDraft(5, "from server")
@@ -700,8 +700,8 @@ func TestChatModel_SeedDraft_PopulatesEmptyChat(t *testing.T) {
 
 func TestChatModel_SeedDraft_DoesNotClobberLocalDraft(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chatA := &store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
-	chatB := &store.Chat{ID: 2, Peer: store.Peer{ID: 2, Type: store.PeerUser}}
+	chatA := &domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
+	chatB := &domain.Chat{ID: 2, Peer: domain.Peer{ID: 2, Type: domain.PeerUser}}
 
 	m.SetChat(chatA)
 	m.SetComposerValue("local edit")
@@ -715,22 +715,22 @@ func TestChatModel_SeedDraft_DoesNotClobberLocalDraft(t *testing.T) {
 
 func TestChatModel_Draft_RefreshSameChatKeepsComposer(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	chat := &store.Chat{ID: 3, Peer: store.Peer{ID: 3, Type: store.PeerUser}}
+	chat := &domain.Chat{ID: 3, Peer: domain.Peer{ID: 3, Type: domain.PeerUser}}
 	m.SetChat(chat)
 	m.SetComposerValue("typing in progress")
 
 	// A refresh of the same chat (e.g. presence update) re-calls SetChat with the
 	// same peer. The composer must be left untouched — no clobbering mid-typing.
-	refreshed := &store.Chat{ID: 3, Peer: store.Peer{ID: 3, Type: store.PeerUser}}
+	refreshed := &domain.Chat{ID: 3, Peer: domain.Peer{ID: 3, Type: domain.PeerUser}}
 	m.SetChat(refreshed)
 	assert.Equal(t, "typing in progress", m.ComposerValue())
 }
 
 func TestChatModel_ScrollInfo_DelegatesToMessageList(t *testing.T) {
 	m := screens.NewChatModel(40, 12)
-	msgs := make([]store.Message, 0, 40)
+	msgs := make([]domain.Message, 0, 40)
 	for i := 1; i <= 40; i++ {
-		msgs = append(msgs, store.Message{ID: i, Text: "line"})
+		msgs = append(msgs, domain.Message{ID: i, Text: "line"})
 	}
 	m.SetMessages(msgs)
 	info := m.ScrollInfo()
@@ -760,10 +760,10 @@ func batchMsgs(cmd tea.Cmd) []tea.Msg {
 // locally and say why rather than sending.
 func TestChat_EnterDoesNotSendOverLimitCaption(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetChat(&store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}})
+	m.SetChat(&domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}})
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
-	m.SetAttachment("photo.png", 1024, store.MediaPhoto, store.MediaPhoto, true)
+	m.SetAttachment("photo.png", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
 	m.SetComposerValue(strings.Repeat("a", 2000)) // over the 1024 caption limit
 
 	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -784,7 +784,7 @@ func TestChat_EnterDoesNotSendOverLimitCaption(t *testing.T) {
 // Same for a plain text message pasted past 4096.
 func TestChat_EnterDoesNotSendOverLimitText(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetChat(&store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}})
+	m.SetChat(&domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}})
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
 	m.SetComposerValue(strings.Repeat("a", 5000))
@@ -804,7 +804,7 @@ func TestChat_EnterDoesNotSendOverLimitText(t *testing.T) {
 // but never delivered, so the border stayed red forever in the real app.
 func TestChat_RoutesFlashOffToComposer(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetChat(&store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}})
+	m.SetChat(&domain.Chat{ID: 10, Peer: domain.Peer{ID: 10, Type: domain.PeerUser}})
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
 	m.SetComposerValue(strings.Repeat("a", 4096))

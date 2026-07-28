@@ -5,12 +5,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 const quoteGlyph = "▌ "
 
-func replyName(orig *store.Message) string {
+func replyName(orig *domain.Message) string {
 	if orig.SenderName != "" {
 		return orig.SenderName
 	}

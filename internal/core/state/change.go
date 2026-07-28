@@ -1,6 +1,6 @@
 package state
 
-import "github.com/sorokin-vladimir/tele/internal/store"
+import "github.com/sorokin-vladimir/tele/internal/domain"
 
 // ChangeKind names what happened to domain state. It is deliberately not
 // store.EventKind: an event means "Telegram told us X", a Change means "state
@@ -33,13 +33,13 @@ const (
 type Change struct {
 	Kind    ChangeKind
 	ChatID  int64
-	Message store.Message
+	Message domain.Message
 	MsgID   int
 	MsgIDs  []int
 	Draft   string
 	Online  bool
 	Muted   bool
-	Typing  store.TypingAction
+	Typing  domain.TypingAction
 	// UnreadChanged reports that this change moved a chat's unread or mention
 	// count, so views derived from unread (the folder bar) need recomputing.
 	UnreadChanged bool

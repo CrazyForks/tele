@@ -9,20 +9,19 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"go.uber.org/zap"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-func (c *GotdClient) GetDialogs(ctx context.Context) ([]store.Chat, error) {
+func (c *GotdClient) GetDialogs(ctx context.Context) ([]domain.Chat, error) {
 	return c.getDialogs(ctx, 0)
 }
 
-func (c *GotdClient) GetArchivedDialogs(ctx context.Context) ([]store.Chat, error) {
+func (c *GotdClient) GetArchivedDialogs(ctx context.Context) ([]domain.Chat, error) {
 	return c.getDialogs(ctx, 1)
 }
 
-func (c *GotdClient) getDialogs(ctx context.Context, folderID int) ([]store.Chat, error) {
+func (c *GotdClient) getDialogs(ctx context.Context, folderID int) ([]domain.Chat, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil, err
@@ -203,7 +202,7 @@ type dialogMeta struct {
 	lastMsgAt time.Time
 }
 
-func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
+func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []domain.Chat {
 	var dialogs []tg.DialogClass
 	var msgs []tg.MessageClass
 	var users []tg.UserClass
@@ -261,7 +260,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 	}
 
 	// Preserve dialog order from server, apply meta
-	out := make([]store.Chat, 0, len(dialogs))
+	out := make([]domain.Chat, 0, len(dialogs))
 	for _, d := range dialogs {
 		dlg, ok := d.(*tg.Dialog)
 		if !ok {
@@ -272,7 +271,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 			continue
 		}
 		m := meta[id]
-		var chat store.Chat
+		var chat domain.Chat
 		var converted bool
 		switch dlg.Peer.(type) {
 		case *tg.PeerUser:
@@ -303,7 +302,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 		chat.UnreadMentionsCount = dlg.UnreadMentionsCount
 		chat.ReadInboxMaxID = dlg.ReadInboxMaxID
 		chat.ReadOutboxMaxID = dlg.ReadOutboxMaxID
-		chat.LastMessage = &store.Message{Date: m.lastMsgAt}
+		chat.LastMessage = &domain.Message{Date: m.lastMsgAt}
 		if d, ok := dlg.GetDraft(); ok {
 			chat.Draft = draftText(d)
 		}
@@ -343,15 +342,15 @@ func peerIDFromPeer(peer tg.PeerClass) int64 {
 	return 0
 }
 
-func (c *GotdClient) cachePeer(p store.Peer) {
+func (c *GotdClient) cachePeer(p domain.Peer) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.peers[p.ID] = p
 }
 
-func convertUser(u *tg.User) (store.Chat, bool) {
+func convertUser(u *tg.User) (domain.Chat, bool) {
 	if u == nil {
-		return store.Chat{}, false
+		return domain.Chat{}, false
 	}
 	var name string
 	if u.Self {
@@ -363,39 +362,39 @@ func convertUser(u *tg.User) (store.Chat, bool) {
 		}
 	}
 	_, isOnline := u.Status.(*tg.UserStatusOnline)
-	return store.Chat{
+	return domain.Chat{
 		ID:        u.ID,
 		Title:     name,
-		Peer:      store.Peer{ID: u.ID, Type: store.PeerUser, AccessHash: u.AccessHash},
+		Peer:      domain.Peer{ID: u.ID, Type: domain.PeerUser, AccessHash: u.AccessHash},
 		IsContact: u.Contact,
 		IsBot:     u.Bot,
 		Online:    isOnline,
 	}, true
 }
 
-func convertGroupChat(ch *tg.Chat) (store.Chat, bool) {
+func convertGroupChat(ch *tg.Chat) (domain.Chat, bool) {
 	if ch == nil {
-		return store.Chat{}, false
+		return domain.Chat{}, false
 	}
-	return store.Chat{
+	return domain.Chat{
 		ID:    ch.ID,
 		Title: ch.Title,
-		Peer:  store.Peer{ID: ch.ID, Type: store.PeerGroup},
+		Peer:  domain.Peer{ID: ch.ID, Type: domain.PeerGroup},
 	}, true
 }
 
-func convertChannel(ch *tg.Channel) (store.Chat, bool) {
+func convertChannel(ch *tg.Channel) (domain.Chat, bool) {
 	if ch == nil {
-		return store.Chat{}, false
+		return domain.Chat{}, false
 	}
-	peerType := store.PeerChannel
+	peerType := domain.PeerChannel
 	if ch.Megagroup {
-		peerType = store.PeerSuperGroup
+		peerType = domain.PeerSuperGroup
 	}
-	return store.Chat{
+	return domain.Chat{
 		ID:    ch.ID,
 		Title: ch.Title,
-		Peer:  store.Peer{ID: ch.ID, Type: peerType, AccessHash: ch.AccessHash},
+		Peer:  domain.Peer{ID: ch.ID, Type: peerType, AccessHash: ch.AccessHash},
 	}, true
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -516,19 +517,19 @@ func TestSetupDispatcher_EditServiceMessageIgnored(t *testing.T) {
 }
 
 func TestConvertTypingAction_Typing(t *testing.T) {
-	assert.Equal(t, store.TypingActionTyping, convertTypingAction(&tg.SendMessageTypingAction{}))
+	assert.Equal(t, domain.TypingActionTyping, convertTypingAction(&tg.SendMessageTypingAction{}))
 }
 
 func TestConvertTypingAction_UploadPhoto(t *testing.T) {
-	assert.Equal(t, store.TypingActionUploadPhoto, convertTypingAction(&tg.SendMessageUploadPhotoAction{}))
+	assert.Equal(t, domain.TypingActionUploadPhoto, convertTypingAction(&tg.SendMessageUploadPhotoAction{}))
 }
 
 func TestConvertTypingAction_Cancel(t *testing.T) {
-	assert.Equal(t, store.TypingActionCancel, convertTypingAction(&tg.SendMessageCancelAction{}))
+	assert.Equal(t, domain.TypingActionCancel, convertTypingAction(&tg.SendMessageCancelAction{}))
 }
 
 func TestConvertTypingAction_Unknown(t *testing.T) {
-	assert.Equal(t, store.TypingActionUnknown, convertTypingAction(&tg.SendMessageGamePlayAction{}))
+	assert.Equal(t, domain.TypingActionUnknown, convertTypingAction(&tg.SendMessageGamePlayAction{}))
 }
 
 func TestSetupDispatcher_UserTyping_EmitsTypingEvent(t *testing.T) {
@@ -545,7 +546,7 @@ func TestSetupDispatcher_UserTyping_EmitsTypingEvent(t *testing.T) {
 	case evt := <-droppable:
 		assert.Equal(t, store.EventTyping, evt.Kind)
 		assert.Equal(t, int64(55), evt.ChatID)
-		assert.Equal(t, store.TypingActionTyping, evt.TypingAction)
+		assert.Equal(t, domain.TypingActionTyping, evt.TypingAction)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
 	}
@@ -565,7 +566,7 @@ func TestSetupDispatcher_ChatUserTyping_EmitsTypingEvent(t *testing.T) {
 	case evt := <-droppable:
 		assert.Equal(t, store.EventTyping, evt.Kind)
 		assert.Equal(t, int64(100), evt.ChatID)
-		assert.Equal(t, store.TypingActionUploadPhoto, evt.TypingAction)
+		assert.Equal(t, domain.TypingActionUploadPhoto, evt.TypingAction)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
 	}

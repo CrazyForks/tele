@@ -12,8 +12,8 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 const (
@@ -44,9 +44,9 @@ type Composer struct {
 // pendingMention records a mention inserted via the autocomplete popup so its
 // entity can be resolved at send time by scanning the final text.
 type pendingMention struct {
-	display string           // exact text inserted into the value ("@alice" or "@Ivan P")
-	member  store.ChatMember // stable identity (UserID/AccessHash) for the entity
-	named   bool             // true when it must emit a mention_name entity (no username)
+	display string            // exact text inserted into the value ("@alice" or "@Ivan P")
+	member  domain.ChatMember // stable identity (UserID/AccessHash) for the entity
+	named   bool              // true when it must emit a mention_name entity (no username)
 }
 
 func NewComposer(width int) *Composer {
@@ -112,7 +112,7 @@ func (c *Composer) SetValue(v string) {
 // mentions are seeded into the pending list rather than rendered as markup:
 // they carry an identity no marker can express, and the normal resolve path
 // re-finds them by text at send time.
-func (c *Composer) SetSource(text string, entities []store.MessageEntity) {
+func (c *Composer) SetSource(text string, entities []domain.MessageEntity) {
 	c.pending = nil
 	runes := []rune(text)
 	for _, e := range entities {
@@ -126,7 +126,7 @@ func (c *Composer) SetSource(text string, entities []store.MessageEntity) {
 		}
 		c.pending = append(c.pending, pendingMention{
 			display: string(runes[start:end]),
-			member:  store.ChatMember{UserID: e.UserID, AccessHash: e.AccessHash},
+			member:  domain.ChatMember{UserID: e.UserID, AccessHash: e.AccessHash},
 			named:   true,
 		})
 	}
@@ -240,7 +240,7 @@ func (c *Composer) MentionQuery() (string, bool) {
 // trailing space and records it for entity resolution. The inserted text is
 // "@username" when the member has a public username, otherwise "@"+display name.
 // The text is always correct; the cursor is left at the end of the value.
-func (c *Composer) ApplyMention(m store.ChatMember) {
+func (c *Composer) ApplyMention(m domain.ChatMember) {
 	before := c.currentRowBeforeCursor()
 	at := mentionAtStart(before)
 	if at < 0 {
@@ -317,7 +317,7 @@ func findMention(runes, sub []rune, from int) int {
 // The order matters: stripping markers shifts every offset, so the mention scan
 // must see the final text. Username mentions and edited-away mentions produce
 // no entity.
-func (c *Composer) ResolveEntities() (string, []store.MessageEntity) {
+func (c *Composer) ResolveEntities() (string, []domain.MessageEntity) {
 	text, entities := markup.Parse(strings.TrimSpace(c.ta.Value()))
 	if len(c.pending) == 0 {
 		return text, entities
@@ -333,7 +333,7 @@ func (c *Composer) ResolveEntities() (string, []store.MessageEntity) {
 		if idx < 0 {
 			continue // mention was edited/removed
 		}
-		entities = append(entities, store.MessageEntity{
+		entities = append(entities, domain.MessageEntity{
 			Type:       "mention_name",
 			Offset:     markup.UTF16Len(string(runes[:idx])),
 			Length:     markup.UTF16Len(p.display),
@@ -354,8 +354,8 @@ func (c *Composer) ClearReplyPreview()             { c.replyPreview = "" }
 type AttachmentChip struct {
 	Name   string
 	Size   int64
-	Kind   store.MediaKind
-	SendAs store.MediaKind
+	Kind   domain.MediaKind
+	SendAs domain.MediaKind
 }
 
 // attachChipMaxRows is the largest attachment list rendered one file per line.
@@ -375,7 +375,7 @@ func (c *Composer) SetAttachments(items []AttachmentChip, toggleable bool) {
 // SetAttachment stages a single file, the one-attachment form of SetAttachments.
 // nativeKind is the file's detected media kind (Photo/Video), used to label the
 // non-file toggle option; sendAs is the current "send as" selection.
-func (c *Composer) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
+func (c *Composer) SetAttachment(name string, size int64, nativeKind, sendAs domain.MediaKind, toggleable bool) {
 	c.SetAttachments([]AttachmentChip{
 		{Name: name, Size: size, Kind: nativeKind, SendAs: sendAs},
 	}, toggleable)
@@ -431,13 +431,13 @@ func (c *Composer) sendAsSuffix() string {
 	}
 	kindLabel := "Photo"
 	switch {
-	case allChipsOfKind(c.attachments, store.MediaVideo):
+	case allChipsOfKind(c.attachments, domain.MediaVideo):
 		kindLabel = "Video"
-	case !allChipsOfKind(c.attachments, store.MediaPhoto):
+	case !allChipsOfKind(c.attachments, domain.MediaPhoto):
 		kindLabel = "Media"
 	}
 	file := "File"
-	if c.attachments[0].SendAs == store.MediaFile {
+	if c.attachments[0].SendAs == domain.MediaFile {
 		file = "[File]"
 	} else {
 		kindLabel = "[" + kindLabel + "]"
@@ -445,7 +445,7 @@ func (c *Composer) sendAsSuffix() string {
 	return fmt.Sprintf("   Send as: %s %s", kindLabel, file)
 }
 
-func allChipsOfKind(items []AttachmentChip, kind store.MediaKind) bool {
+func allChipsOfKind(items []AttachmentChip, kind domain.MediaKind) bool {
 	for _, a := range items {
 		if a.Kind != kind {
 			return false

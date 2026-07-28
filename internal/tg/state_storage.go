@@ -6,8 +6,7 @@ import (
 	"errors"
 
 	"github.com/gotd/td/telegram/updates"
-
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 type sqliteStateStorage struct {
@@ -115,7 +114,7 @@ func (s *sqliteStateStorage) GetChannelAccessHash(ctx context.Context, userID, c
 	// from matching.
 	err = s.db.QueryRowContext(ctx,
 		`SELECT peer_access_hash FROM chats WHERE id = ? AND peer_type IN (?, ?) AND peer_access_hash != 0`,
-		channelID, int(store.PeerChannel), int(store.PeerSuperGroup),
+		channelID, int(domain.PeerChannel), int(domain.PeerSuperGroup),
 	).Scan(&hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil

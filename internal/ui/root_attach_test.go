@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -85,7 +85,7 @@ func TestStaging_ToggleSendAsAppliesToEveryItem(t *testing.T) {
 	kinds := m.PendingAttachmentSendAsAll()
 	require.Len(t, kinds, 2)
 	for i, k := range kinds {
-		assert.Equal(t, store.MediaFile, k, "item %d must follow the album-wide toggle", i)
+		assert.Equal(t, domain.MediaFile, k, "item %d must follow the album-wide toggle", i)
 	}
 }
 

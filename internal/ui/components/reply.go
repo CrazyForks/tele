@@ -4,14 +4,14 @@ import (
 	"strings"
 
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // BuildEditPreview returns a two-line preview string for the edit bar above the composer:
 //
 //	line 1: "▌ Edit Message"
 //	line 2: "▌ first-line-of-text (truncated to 40 runes)"
-func BuildEditPreview(msg store.Message) string {
+func BuildEditPreview(msg domain.Message) string {
 	snippet := msg.Text
 	if idx := strings.IndexByte(snippet, '\n'); idx >= 0 {
 		snippet = snippet[:idx]
@@ -26,7 +26,7 @@ func BuildEditPreview(msg store.Message) string {
 //
 //	line 1: "▌ SenderName"
 //	line 2: "▌ first-line-of-text (truncated to 40 runes)"
-func BuildReplyPreview(msg store.Message) string {
+func BuildReplyPreview(msg domain.Message) string {
 	name := msg.SenderName
 	if name == "" {
 		if msg.IsOut {

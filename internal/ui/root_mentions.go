@@ -3,14 +3,14 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
 // participantsLoadedMsg carries the fetched mention candidates for a chat.
 type participantsLoadedMsg struct {
 	chatID  int64
-	members []store.ChatMember
+	members []domain.ChatMember
 }
 
 // syncMentionPopup opens, refreshes, or closes the mention popup based on the
@@ -38,7 +38,7 @@ func (m *RootModel) syncMentionPopup() tea.Cmd {
 	return m.fetchParticipantsCmd(chatID, m.chat.CurrentPeer())
 }
 
-func (m RootModel) fetchParticipantsCmd(chatID int64, peer store.Peer) tea.Cmd {
+func (m RootModel) fetchParticipantsCmd(chatID int64, peer domain.Peer) tea.Cmd {
 	ctx := m.ctx
 	client := m.tgClient
 	return func() tea.Msg {
@@ -52,7 +52,7 @@ func (m RootModel) fetchParticipantsCmd(chatID int64, peer store.Peer) tea.Cmd {
 
 func (m RootModel) handleParticipantsLoaded(msg participantsLoadedMsg) (RootModel, tea.Cmd) {
 	if m.mentionMembers == nil {
-		m.mentionMembers = map[int64][]store.ChatMember{}
+		m.mentionMembers = map[int64][]domain.ChatMember{}
 	}
 	m.mentionMembers[msg.chatID] = msg.members
 	if m.mentionPopup != nil && msg.chatID == m.currentChatID {

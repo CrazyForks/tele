@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var testFolders = []store.FolderFilter{
+var testFolders = []domain.FolderFilter{
 	{ID: 1, Title: "Work"},
 	{ID: 2, Title: "Personal"},
 }
@@ -92,9 +92,9 @@ func TestFolders_ExactFitNameHasSpaceBeforeBadge(t *testing.T) {
 	// "Russia news" = 11 visual cols; prefix "  " = 2; badge "[3]" = 3; separator = 1
 	// exact fit: width = 11+2+3+1 = 17 → nameWidth = 17-2-3-1 = 11 = exact fit, no padRight padding
 	// space must come from the explicit separator, not from padRight
-	f := store.FolderFilter{ID: 1, Title: "Russia news"}
+	f := domain.FolderFilter{ID: 1, Title: "Russia news"}
 	m := screens.NewFoldersModel()
-	m.SetFolders([]store.FolderFilter{f})
+	m.SetFolders([]domain.FolderFilter{f})
 	m.SetSize(17, 10)
 	m.SetUnreadCounts(map[int]int{1: 3})
 	view := m.View()
@@ -113,9 +113,9 @@ func TestFolders_View_ShowsFilledArrowOnActiveItem(t *testing.T) {
 }
 
 func TestFolders_TruncatedBadgeFitsWidth(t *testing.T) {
-	long := store.FolderFilter{ID: 3, Title: "Russia newsletter"}
+	long := domain.FolderFilter{ID: 3, Title: "Russia newsletter"}
 	m := screens.NewFoldersModel()
-	m.SetFolders([]store.FolderFilter{long})
+	m.SetFolders([]domain.FolderFilter{long})
 	m.SetSize(16, 20) // inner width: outer(18) - 2 borders
 	m.SetUnreadCounts(map[int]int{3: 24})
 	view := m.View()
@@ -131,30 +131,30 @@ func TestFolders_TruncatedBadgeFitsWidth(t *testing.T) {
 
 func TestFolders_ArchiveAppearsOnlyWhenPresent(t *testing.T) {
 	m := screens.NewFoldersModel()
-	m.SetFolders([]store.FolderFilter{{ID: 7, Title: "Work"}})
+	m.SetFolders([]domain.FolderFilter{{ID: 7, Title: "Work"}})
 
 	// No archived chats yet: no Archive entry.
 	for _, f := range m.Folders() {
-		require.NotEqual(t, store.ArchiveFolderID, f.ID, "archive must be hidden when empty")
+		require.NotEqual(t, domain.ArchiveFolderID, f.ID, "archive must be hidden when empty")
 	}
 
 	// Archived chat exists: Archive entry appears last.
 	m.SetArchivePresent(true)
 	folders := m.Folders()
 	last := folders[len(folders)-1]
-	assert.Equal(t, store.ArchiveFolderID, last.ID)
+	assert.Equal(t, domain.ArchiveFolderID, last.ID)
 	assert.Equal(t, "Archive", last.Title)
 
 	// Becomes empty again: Archive entry disappears.
 	m.SetArchivePresent(false)
 	for _, f := range m.Folders() {
-		require.NotEqual(t, store.ArchiveFolderID, f.ID)
+		require.NotEqual(t, domain.ArchiveFolderID, f.ID)
 	}
 }
 
 func TestFolders_ArchivePreservesSelectionByID(t *testing.T) {
 	m := screens.NewFoldersModel()
-	m.SetFolders([]store.FolderFilter{{ID: 7, Title: "Work"}})
+	m.SetFolders([]domain.FolderFilter{{ID: 7, Title: "Work"}})
 	m.SetArchivePresent(true)
 
 	// Move cursor to the Work folder (index 1). Update returns a new pane.
@@ -170,7 +170,7 @@ func TestFolders_ArchivePreservesSelectionByID(t *testing.T) {
 
 func TestFoldersModel_ScrollInfo(t *testing.T) {
 	m := screens.NewFoldersModel()
-	m.SetFolders([]store.FolderFilter{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}})
+	m.SetFolders([]domain.FolderFilter{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}})
 	m.SetSize(18, 10)
 	info := m.ScrollInfo()
 	assert.Equal(t, 10, info.Visible)

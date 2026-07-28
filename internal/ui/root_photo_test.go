@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -29,7 +30,7 @@ func TestOpenPhotoModal_UsesFullWhenCached(t *testing.T) {
 	m := newSizedModel(t)
 	m.imageMode = media.ModeBlocks
 	m.fullImageCache.Add(42, solidImage(800, 600))
-	ref := store.PhotoRef{ID: 42, FullThumbSize: "x"}
+	ref := domain.PhotoRef{ID: 42, FullThumbSize: "x"}
 	m2, cmd := m.openPhotoModal(ref, 100, "Alice", time.Now())
 	assert.NotNil(t, m2.photoViewer, "modal opens")
 	assert.True(t, m2.photoViewer.full, "uses the full-quality image")
@@ -43,7 +44,7 @@ func TestOpenPhotoModal_PreviewThenDownloadsFull(t *testing.T) {
 	m := newSizedModel(t)
 	m.imageMode = media.ModeBlocks
 	m.imageCache.Add(7, solidImage(400, 300)) // inline preview only
-	ref := store.PhotoRef{ID: 7, FullThumbSize: "x"}
+	ref := domain.PhotoRef{ID: 7, FullThumbSize: "x"}
 	m2, cmd := m.openPhotoModal(ref, 100, "Alice", time.Now())
 	assert.NotNil(t, m2.photoViewer)
 	assert.False(t, m2.photoViewer.full, "preview is not full quality")
@@ -53,7 +54,7 @@ func TestOpenPhotoModal_PreviewThenDownloadsFull(t *testing.T) {
 func TestOpenPhotoModal_SpinnerWhenNothingCached(t *testing.T) {
 	m := newSizedModel(t)
 	m.imageMode = media.ModeBlocks
-	ref := store.PhotoRef{ID: 9, FullThumbSize: "x"}
+	ref := domain.PhotoRef{ID: 9, FullThumbSize: "x"}
 	m2, _ := m.openPhotoModal(ref, 100, "Alice", time.Now())
 	assert.NotNil(t, m2.photoViewer)
 	assert.Nil(t, m2.photoViewer.img, "no image yet -> spinner")
@@ -64,7 +65,7 @@ func TestOpenPhotoModal_BuildsDateLabel(t *testing.T) {
 	m.imageMode = media.ModeBlocks
 	m.fullImageCache.Add(3, solidImage(100, 100))
 	when := time.Date(time.Now().Year(), time.January, 2, 9, 41, 0, 0, time.Local)
-	ref := store.PhotoRef{ID: 3, FullThumbSize: "x"}
+	ref := domain.PhotoRef{ID: 3, FullThumbSize: "x"}
 	m2, _ := m.openPhotoModal(ref, 100, "Bob", when)
 	assert.Equal(t, "January 2 09:41", m2.photoViewer.timeLabel)
 }
@@ -184,8 +185,8 @@ func TestUpdatePhotoSpinner_AdvancesWhileLoading(t *testing.T) {
 
 func TestModalPagingWithinAlbum(t *testing.T) {
 	album := []components.GroupMediaRef{
-		{Index: 1, Kind: store.MediaPhoto, Photo: &store.PhotoRef{ID: 11}, MsgID: 1},
-		{Index: 2, Kind: store.MediaPhoto, Photo: &store.PhotoRef{ID: 22}, MsgID: 2},
+		{Index: 1, Kind: domain.MediaPhoto, Photo: &domain.PhotoRef{ID: 11}, MsgID: 1},
+		{Index: 2, Kind: domain.MediaPhoto, Photo: &domain.PhotoRef{ID: 22}, MsgID: 2},
 	}
 	m := newSizedModel(t)
 	m.imageMode = media.ModeBlocks

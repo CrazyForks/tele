@@ -6,27 +6,27 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 // Chat context-menu request messages. The root model turns each into an
 // optimistic store mutation plus an async Telegram RPC.
 type ToggleUnreadRequest struct {
-	Peer   store.Peer
+	Peer   domain.Peer
 	Unread bool
 }
 type ToggleMuteRequest struct {
-	Peer  store.Peer
+	Peer  domain.Peer
 	Muted bool
 }
 type AddToFolderRequest struct {
-	Peer     store.Peer
+	Peer     domain.Peer
 	FilterID int
 	Add      bool
 }
 type ToggleArchiveRequest struct {
-	Peer     store.Peer
+	Peer     domain.Peer
 	Archived bool
 }
 
@@ -41,8 +41,8 @@ const (
 // row. It reuses the menu styles and box rendering from the message
 // context menu but carries chat-specific actions.
 type ChatContextMenu struct {
-	chat      store.Chat
-	folders   []store.FolderFilter
+	chat      domain.Chat
+	folders   []domain.FolderFilter
 	items     []menuItem
 	savedMain []menuItem
 	list      *ListView
@@ -50,7 +50,7 @@ type ChatContextMenu struct {
 	keyMap    keys.KeyMap
 }
 
-func NewChatContextMenu(chat store.Chat, folders []store.FolderFilter, km keys.KeyMap) *ChatContextMenu {
+func NewChatContextMenu(chat domain.Chat, folders []domain.FolderFilter, km keys.KeyMap) *ChatContextMenu {
 	cm := &ChatContextMenu{chat: chat, folders: folders, keyMap: km, list: NewListView(true)}
 	cm.setItems(cm.mainItems())
 	return cm
@@ -105,7 +105,7 @@ func (cm *ChatContextMenu) folderSubItems() []menuItem {
 	return items
 }
 
-func folderContains(f store.FolderFilter, chatID int64) bool {
+func folderContains(f domain.FolderFilter, chatID int64) bool {
 	for _, id := range f.IncludePeers {
 		if id == chatID {
 			return true

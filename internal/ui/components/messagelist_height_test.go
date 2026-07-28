@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // TestMsgHeightMatchesRenderMessage guards the invariant that positionAtBottom
@@ -15,17 +15,17 @@ func TestMsgHeightMatchesRenderMessage(t *testing.T) {
 	now := time.Now()
 	cases := []struct {
 		name string
-		msgs []store.Message
+		msgs []domain.Message
 		// target is the index in msgs of the message under test.
 		target int
 	}{
-		{"plain short", []store.Message{{ID: 1, Text: "ok", Date: now}}, 0},
-		{"plain outgoing", []store.Message{{ID: 1, Text: "ok", IsOut: true, Date: now}}, 0},
-		{"multiline", []store.Message{{ID: 1, Text: "line one\nline two\nline three", Date: now}}, 0},
-		{"empty text", []store.Message{{ID: 1, Text: "", Date: now}}, 0},
+		{"plain short", []domain.Message{{ID: 1, Text: "ok", Date: now}}, 0},
+		{"plain outgoing", []domain.Message{{ID: 1, Text: "ok", IsOut: true, Date: now}}, 0},
+		{"multiline", []domain.Message{{ID: 1, Text: "line one\nline two\nline three", Date: now}}, 0},
+		{"empty text", []domain.Message{{ID: 1, Text: "", Date: now}}, 0},
 		{
 			name: "reply orig present",
-			msgs: []store.Message{
+			msgs: []domain.Message{
 				{ID: 1, Text: "original", Date: now},
 				{ID: 2, Text: "a reply", ReplyToMsgID: 1, Date: now},
 			},
@@ -33,49 +33,49 @@ func TestMsgHeightMatchesRenderMessage(t *testing.T) {
 		},
 		{
 			name:   "reply orig absent",
-			msgs:   []store.Message{{ID: 2, Text: "a reply", ReplyToMsgID: 999, Date: now}},
+			msgs:   []domain.Message{{ID: 2, Text: "a reply", ReplyToMsgID: 999, Date: now}},
 			target: 0,
 		},
 		{
 			name:   "forward no text",
-			msgs:   []store.Message{{ID: 1, Date: now, Forward: &store.ForwardInfo{From: "Alice"}}},
+			msgs:   []domain.Message{{ID: 1, Date: now, Forward: &domain.ForwardInfo{From: "Alice"}}},
 			target: 0,
 		},
 		{
 			name:   "forward with text",
-			msgs:   []store.Message{{ID: 1, Text: "fwded note", Date: now, Forward: &store.ForwardInfo{From: "Alice"}}},
+			msgs:   []domain.Message{{ID: 1, Text: "fwded note", Date: now, Forward: &domain.ForwardInfo{From: "Alice"}}},
 			target: 0,
 		},
 		{
 			name:   "forward hidden sender",
-			msgs:   []store.Message{{ID: 1, Text: "hi", Date: now, Forward: &store.ForwardInfo{From: ""}}},
+			msgs:   []domain.Message{{ID: 1, Text: "hi", Date: now, Forward: &domain.ForwardInfo{From: ""}}},
 			target: 0,
 		},
 		{
 			name:   "edited short",
-			msgs:   []store.Message{{ID: 1, Text: "ok", Date: now, EditDate: &now}},
+			msgs:   []domain.Message{{ID: 1, Text: "ok", Date: now, EditDate: &now}},
 			target: 0,
 		},
 		{
 			name:   "with reactions",
-			msgs:   []store.Message{{ID: 1, Text: "ok", Date: now, Reactions: []store.Reaction{{Emoji: "👍", Count: 2}}}},
+			msgs:   []domain.Message{{ID: 1, Text: "ok", Date: now, Reactions: []domain.Reaction{{Emoji: "👍", Count: 2}}}},
 			target: 0,
 		},
 		// Word-wrap cases: ceil(runes/width) under-counts because lipgloss cannot
 		// split words and leaves ragged line ends (issue #115).
 		{
 			name:   "wrap natural sentence",
-			msgs:   []store.Message{{ID: 1, Text: "один два три четыре пять шесть семь восемь девять десять одиннадцать двенадцать", Date: now}},
+			msgs:   []domain.Message{{ID: 1, Text: "один два три четыре пять шесть семь восемь девять десять одиннадцать двенадцать", Date: now}},
 			target: 0,
 		},
 		{
 			name:   "wrap ragged words",
-			msgs:   []store.Message{{ID: 1, Text: "abcdefghijklmn opqrstuvwxyzab cdefghijklmnop qrstuvwxyzabcd", Date: now}},
+			msgs:   []domain.Message{{ID: 1, Text: "abcdefghijklmn opqrstuvwxyzab cdefghijklmnop qrstuvwxyzabcd", Date: now}},
 			target: 0,
 		},
 		{
 			name:   "wrap long unbreakable words",
-			msgs:   []store.Message{{ID: 1, Text: "supercalifragilisticexpialidocious antidisestablishmentarianism pneumonoultramicroscopic", Date: now}},
+			msgs:   []domain.Message{{ID: 1, Text: "supercalifragilisticexpialidocious antidisestablishmentarianism pneumonoultramicroscopic", Date: now}},
 			target: 0,
 		},
 	}

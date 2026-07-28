@@ -3,7 +3,7 @@ package components
 import (
 	"time"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 type itemKind int
@@ -16,9 +16,9 @@ const (
 
 type listItem struct {
 	kind  itemKind
-	msg   store.Message   // valid when kind == itemMessage; the album anchor (parts[0])
-	parts []store.Message // album parts when kind == itemMessage; len 1 for a lone message
-	label string          // valid when kind == itemDateSeparator, e.g. "May 18"
+	msg   domain.Message   // valid when kind == itemMessage; the album anchor (parts[0])
+	parts []domain.Message // album parts when kind == itemMessage; len 1 for a lone message
+	label string           // valid when kind == itemDateSeparator, e.g. "May 18"
 }
 
 func sameDay(a, b time.Time) bool {
@@ -51,11 +51,11 @@ func FormatDateLabel(t time.Time) string {
 // a group of one. Order is preserved. Album parts arrive contiguous in the
 // timeline, so a single linear scan is sufficient; the function is pure so it can
 // be table-tested and re-run cheaply on every rebuild.
-func groupParts(msgs []store.Message) [][]store.Message {
+func groupParts(msgs []domain.Message) [][]domain.Message {
 	if len(msgs) == 0 {
 		return nil
 	}
-	out := make([][]store.Message, 0, len(msgs))
+	out := make([][]domain.Message, 0, len(msgs))
 	for i := 0; i < len(msgs); {
 		j := i + 1
 		if msgs[i].GroupedID != 0 {
@@ -71,7 +71,7 @@ func groupParts(msgs []store.Message) [][]store.Message {
 	return out
 }
 
-func (ml *MessageList) buildItems(msgs []store.Message) []listItem {
+func (ml *MessageList) buildItems(msgs []domain.Message) []listItem {
 	if len(msgs) == 0 {
 		return nil
 	}
@@ -96,7 +96,7 @@ func (ml *MessageList) buildItems(msgs []store.Message) []listItem {
 	return items
 }
 
-func (ml *MessageList) SetMessages(msgs []store.Message) {
+func (ml *MessageList) SetMessages(msgs []domain.Message) {
 	ml.items = ml.buildItems(msgs)
 	ml.invalidateHeights()
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
@@ -111,7 +111,7 @@ func (ml *MessageList) SetMessages(msgs []store.Message) {
 // bottom, re-anchor to the new bottom so the newest content stays fully visible
 // instead of being clipped by a now-stale offset (same fix as SetImage). When
 // scrolled up in history, keep the top anchor so the position does not jump.
-func (ml *MessageList) SetMessagesKeepScroll(msgs []store.Message) {
+func (ml *MessageList) SetMessagesKeepScroll(msgs []domain.Message) {
 	botIdx, botOff := ml.positionAtBottom()
 	wasAtBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
 
@@ -132,7 +132,7 @@ func (ml *MessageList) SetMessagesKeepScroll(msgs []store.Message) {
 // RemoveMessage removes the message with the given ID while preserving scroll position.
 func (ml *MessageList) RemoveMessage(id int) {
 	found := false
-	msgs := make([]store.Message, 0, len(ml.items))
+	msgs := make([]domain.Message, 0, len(ml.items))
 	for _, item := range ml.items {
 		if item.kind != itemMessage {
 			continue
@@ -194,11 +194,11 @@ func (ml *MessageList) RemoveMessage(id int) {
 // "load older" requests before the first resolves, so the same chunk may arrive
 // more than once. Without this guard the duplicates would stack into a repeating
 // date-range "ring" that never advances toward older history (issue #120).
-func (ml *MessageList) PrependMessages(older []store.Message) {
+func (ml *MessageList) PrependMessages(older []domain.Message) {
 	if len(older) == 0 {
 		return
 	}
-	current := make([]store.Message, 0, len(ml.items))
+	current := make([]domain.Message, 0, len(ml.items))
 	existing := make(map[int]struct{}, len(ml.items))
 	for _, item := range ml.items {
 		if item.kind != itemMessage {
@@ -211,7 +211,7 @@ func (ml *MessageList) PrependMessages(older []store.Message) {
 			existing[p.ID] = struct{}{}
 		}
 	}
-	fresh := make([]store.Message, 0, len(older))
+	fresh := make([]domain.Message, 0, len(older))
 	for _, msg := range older {
 		if _, dup := existing[msg.ID]; dup {
 			continue
@@ -236,7 +236,7 @@ func (ml *MessageList) OldestID() int {
 	return 0
 }
 
-func (ml *MessageList) findMessage(id int) *store.Message {
+func (ml *MessageList) findMessage(id int) *domain.Message {
 	for i := range ml.items {
 		if ml.items[i].kind != itemMessage {
 			continue

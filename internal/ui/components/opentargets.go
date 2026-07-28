@@ -3,8 +3,8 @@ package components
 import (
 	"strconv"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // OpenTargetKind classifies something in a message that the "open" action can act
@@ -33,7 +33,7 @@ type OpenTarget struct {
 // MessageOpenTargets returns the openable targets of a message in display order:
 // media (photo/video) first, then links in text order. Voice, audio, GIF, files,
 // stickers, phone numbers and bank cards are not openable and are omitted.
-func MessageOpenTargets(msg store.Message) []OpenTarget {
+func MessageOpenTargets(msg domain.Message) []OpenTarget {
 	var targets []OpenTarget
 
 	switch {
@@ -50,7 +50,7 @@ func MessageOpenTargets(msg store.Message) []OpenTarget {
 // GroupOpenTargets lists the openable targets of an album: one entry per media
 // part labelled with its 1-based index (matching the bubble badges and the modal
 // paging order), followed by the links found in the album caption.
-func GroupOpenTargets(parts []store.Message) []OpenTarget {
+func GroupOpenTargets(parts []domain.Message) []OpenTarget {
 	var targets []OpenTarget
 	n := 0
 	for _, p := range parts {
@@ -83,7 +83,7 @@ func GroupOpenTargets(parts []store.Message) []OpenTarget {
 
 // linkTargets extracts openable link targets (url/email/text_url) from text in
 // entity order. Entity offsets are UTF-16 code units.
-func linkTargets(text string, entities []store.MessageEntity) []OpenTarget {
+func linkTargets(text string, entities []domain.MessageEntity) []OpenTarget {
 	if len(entities) == 0 {
 		return nil
 	}

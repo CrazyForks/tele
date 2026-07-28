@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/gotd/td/telegram/updates"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
@@ -149,8 +150,8 @@ func TestSQLiteState_GetChannelAccessHash_FallsBackToChatStore(t *testing.T) {
 
 	// Channel known to the chat store (from GetDialogs) but absent from the
 	// dedicated channel_access_hash table — the #119 startup gap.
-	st.SetChat(store.Chat{ID: 555, Peer: store.Peer{ID: 555, Type: store.PeerChannel, AccessHash: 9999}})
-	st.SetChat(store.Chat{ID: 666, Peer: store.Peer{ID: 666, Type: store.PeerSuperGroup, AccessHash: 8888}})
+	st.SetChat(domain.Chat{ID: 555, Peer: domain.Peer{ID: 555, Type: domain.PeerChannel, AccessHash: 9999}})
+	st.SetChat(domain.Chat{ID: 666, Peer: domain.Peer{ID: 666, Type: domain.PeerSuperGroup, AccessHash: 8888}})
 
 	for id, want := range map[int64]int64{555: 9999, 666: 8888} {
 		hash, found, err := h.GetChannelAccessHash(ctx, 1, id)
@@ -166,7 +167,7 @@ func TestSQLiteState_GetChannelAccessHash_FallsBackToChatStore(t *testing.T) {
 	assert.Equal(t, int64(1234), hash)
 
 	// A non-channel peer (user) must not match the fallback.
-	st.SetChat(store.Chat{ID: 777, Peer: store.Peer{ID: 777, Type: store.PeerUser, AccessHash: 4242}})
+	st.SetChat(domain.Chat{ID: 777, Peer: domain.Peer{ID: 777, Type: domain.PeerUser, AccessHash: 4242}})
 	_, found, err := h.GetChannelAccessHash(ctx, 1, 777)
 	require.NoError(t, err)
 	assert.False(t, found)

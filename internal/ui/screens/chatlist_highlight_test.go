@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +54,7 @@ func TestChatList_Highlight_SurvivesReorderByID(t *testing.T) {
 	m.SetChats(makeTestChats()) // Alice(1), Bob(2), Charlie(3)
 	m.HighlightChat(2)
 	// Reorder: Bob bubbles to top. Highlight tracks chat 2 by id.
-	m.SetChats([]store.Chat{
+	m.SetChats([]domain.Chat{
 		{ID: 2, Title: "Bob"},
 		{ID: 1, Title: "Alice"},
 		{ID: 3, Title: "Charlie"},
