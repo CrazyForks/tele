@@ -47,27 +47,6 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.subscribeChat(msg.ChatID, msg.Peer)
 		return m, tea.Batch(draftFlush, reactionsCmd, mentionsCmd)
 
-	case markReadDoneMsg:
-		if m.st != nil {
-			m.st.UpdateChatReadMaxID(msg.chatID, msg.maxID)
-			m.refreshProjections()
-		}
-		return m, nil
-
-	case readReactionsDoneMsg:
-		if m.st != nil {
-			m.st.SetChatReactionsRead(msg.chatID)
-			m.refreshProjections()
-		}
-		return m, nil
-
-	case readMentionsDoneMsg:
-		if m.st != nil {
-			m.st.SetChatMentionsRead(msg.chatID)
-			m.refreshProjections()
-		}
-		return m, nil
-
 	case screens.LoadMoreMsg:
 		// Reaching the top of the window asks the owner to widen it. Whether the
 		// extra messages come from the store or from Telegram is the owner's

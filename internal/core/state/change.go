@@ -30,6 +30,17 @@ const (
 	// fetched page. It is how a backfill re-enters state so the chat:<id>
 	// projection rebuilds from the same place every other change does.
 	ChangeHistory
+	// ChangeArchived and ChangeUnreadMark are per-chat flags a client toggles
+	// and another device can change; both restyle or reorder a chat-list row.
+	ChangeArchived
+	ChangeUnreadMark
+	// ChangeFolders reports that folder membership changed, which re-filters
+	// every chat-list window bound to a folder.
+	ChangeFolders
+	// ChangeReactionsRead and ChangeMentionsRead clear the per-chat badges that
+	// sit next to the unread count.
+	ChangeReactionsRead
+	ChangeMentionsRead
 )
 
 // Change describes one applied difference in domain state, carrying what a

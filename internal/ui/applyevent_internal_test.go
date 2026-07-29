@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -21,6 +22,19 @@ type ownerStub struct {
 	queued   []project.Delta
 	incoming []core.Incoming
 	typing   []core.Typing
+
+	// calls records the commands the UI issued, so a test can assert on what
+	// was asked for rather than on how the result was rendered. err is what
+	// every command answers with, standing in for a Telegram refusal.
+	calls []cmdCall
+	err   error
+}
+
+// cmdCall is one command the UI issued through the owner.
+type cmdCall struct {
+	name   string
+	chatID int64
+	flag   bool
 }
 
 func newOwnerStub(st store.Store) *ownerStub {
@@ -48,6 +62,75 @@ func (o *ownerStub) MoveWindow(id project.SubID, w project.Window) {
 func (o *ownerStub) Unsubscribe(id project.SubID) { o.reg.Unsubscribe(id) }
 
 func (o *ownerStub) Refresh() { o.queued = append(o.queued, o.reg.Refresh()...) }
+
+// SetMuted mirrors the real owner: it applies the change through state (which
+// publishes a delta) and answers with o.err.
+func (o *ownerStub) SetMuted(_ context.Context, chatID int64, muted bool) error {
+	o.calls = append(o.calls, cmdCall{name: "SetMuted", chatID: chatID, flag: muted})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.ApplyMute(chatID, muted)
+	return nil
+}
+
+func (o *ownerStub) SetArchived(_ context.Context, chatID int64, archived bool) error {
+	o.calls = append(o.calls, cmdCall{name: "SetArchived", chatID: chatID, flag: archived})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.ApplyArchived(chatID, archived)
+	return nil
+}
+
+func (o *ownerStub) SetUnreadMark(_ context.Context, chatID int64, unread bool) error {
+	o.calls = append(o.calls, cmdCall{name: "SetUnreadMark", chatID: chatID, flag: unread})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.ApplyUnreadMark(chatID, unread)
+	return nil
+}
+
+func (o *ownerStub) ReadReactions(_ context.Context, chatID int64) error {
+	o.calls = append(o.calls, cmdCall{name: "ReadReactions", chatID: chatID})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.ApplyReactionsRead(chatID)
+	return nil
+}
+
+func (o *ownerStub) ReadMentions(_ context.Context, chatID int64) error {
+	o.calls = append(o.calls, cmdCall{name: "ReadMentions", chatID: chatID})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.ApplyMentionsRead(chatID)
+	return nil
+}
+
+func (o *ownerStub) MarkRead(_ context.Context, chatID int64, maxID int) error {
+	o.calls = append(o.calls, cmdCall{name: "MarkRead", chatID: chatID})
+	if o.err != nil {
+		return o.err
+	}
+	if maxID == 0 {
+		o.state.ApplyChatRead(chatID)
+		return nil
+	}
+	o.state.ApplyReadInbox(chatID, maxID)
+	return nil
+}
+
+func (o *ownerStub) AddToFolder(_ context.Context, filterID int, chatID int64, add bool) error {
+	o.calls = append(o.calls, cmdCall{name: "AddToFolder", chatID: chatID, flag: add})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.ApplyFolderMembership(filterID, chatID, add)
+	return nil
+}
 
 func (o *ownerStub) drain(m RootModel) (tea.Model, tea.Cmd) {
 	var model tea.Model = m

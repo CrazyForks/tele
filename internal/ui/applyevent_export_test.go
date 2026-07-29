@@ -1,6 +1,7 @@
 package ui_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -30,6 +31,13 @@ type testOwner struct {
 	// moves records the windows the client asked for, so a test can assert that
 	// scrolling repositions a window rather than fetching anything itself.
 	moves []project.Window
+	// cmdErr is what every command answers with, standing in for a refusal.
+	cmdErr error
+	// reactionsRead and mentionsRead count the badge-clearing commands, which
+	// used to be counted on the mock tg.Client before they became owner
+	// commands (#198).
+	reactionsRead int
+	mentionsRead  int
 }
 
 func newTestOwner(st store.Store) *testOwner {
@@ -78,6 +86,81 @@ func (o *testOwner) lastChatListWindow() (project.ChatListWindow, bool) {
 func (o *testOwner) Unsubscribe(id project.SubID) { o.reg.Unsubscribe(id) }
 
 func (o *testOwner) Refresh() { o.queued = append(o.queued, o.reg.Refresh()...) }
+
+// SetMuted mirrors the real owner: the change is applied through state, which
+// publishes a delta, and cmdErr stands in for a Telegram refusal.
+func (o *testOwner) SetMuted(_ context.Context, chatID int64, muted bool) error {
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.state.ApplyMute(chatID, muted)
+	return nil
+}
+
+func (o *testOwner) SetArchived(_ context.Context, chatID int64, archived bool) error {
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.state.ApplyArchived(chatID, archived)
+	return nil
+}
+
+func (o *testOwner) SetUnreadMark(_ context.Context, chatID int64, unread bool) error {
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.state.ApplyUnreadMark(chatID, unread)
+	return nil
+}
+
+func (o *testOwner) ReadReactions(_ context.Context, chatID int64) error {
+	o.reactionsRead++
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.state.ApplyReactionsRead(chatID)
+	return nil
+}
+
+func (o *testOwner) ReadMentions(_ context.Context, chatID int64) error {
+	o.mentionsRead++
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.state.ApplyMentionsRead(chatID)
+	return nil
+}
+
+// ownerOf returns the testOwner a model was built with, for asserting on the
+// commands the UI issued.
+func ownerOf(t *testing.T, m ui.RootModel) *testOwner {
+	t.Helper()
+	o, ok := m.Owner().(*testOwner)
+	if !ok {
+		t.Fatalf("model has no testOwner attached, got %T", m.Owner())
+	}
+	return o
+}
+
+func (o *testOwner) MarkRead(_ context.Context, chatID int64, maxID int) error {
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	if maxID == 0 {
+		o.state.ApplyChatRead(chatID)
+		return nil
+	}
+	o.state.ApplyReadInbox(chatID, maxID)
+	return nil
+}
+
+func (o *testOwner) AddToFolder(_ context.Context, filterID int, chatID int64, add bool) error {
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.state.ApplyFolderMembership(filterID, chatID, add)
+	return nil
+}
 
 // drain feeds every queued delta and event into the model, in the order the
 // bubbletea program would receive them, and returns the last command.

@@ -90,11 +90,6 @@ type retransmitTickMsg struct {
 	gen int
 }
 
-type markReadDoneMsg struct {
-	chatID int64
-	maxID  int
-}
-
 type FolderFiltersMsg struct {
 	Filters []domain.FolderFilter
 }

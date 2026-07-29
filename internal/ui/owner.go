@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/sorokin-vladimir/tele/internal/core/project"
+import (
+	"context"
+
+	"github.com/sorokin-vladimir/tele/internal/core/project"
+)
 
 // Owner is the client's view of the connection owner: the subscription surface
 // and nothing else. The UI holds this rather than *core.Owner so it can be
@@ -13,6 +17,17 @@ type Owner interface {
 	// Refresh rebuilds the subscriptions after an optimistic store write that
 	// bypassed the owner. TRANSITIONAL (#193, #195, #196, #198).
 	Refresh()
+
+	// Commands. Each applies its own optimistic change and undoes it if
+	// Telegram refuses, so the client only decides how a failure looks.
+	SetMuted(ctx context.Context, chatID int64, muted bool) error
+	SetArchived(ctx context.Context, chatID int64, archived bool) error
+	SetUnreadMark(ctx context.Context, chatID int64, unread bool) error
+	AddToFolder(ctx context.Context, filterID int, chatID int64, add bool) error
+	// MarkRead with maxID 0 reads the whole chat.
+	MarkRead(ctx context.Context, chatID int64, maxID int) error
+	ReadReactions(ctx context.Context, chatID int64) error
+	ReadMentions(ctx context.Context, chatID int64) error
 }
 
 // refreshProjections repaints after an optimistic write the client made

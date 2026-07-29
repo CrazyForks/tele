@@ -11,72 +11,48 @@ import (
 )
 
 func (m RootModel) markReadCmd() tea.Cmd {
-	if m.st == nil || m.tgClient == nil || m.currentChatID == 0 || m.focus != FocusChat {
-		return nil
-	}
-	chat, ok := m.st.GetChat(m.currentChatID)
-	if !ok {
+	if m.owner == nil || m.currentChatID == 0 || m.focus != FocusChat {
 		return nil
 	}
 	maxID := m.chat.VisibleReadMaxID()
-	if maxID <= 0 || maxID <= chat.ReadInboxMaxID {
+	if maxID <= 0 || maxID <= m.chat.InboxReadMaxID() {
 		return nil
 	}
-	ctx := m.ctx
-	client := m.tgClient
-	peer := chat.Peer
-	chatID := chat.ID
+	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
 	return func() tea.Msg {
-		if err := client.MarkRead(ctx, peer, maxID); err != nil {
+		if err := owner.MarkRead(ctx, chatID, maxID); err != nil {
 			return errStatus("mark read", err)
 		}
-		return markReadDoneMsg{chatID: chatID, maxID: maxID}
+		return nil
 	}
 }
 
-type readReactionsDoneMsg struct{ chatID int64 }
-
-// readReactionsCmd sends messages.readReactions for a chat, then reports done so
-// the store count can be reconciled. Nil when prerequisites are missing.
+// readReactionsCmd tells the owner to mark this chat's reactions read. The
+// owner clears the badge itself once Telegram confirms.
 func (m RootModel) readReactionsCmd(chatID int64) tea.Cmd {
-	if m.st == nil || m.tgClient == nil {
+	if m.owner == nil {
 		return nil
 	}
-	chat, ok := m.st.GetChat(chatID)
-	if !ok {
-		return nil
-	}
-	ctx := m.ctx
-	client := m.tgClient
-	peer := chat.Peer
+	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
-		if err := client.ReadReactions(ctx, peer); err != nil {
+		if err := owner.ReadReactions(ctx, chatID); err != nil {
 			return errStatus("read reactions", err)
 		}
-		return readReactionsDoneMsg{chatID: chatID}
+		return nil
 	}
 }
 
-type readMentionsDoneMsg struct{ chatID int64 }
-
-// readMentionsCmd sends messages.readMentions for a chat, then reports done so
-// the store count can be reconciled. Nil when prerequisites are missing.
+// readMentionsCmd tells the owner to mark this chat's mentions read.
 func (m RootModel) readMentionsCmd(chatID int64) tea.Cmd {
-	if m.st == nil || m.tgClient == nil {
+	if m.owner == nil {
 		return nil
 	}
-	chat, ok := m.st.GetChat(chatID)
-	if !ok {
-		return nil
-	}
-	ctx := m.ctx
-	client := m.tgClient
-	peer := chat.Peer
+	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
-		if err := client.ReadMentions(ctx, peer); err != nil {
+		if err := owner.ReadMentions(ctx, chatID); err != nil {
 			return errStatus("read mentions", err)
 		}
-		return readMentionsDoneMsg{chatID: chatID}
+		return nil
 	}
 }
 

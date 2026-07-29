@@ -235,6 +235,7 @@ func (m *ChatModel) SetMaxMediaPx(px int)         { m.msgList.SetMaxMediaPx(px) 
 func (m *ChatModel) SetImageMode(mode media.Mode) { m.msgList.SetImageMode(mode) }
 func (m *ChatModel) SetOutboxReadMaxID(id int)    { m.msgList.SetOutboxReadMaxID(id) }
 func (m *ChatModel) SetInboxReadMaxID(id int)     { m.msgList.SetInboxReadMaxID(id) }
+func (m *ChatModel) InboxReadMaxID() int          { return m.msgList.InboxReadMaxID() }
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool {
 	return m.msgList.ScrollToFirstUnread(readMaxID)
 }

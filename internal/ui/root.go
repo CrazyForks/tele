@@ -511,7 +511,6 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// network/data messages
 	case screens.OpenChatMsg,
 		screens.LoadMoreMsg,
-		markReadDoneMsg,
 		PhotoReadyMsg,
 		FullPhotoReadyMsg,
 		kittyEncodedMsg,

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,8 @@ func TestRoot_OpenChat_UnreadClearedOnMarkReadConfirmation(t *testing.T) {
 	c, _ := st.GetChat(1)
 	require.Equal(t, 1, c.UnreadCount, "unread is counted before the server confirms the read")
 
-	m.Update(markReadDoneMsg{chatID: 1, maxID: 7})
+	// Reading is the owner's command now, and it moves the pointer itself.
+	require.NoError(t, m.owner.MarkRead(context.Background(), 1, 7))
 
 	c, _ = st.GetChat(1)
 	assert.Equal(t, 0, c.UnreadCount)

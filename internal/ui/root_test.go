@@ -1990,10 +1990,9 @@ func TestRoot_ReactionUpdate_OnOpenChat_ReadsReactions(t *testing.T) {
 	_ = newM.(ui.RootModel)
 	require.NotNil(t, cmd)
 
-	// Invoking the command sends readReactions to the server.
-	done := cmd()
-	_ = done
-	assert.Equal(t, 1, mock.readReactionsCalls)
+	// Invoking the command asks the owner to read the reactions.
+	drainMsgs(cmd())
+	assert.Equal(t, 1, ownerOf(t, m).reactionsRead)
 }
 
 // A reaction delivered as an edit of an already-edited message must be marked
@@ -2014,8 +2013,8 @@ func TestRoot_EditWithReaction_OnOpenChat_ReadsReactions(t *testing.T) {
 	})
 	require.NotNil(t, cmd)
 
-	cmd()
-	assert.Equal(t, 1, mock.readReactionsCalls)
+	drainMsgs(cmd())
+	assert.Equal(t, 1, ownerOf(t, m).reactionsRead)
 }
 
 func TestRoot_OpenChat_ClearsUnreadReactionsOptimistically(t *testing.T) {
@@ -2238,35 +2237,45 @@ func TestRoot_RebindChatListConfirmToL_OpensChat(t *testing.T) {
 	assert.Equal(t, ui.FocusChatList, m.CurrentFocus(), "focus must not cycle to the chat pane")
 }
 
-func TestRoot_ToggleMute_OptimisticUpdate(t *testing.T) {
+// Muting goes to the owner as a command; the optimistic write is the owner's,
+// so it lands when the command runs rather than inside Update (#198).
+func TestRoot_ToggleMute_GoesThroughTheOwner(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Title: "A", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
 
-	updated, _ := m.Update(components.ToggleMuteRequest{Peer: domain.Peer{ID: 1}, Muted: true})
+	updated, cmd := m.Update(components.ToggleMuteRequest{Peer: domain.Peer{ID: 1}, Muted: true})
 	rm := updated.(ui.RootModel)
 	assert.False(t, rm.ChatMenuOpen(), "menu closes after action")
+	require.NotNil(t, cmd, "the request must produce an owner command")
+	drainMsgs(cmd())
 
 	c, _ := st.GetChat(1)
-	assert.True(t, c.IsMuted, "store updated optimistically")
+	assert.True(t, c.IsMuted, "the owner applied the mute")
 }
 
-func TestRoot_MarkUnread_OptimisticUpdate(t *testing.T) {
+func TestRoot_MarkUnread_GoesThroughTheOwner(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
 
-	m.Update(components.ToggleUnreadRequest{Peer: domain.Peer{ID: 1}, Unread: true})
+	_, cmd := m.Update(components.ToggleUnreadRequest{Peer: domain.Peer{ID: 1}, Unread: true})
+
+	require.NotNil(t, cmd, "the request must produce an owner command")
+	drainMsgs(cmd())
 	c, _ := st.GetChat(1)
 	assert.True(t, c.UnreadMark)
 }
 
-func TestRoot_ToggleArchive_OptimisticUpdate(t *testing.T) {
+func TestRoot_ToggleArchive_GoesThroughTheOwner(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
 
-	m.Update(components.ToggleArchiveRequest{Peer: domain.Peer{ID: 1}, Archived: true})
+	_, cmd := m.Update(components.ToggleArchiveRequest{Peer: domain.Peer{ID: 1}, Archived: true})
+
+	require.NotNil(t, cmd, "the request must produce an owner command")
+	drainMsgs(cmd())
 	c, _ := st.GetChat(1)
 	assert.True(t, c.IsArchived)
 }
@@ -2361,7 +2370,7 @@ func TestRoot_ReactionWhileChatOpen_MarksItRead(t *testing.T) {
 
 	require.NotNil(t, cmd, "an arriving reaction on the open chat must be read")
 	drainMsgs(cmd())
-	assert.Equal(t, 1, mock.readReactionsCalls)
+	assert.Equal(t, 1, ownerOf(t, m).reactionsRead)
 }
 
 // A reaction that arrives while the chat pane is not focused is only seen when
@@ -2387,5 +2396,5 @@ func TestRoot_ReactionArrivingUnfocused_IsReadOnFocus(t *testing.T) {
 	_ = out
 	require.NotNil(t, cmd, "focusing the chat must read the waiting reaction")
 	drainMsgs(cmd())
-	assert.Equal(t, 1, mock.readReactionsCalls)
+	assert.Equal(t, 1, ownerOf(t, m).reactionsRead)
 }
