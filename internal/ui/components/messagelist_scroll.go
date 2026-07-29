@@ -67,6 +67,11 @@ func (ml *MessageList) ScrollUpBy(n int) {
 // VisibleReadMaxID returns the highest message ID that is "sufficiently visible" to count
 // as read: either more than half its lines are in the viewport, or it fills the entire
 // viewport (so more than half is impossible to show at once). Returns 0 if none qualify.
+//
+// An album renders as one item but is several Telegram messages, so a visible album
+// contributes its last part's ID, not the anchor's. Reporting the anchor would leave
+// the remaining parts unread forever: the server's read_inbox_max_id would stop at the
+// anchor, and the item can never be scrolled past to bump it (issue: album never read).
 func (ml *MessageList) VisibleReadMaxID() int {
 	if ml.viewWidth <= 0 || ml.viewHeight <= 0 || len(ml.items) == 0 {
 		return 0
@@ -79,7 +84,12 @@ func (ml *MessageList) VisibleReadMaxID() int {
 			linesUsed += h
 			continue
 		}
-		msg := ml.items[i].msg
+		itemMaxID := ml.items[i].msg.ID
+		for _, p := range ml.items[i].parts {
+			if p.ID > itemMaxID {
+				itemMaxID = p.ID
+			}
+		}
 		skipped := 0
 		if i == ml.viewStart {
 			skipped = ml.lineOffset
@@ -90,8 +100,8 @@ func (ml *MessageList) VisibleReadMaxID() int {
 			visibleLines = remaining
 		}
 		if visibleLines > 0 && (visibleLines*2 > h || h >= ml.viewHeight) {
-			if msg.ID > maxID {
-				maxID = msg.ID
+			if itemMaxID > maxID {
+				maxID = itemMaxID
 			}
 		}
 		linesUsed += visibleLines
