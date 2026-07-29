@@ -38,6 +38,10 @@ type Store interface {
 	// SetGroupedID stamps Telegram's album key onto a message, so the parts of a
 	// just-sent album collapse into one album bubble.
 	SetGroupedID(chatID int64, msgID int, groupedID int64)
+	// ReplaceMessage overwrites a stored message wholesale. It is how a refused
+	// edit is undone: the field-wise updates always stamp an EditDate, and a
+	// message that was never edited must not keep that marker (#118).
+	ReplaceMessage(chatID int64, msg domain.Message)
 	RemoveMessage(chatID int64, msgID int)
 	RemoveMessages(chatID int64, msgIDs []int)
 	RemoveMessagesByID(msgIDs []int) (affected []int64)

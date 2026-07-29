@@ -26,6 +26,18 @@ type stubClient struct {
 	archivedWith *bool
 	unreadWith   *bool
 	readTo       int
+	editedTo     string
+	deletedIDs   []int
+	revoked      bool
+	reactedWith  string
+	reactionSent bool
+	forwardedTo  int64
+	forwardedIDs []int
+	sentText     string
+	typingCalls  int
+	draftText    string
+	searchedFor  string
+	searchLimit  int
 }
 
 func (s *stubClient) Connect(context.Context, *config.Config, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
@@ -251,7 +263,10 @@ func TestReadReactions_ClearsTheBadgeOnSuccess(t *testing.T) {
 	assert.Equal(t, 0, chat.UnreadReactionsCount)
 }
 
-func TestReadReactions_ClearsTheBadgeOnlyAfterConfirmation(t *testing.T) {
+// The badge clears up front so an opened chat drops its indicators at once
+// (#142, #155); a failure is reported but does not relight it, since the count
+// cannot be reconstructed and the next dialog-list sync is authoritative.
+func TestReadReactions_ClearsTheBadgeBeforeTheRequest(t *testing.T) {
 	c := &stubClient{err: &telerr.Error{Kind: telerr.Network}}
 	o, st := newCmdOwner(t, c)
 	st.SetChat(domain.Chat{
@@ -261,7 +276,7 @@ func TestReadReactions_ClearsTheBadgeOnlyAfterConfirmation(t *testing.T) {
 	require.Error(t, o.ReadReactions(context.Background(), 1))
 
 	chat, _ := st.GetChat(1)
-	assert.Equal(t, 2, chat.UnreadReactionsCount)
+	assert.Equal(t, 0, chat.UnreadReactionsCount)
 }
 
 func TestReadMentions_ClearsTheBadgeOnSuccess(t *testing.T) {
@@ -276,7 +291,7 @@ func TestReadMentions_ClearsTheBadgeOnSuccess(t *testing.T) {
 	assert.Equal(t, 0, chat.UnreadMentionsCount)
 }
 
-func TestReadMentions_ClearsTheBadgeOnlyAfterConfirmation(t *testing.T) {
+func TestReadMentions_ClearsTheBadgeBeforeTheRequest(t *testing.T) {
 	c := &stubClient{err: &telerr.Error{Kind: telerr.Network}}
 	o, st := newCmdOwner(t, c)
 	st.SetChat(domain.Chat{
@@ -286,5 +301,24 @@ func TestReadMentions_ClearsTheBadgeOnlyAfterConfirmation(t *testing.T) {
 	require.Error(t, o.ReadMentions(context.Background(), 1))
 
 	chat, _ := st.GetChat(1)
-	assert.Equal(t, 3, chat.UnreadMentionsCount)
+	assert.Equal(t, 0, chat.UnreadMentionsCount)
+}
+
+// Reading a whole chat must move the read pointer too, not just clear the
+// count: the "New messages" divider is drawn from the pointer, so a chat marked
+// read from the menu would still open with a divider.
+func TestMarkRead_ZeroMaxIDMovesThePointerToTheNewestMessage(t *testing.T) {
+	c := &stubClient{}
+	o, st := newCmdOwner(t, c)
+	st.SetChat(domain.Chat{
+		ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
+		ReadInboxMaxID: 10, UnreadCount: 3,
+		LastMessage: &domain.Message{ID: 42, ChatID: 1},
+	})
+
+	require.NoError(t, o.MarkRead(context.Background(), 1, 0))
+
+	chat, _ := st.GetChat(1)
+	assert.Equal(t, 42, chat.ReadInboxMaxID, "everything up to the newest message is read")
+	assert.Equal(t, 0, chat.UnreadCount)
 }

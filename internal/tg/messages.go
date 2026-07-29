@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
@@ -210,13 +211,56 @@ func (c *GotdClient) ForwardMessages(ctx context.Context, from domain.Peer, to d
 			}
 			randomIDs[i] = int64(binary.LittleEndian.Uint64(buf[:]))
 		}
-		_, err := api.MessagesForwardMessages(ctx, buildForwardRequest(peerToInput(from), peerToInput(to), ids, randomIDs))
+		updates, err := api.MessagesForwardMessages(ctx, buildForwardRequest(peerToInput(from), peerToInput(to), ids, randomIDs))
 		if err != nil {
 			c.log.Error("MessagesForwardMessages failed", zap.Error(err))
 			return err
 		}
+		// The reply carries the created messages. Nothing is done with them —
+		// the copies are expected to arrive through the live update path — so
+		// say what came back, which is where a forward that never renders has to
+		// be traced from.
+		c.traceLog.Debug("forward: reply from telegram",
+			zap.Int64("to", to.ID),
+			zap.Strings("updates", describeUpdates(updates)),
+			zap.Ints("new_msg_ids", extractSentMessageIDs(updates, randomIDs)))
 		return nil
 	})
+}
+
+// describeUpdates names the updates in an RPC reply, so a log line shows what
+// Telegram answered with rather than only that it answered.
+func describeUpdates(updates tg.UpdatesClass) []string {
+	upds, ok := updates.(*tg.Updates)
+	if !ok {
+		return []string{fmt.Sprintf("%T", updates)}
+	}
+	out := make([]string, 0, len(upds.Updates))
+	for _, u := range upds.Updates {
+		switch t := u.(type) {
+		case *tg.UpdateNewMessage:
+			out = append(out, fmt.Sprintf("NewMessage(id=%d)", messageID(t.Message)))
+		case *tg.UpdateNewChannelMessage:
+			out = append(out, fmt.Sprintf("NewChannelMessage(id=%d)", messageID(t.Message)))
+		case *tg.UpdateMessageID:
+			out = append(out, fmt.Sprintf("MessageID(id=%d)", t.ID))
+		default:
+			out = append(out, fmt.Sprintf("%T", u))
+		}
+	}
+	return out
+}
+
+// messageID reports a message's id whatever concrete class it is.
+func messageID(m tg.MessageClass) int {
+	switch t := m.(type) {
+	case *tg.Message:
+		return t.ID
+	case *tg.MessageService:
+		return t.ID
+	default:
+		return 0
+	}
 }
 
 func buildForwardRequest(fromPeer, toPeer tg.InputPeerClass, ids []int, randomIDs []int64) *tg.MessagesForwardMessagesRequest {

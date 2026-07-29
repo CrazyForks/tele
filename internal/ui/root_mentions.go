@@ -35,14 +35,16 @@ func (m *RootModel) syncMentionPopup() tea.Cmd {
 		return nil
 	}
 	m.mentionPopup.SetLoading(true)
-	return m.fetchParticipantsCmd(chatID, m.chat.CurrentPeer())
+	return m.fetchParticipantsCmd(chatID)
 }
 
-func (m RootModel) fetchParticipantsCmd(chatID int64, peer domain.Peer) tea.Cmd {
-	ctx := m.ctx
-	client := m.tgClient
+func (m RootModel) fetchParticipantsCmd(chatID int64) tea.Cmd {
+	if m.owner == nil {
+		return nil
+	}
+	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
-		members, err := client.GetParticipants(ctx, peer)
+		members, err := owner.GetParticipants(ctx, chatID)
 		if err != nil {
 			return participantsLoadedMsg{chatID: chatID, members: nil}
 		}

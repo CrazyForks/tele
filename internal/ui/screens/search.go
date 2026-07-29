@@ -309,8 +309,10 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		}
 		if m.forwardMsgID != 0 {
 			msgID := m.forwardMsgID
-			peer := chat.Peer
-			return m, func() tea.Msg { return ForwardToChatRequest{ToPeer: peer, MsgID: msgID} }
+			peer, title := chat.Peer, chat.Title
+			return m, func() tea.Msg {
+				return ForwardToChatRequest{ToPeer: peer, Title: title, MsgID: msgID}
+			}
 		}
 		// A search hit may be a contact with no dialog, which the owner does not
 		// hold, so the peer travels along to address a first message.
@@ -365,10 +367,10 @@ func (m *SearchModel) updateComment(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		return m, nil
 	case tea.KeyEnter:
 		comment := m.comment
-		peer := m.target.Peer
+		peer, title := m.target.Peer, m.target.Title
 		msgID := m.forwardMsgID
 		return m, func() tea.Msg {
-			return ForwardToChatRequest{ToPeer: peer, MsgID: msgID, Comment: comment}
+			return ForwardToChatRequest{ToPeer: peer, Title: title, MsgID: msgID, Comment: comment}
 		}
 	case tea.KeyBackspace:
 		if len(m.comment) > 0 {

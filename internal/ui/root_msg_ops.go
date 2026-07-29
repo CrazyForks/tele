@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -19,33 +20,39 @@ type sentMsgConfirmedMsg struct {
 	failed     bool
 }
 
+// reactionFailedMsg reports a refused reaction for presentation only: the owner
+// has already restored the previous reactions.
 type reactionFailedMsg struct {
-	chatID    int64
-	msgID     int
-	reactions []domain.Reaction
+	chatID int64
+	msgID  int
+	err    error
 }
 
+// deleteMsgFailedMsg reports a refused delete for presentation only: the owner
+// has already restored the message.
 type deleteMsgFailedMsg struct {
-	chatID   int64
-	msgID    int
-	messages []domain.Message
+	chatID int64
+	msgID  int
+	err    error
 }
 
+// editMsgFailedMsg reports a refused edit for presentation only: the owner has
+// already restored the text, so nothing here touches state. chatID is carried
+// to place the highlight, which belongs only to the chat still on screen.
 type editMsgFailedMsg struct {
-	chatID   int64
-	msgID    int
-	messages []domain.Message
+	chatID int64
+	msgID  int
+	err    error
 }
 
+// forwardDoneMsg reports the outcome of a forward for the status line. The
+// target's preview bump is the owner's, so nothing else travels here.
 type forwardDoneMsg struct {
 	toTitle string
 	// err is nil on success. It carries the domain kind, so the failure is
 	// rendered by the same path as every other error rather than by flags that
 	// have to be kept in step with it.
 	err error
-	// On success, bump the target chat in the list with this preview message.
-	bumpChatID int64
-	lastMsg    domain.Message
 }
 
 func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd) {
@@ -104,37 +111,24 @@ func (m RootModel) handleSentMsgConfirmed(msg sentMsgConfirmedMsg) (RootModel, t
 }
 
 func (m RootModel) handleEditSend(msg screens.EditSendRequest) (RootModel, tea.Cmd) {
-	if m.st == nil || m.tgClient == nil {
+	if m.owner == nil {
 		return m, nil
 	}
-	chatID := m.currentChatID
-	origMessages := m.st.Messages(chatID)
-	m.st.UpdateMessageText(chatID, msg.MsgID, msg.Text, msg.Entities, time.Now())
-	m.chat.SetMessages(m.st.Messages(chatID))
-	ctx := m.ctx
-	client := m.tgClient
-	peer := msg.Peer
-	msgID := msg.MsgID
-	text := msg.Text
-	entities := msg.Entities
+	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
+	msgID, text, entities := msg.MsgID, msg.Text, msg.Entities
 	return m, func() tea.Msg {
-		if err := client.EditMessage(ctx, peer, msgID, text, entities); err != nil {
-			return editMsgFailedMsg{chatID: chatID, msgID: msgID, messages: origMessages}
+		if err := owner.EditMessage(ctx, chatID, msgID, text, entities); err != nil {
+			return editMsgFailedMsg{chatID: chatID, msgID: msgID, err: err}
 		}
 		return nil
 	}
 }
 
 func (m RootModel) handleEditMsgFailed(msg editMsgFailedMsg) (RootModel, tea.Cmd) {
-	toast := func() tea.Msg { return StatusErrMsg{Text: "edit failed", Sev: components.SeverityWarning} }
-	if m.st == nil {
-		return m, toast
-	}
-	m.st.SetMessages(msg.chatID, msg.messages)
+	toast := func() tea.Msg { return errStatus("edit", msg.err) }
 	if msg.chatID != m.currentChatID {
 		return m, toast
 	}
-	m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
 	return m.flashRollback(msg.msgID, toast)
 }
 
@@ -172,184 +166,91 @@ func (m RootModel) flushCurrentDraftCmd() tea.Cmd {
 	if text == chat.Draft {
 		return nil // unchanged — avoid a redundant messages.saveDraft round-trip
 	}
-	m.st.SetChatDraft(m.currentChatID, text)
-	return m.saveDraftCmd(chat.Peer, text)
+	return m.saveDraftCmd(m.currentChatID, text)
 }
 
 // saveDraftCmd returns a managed Cmd that saves (or clears, when text == "")
-// the draft for a peer via the Telegram client. nil client → nil Cmd.
-func (m RootModel) saveDraftCmd(peer domain.Peer, text string) tea.Cmd {
-	if m.tgClient == nil {
+// a chat's draft through the owner, which stores it locally either way.
+func (m RootModel) saveDraftCmd(chatID int64, text string) tea.Cmd {
+	if m.owner == nil {
 		return nil
 	}
-	appCtx := m.ctx
-	client := m.tgClient
+	appCtx, owner := m.ctx, m.owner
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 		defer cancel()
-		_ = client.SaveDraft(ctx, peer, text)
+		// A failed draft sync is not worth interrupting for: the text is kept
+		// locally and the next flush retries.
+		_ = owner.SaveDraft(ctx, chatID, text)
 		return nil
 	}
 }
 
 func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea.Cmd) {
-	if m.tgClient == nil {
+	if m.owner == nil || m.currentChatID == 0 {
 		return m, nil
 	}
-	appCtx := m.ctx
-	client := m.tgClient
-	peer := msg.Peer
+	appCtx, owner, chatID := m.ctx, m.owner, m.currentChatID
 	action := msg.Action
 	// Run as a managed tea.Cmd (not a detached goroutine) so the RPC is bound to
 	// the app lifecycle context and cancelled on shutdown.
 	return m, func() tea.Msg {
 		ctx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 		defer cancel()
-		_ = client.SetTyping(ctx, peer, action)
+		// Typing notices are best-effort; a toast per failure would be noise.
+		_ = owner.SetTyping(ctx, chatID, action)
 		return nil
 	}
 }
 
 func (m RootModel) handleReactConfirmed(msg components.ReactConfirmedMsg) (RootModel, tea.Cmd) {
 	m.reactionPicker = nil
-	if m.st == nil || m.tgClient == nil {
+	if m.owner == nil {
 		return m, nil
 	}
-	chatID := m.currentChatID
-	msgID := m.reactionTargetID
-	emoji := msg.Emoji
-	currentReactions := m.st.Messages(chatID)
-	var msgReactions []domain.Reaction
-	for _, sm := range currentReactions {
-		if sm.ID == msgID {
-			msgReactions = sm.Reactions
-			break
-		}
-	}
-	alreadyChosen := false
-	for _, r := range msgReactions {
-		if r.Emoji == emoji && r.IsChosen {
-			alreadyChosen = true
-			break
-		}
-	}
-	sendEmoji := emoji
-	if alreadyChosen {
-		sendEmoji = ""
-	}
-	origReactions := make([]domain.Reaction, len(msgReactions))
-	copy(origReactions, msgReactions)
-	newReactions := buildOptimisticReactions(msgReactions, emoji)
-	m.st.UpdateMessageReactions(chatID, msgID, newReactions)
-	m.chat.SetMessagesKeepScroll(m.st.Messages(chatID))
-	chat, ok := m.st.GetChat(chatID)
-	if !ok {
-		return m, nil
-	}
-	ctx := m.ctx
-	client := m.tgClient
-	peer := chat.Peer
+	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
+	msgID, emoji := m.reactionTargetID, msg.Emoji
 	return m, func() tea.Msg {
-		if err := client.SendReaction(ctx, peer, msgID, sendEmoji); err != nil {
-			return reactionFailedMsg{chatID: chatID, msgID: msgID, reactions: origReactions}
+		if err := owner.SendReaction(ctx, chatID, msgID, emoji); err != nil {
+			return reactionFailedMsg{chatID: chatID, msgID: msgID, err: err}
 		}
 		return nil
 	}
 }
 
 func (m RootModel) handleReactionFailed(msg reactionFailedMsg) (RootModel, tea.Cmd) {
-	toast := func() tea.Msg { return StatusErrMsg{Text: "reaction failed", Sev: components.SeverityWarning} }
-	if m.st == nil {
-		return m, toast
-	}
-	m.st.UpdateMessageReactions(msg.chatID, msg.msgID, msg.reactions)
+	toast := func() tea.Msg { return errStatus("reaction", msg.err) }
 	if msg.chatID != m.currentChatID {
 		return m, toast
 	}
-	m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
 	return m.flashRollback(msg.msgID, toast)
 }
 
 func (m RootModel) handleDeleteMsg(msg components.DeleteMsgRequest) (RootModel, tea.Cmd) {
 	m.contextMenu = nil
-	if m.st == nil {
+	if m.owner == nil {
 		return m, nil
 	}
-	chatID := m.currentChatID
-	origMessages := m.st.Messages(chatID)
-	m.st.RemoveMessage(chatID, msg.MsgID)
-	m.chat.RemoveMessage(msg.MsgID)
-	if m.tgClient == nil {
-		return m, nil
-	}
-	chat, ok := m.st.GetChat(chatID)
-	if !ok {
-		return m, nil
-	}
-	ctx := m.ctx
-	client := m.tgClient
-	peer := chat.Peer
-	msgID := msg.MsgID
-	revoke := msg.Revoke
+	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
+	msgID, revoke := msg.MsgID, msg.Revoke
 	return m, func() tea.Msg {
-		if err := client.DeleteMessages(ctx, peer, []int{msgID}, revoke); err != nil {
-			return deleteMsgFailedMsg{chatID: chatID, msgID: msgID, messages: origMessages}
+		if err := owner.DeleteMessages(ctx, chatID, []int{msgID}, revoke); err != nil {
+			return deleteMsgFailedMsg{chatID: chatID, msgID: msgID, err: err}
 		}
 		return nil
 	}
 }
 
 func (m RootModel) handleDeleteMsgFailed(msg deleteMsgFailedMsg) (RootModel, tea.Cmd) {
-	toast := func() tea.Msg { return StatusErrMsg{Text: "delete failed", Sev: components.SeverityWarning} }
-	if m.st == nil {
-		return m, toast
-	}
-	m.st.SetMessages(msg.chatID, msg.messages)
+	toast := func() tea.Msg { return errStatus("delete", msg.err) }
 	if msg.chatID != m.currentChatID {
 		return m, toast
 	}
-	m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
 	return m.flashRollback(msg.msgID, toast)
 }
 
-func buildOptimisticReactions(current []domain.Reaction, emoji string) []domain.Reaction {
-	alreadyChosen := false
-	for _, r := range current {
-		if r.Emoji == emoji && r.IsChosen {
-			alreadyChosen = true
-			break
-		}
-	}
-	out := make([]domain.Reaction, 0, len(current)+1)
-	emojiFound := false
-	for _, r := range current {
-		nr := r
-		if r.Emoji == emoji {
-			emojiFound = true
-			if alreadyChosen {
-				nr.IsChosen = false
-				nr.Count--
-				if nr.Count <= 0 {
-					continue
-				}
-			} else {
-				nr.IsChosen = true
-				nr.Count++
-			}
-		} else if r.IsChosen {
-			nr.IsChosen = false
-			nr.Count--
-			if nr.Count <= 0 {
-				continue
-			}
-		}
-		out = append(out, nr)
-	}
-	if !alreadyChosen && !emojiFound && emoji != "" {
-		out = append(out, domain.Reaction{Emoji: emoji, Count: 1, IsChosen: true})
-	}
-	return out
-}
+// buildOptimisticReactions is gone: what a reaction looks like before the
+// server answers is state, so it moved to core as optimisticReactions (#198).
 
 func durationFor(sev components.Severity) time.Duration {
 	switch sev {
@@ -464,48 +365,23 @@ func (m RootModel) openForwardPicker(msgID int) (RootModel, tea.Cmd) {
 // chat to the chosen target peer, surfacing the result via a status message.
 func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootModel, tea.Cmd) {
 	m.searchModel = nil
-	if m.st == nil || m.tgClient == nil {
+	if m.owner == nil {
 		return m, nil
 	}
-	chat, ok := m.st.GetChat(m.currentChatID)
-	if !ok {
-		return m, nil
-	}
-	var toTitle string
-	if target, ok := m.st.GetChat(msg.ToPeer.ID); ok {
-		toTitle = target.Title
-	}
-	// Build the optimistic last-message preview for the target chat from the
-	// forwarded source message, so the target can bubble up the list on success
-	// (the real message arrives later via the update stream / on next open).
-	preview := domain.Message{ChatID: msg.ToPeer.ID, IsOut: true, Date: time.Now()}
-	for _, sm := range m.st.Messages(m.currentChatID) {
-		if sm.ID == msg.MsgID {
-			preview.Text = sm.Text
-			preview.Forward = sm.Forward
-			break
-		}
-	}
-	ctx := m.ctx
-	client := m.tgClient
-	from := chat.Peer
-	to := msg.ToPeer
-	ids := []int{msg.MsgID}
-	comment := msg.Comment
+	ctx, owner, from := m.ctx, m.owner, m.currentChatID
+	to, toTitle := msg.ToPeer, msg.Title
+	ids, comment := []int{msg.MsgID}, msg.Comment
+	m.debug("forward: client asked",
+		zap.Int64("from_chat", from), zap.Int64("to_peer", to.ID),
+		zap.Ints("msg_ids", ids), zap.Bool("with_comment", comment != ""))
 	return m, func() tea.Msg {
-		if comment != "" {
-			if _, err := client.SendMessage(ctx, to, comment, 0, nil); err != nil {
-				return forwardDoneMsg{toTitle: toTitle, err: err}
-			}
-		}
-		if err := client.ForwardMessages(ctx, from, to, ids); err != nil {
-			return forwardDoneMsg{toTitle: toTitle, err: err}
-		}
-		return forwardDoneMsg{toTitle: toTitle, bumpChatID: to.ID, lastMsg: preview}
+		err := owner.Forward(ctx, from, to, ids, comment)
+		return forwardDoneMsg{toTitle: toTitle, err: err}
 	}
 }
 
-// handleForwardDone turns a completed forward into a status message.
+// handleForwardDone turns a completed forward into a status message. The owner
+// has already surfaced the target chat, so there is nothing to apply here.
 func (m RootModel) handleForwardDone(msg forwardDoneMsg) (RootModel, tea.Cmd) {
 	if msg.err != nil {
 		text, sev, ok := errText("forward", msg.err)
@@ -513,9 +389,6 @@ func (m RootModel) handleForwardDone(msg forwardDoneMsg) (RootModel, tea.Cmd) {
 			return m, nil
 		}
 		return m, func() tea.Msg { return StatusErrMsg{Text: text, Sev: sev} }
-	}
-	if msg.bumpChatID != 0 && m.st != nil {
-		m.st.BumpChatLastMessage(msg.bumpChatID, msg.lastMsg)
 	}
 	m.statusBar.SetStatus("Forwarded to " + msg.toTitle)
 	return m, nil

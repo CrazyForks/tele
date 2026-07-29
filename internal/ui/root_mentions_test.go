@@ -20,6 +20,9 @@ func newRootOnGroupChat(t *testing.T, mc *mockTGClient) (ui.RootModel, store.Sto
 	chat := domain.Chat{ID: 5, Title: "Group", Peer: domain.Peer{ID: 5, Type: domain.PeerSuperGroup}}
 	st.SetChat(chat)
 	m := newRoot(mc, st, 50, false).WithScreen(ui.ScreenMain)
+	// Mention candidates come from the owner's query now (#198); the mock's list
+	// is what the test set up, so hand it over.
+	ownerOf(t, m).participants = mc.participants
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(ui.RootModel)
 	nm, cmd := m.Update(screens.OpenChatMsg{ChatID: chat.ID, Title: chat.Title})

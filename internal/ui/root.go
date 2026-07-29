@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -81,6 +82,7 @@ type RootModel struct {
 	currentChatID int64
 	historyLimit  int
 	verbose       bool
+	log           *zap.Logger
 	cfg           *config.Config
 	// Pending one-time startup notices (#197). The head of the queue is shown
 	// above every screen, including login; noticeLeft counts down whole seconds
@@ -231,6 +233,22 @@ func (m RootModel) WithFocus(f Focus) RootModel {
 func (m RootModel) WithContext(ctx context.Context) RootModel {
 	m.ctx = ctx
 	return m
+}
+
+// WithLogger attaches the app logger so the client can say what it did with a
+// delta. Optional: every use goes through m.debug, which is a no-op when unset,
+// so tests and any other caller need not supply one.
+func (m RootModel) WithLogger(log *zap.Logger) RootModel {
+	m.log = log
+	return m
+}
+
+// debug logs at debug level when a logger is attached, and does nothing when it
+// is not.
+func (m RootModel) debug(msg string, fields ...zap.Field) {
+	if m.log != nil {
+		m.log.Debug(msg, fields...)
+	}
 }
 
 func (m RootModel) WithConfig(cfg *config.Config) RootModel {

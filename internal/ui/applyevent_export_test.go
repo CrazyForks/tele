@@ -10,7 +10,9 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -38,6 +40,18 @@ type testOwner struct {
 	// commands (#198).
 	reactionsRead int
 	mentionsRead  int
+	// forward records the last Forward call, replacing what used to be asserted
+	// on the mock tg.Client (#198).
+	forwardFrom    int64
+	forwardTo      domain.Peer
+	forwardIDs     []int
+	forwardComment string
+	savedDrafts    []ownerDraft
+	// searchResult and participants are what the queries answer with;
+	// lastSearchQuery records what was asked.
+	searchResult    []domain.Chat
+	participants    []domain.ChatMember
+	lastSearchQuery string
 }
 
 func newTestOwner(st store.Store) *testOwner {
@@ -111,6 +125,109 @@ func (o *testOwner) SetUnreadMark(_ context.Context, chatID int64, unread bool) 
 	}
 	o.state.ApplyUnreadMark(chatID, unread)
 	return nil
+}
+
+func (o *testOwner) SearchContacts(_ context.Context, q string, _ int) ([]domain.Chat, error) {
+	o.lastSearchQuery = q
+	return o.searchResult, o.cmdErr
+}
+
+func (o *testOwner) GetParticipants(_ context.Context, _ int64) ([]domain.ChatMember, error) {
+	return o.participants, o.cmdErr
+}
+
+func (o *testOwner) SetTyping(_ context.Context, _ int64, _ domain.TypingAction) error {
+	return o.cmdErr
+}
+
+func (o *testOwner) SaveDraft(_ context.Context, chatID int64, text string) error {
+	o.savedDrafts = append(o.savedDrafts, ownerDraft{chatID: chatID, text: text})
+	o.state.ApplyDraft(chatID, text)
+	return o.cmdErr
+}
+
+// ownerDraft is one SaveDraft the UI issued, replacing what used to be recorded
+// on the mock tg.Client (#198).
+type ownerDraft struct {
+	chatID int64
+	text   string
+}
+
+func (o *testOwner) Forward(_ context.Context, fromChatID int64, to domain.Peer, msgIDs []int, comment string) error {
+	o.forwardFrom, o.forwardTo, o.forwardIDs, o.forwardComment = fromChatID, to, msgIDs, comment
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	preview := domain.Message{ChatID: to.ID, IsOut: true, Date: time.Now()}
+	if len(msgIDs) > 0 {
+		if src, ok := o.messageByID(fromChatID, msgIDs[0]); ok {
+			preview.Text = src.Text
+		}
+	}
+	o.state.Store().BumpChatLastMessage(to.ID, preview)
+	o.queued = append(o.queued, o.reg.Refresh()...)
+	return nil
+}
+
+func (o *testOwner) SendReaction(_ context.Context, chatID int64, msgID int, emoji string) error {
+	msg, ok := o.messageByID(chatID, msgID)
+	if !ok {
+		return &telerr.Error{Kind: telerr.NotFound}
+	}
+	prev := make([]domain.Reaction, len(msg.Reactions))
+	copy(prev, msg.Reactions)
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	next := append([]domain.Reaction{}, prev...)
+	next = append(next, domain.Reaction{Emoji: emoji, Count: 1, IsChosen: true})
+	o.state.ApplyReactions(chatID, msgID, next, false)
+	return nil
+}
+
+func (o *testOwner) DeleteMessages(_ context.Context, chatID int64, msgIDs []int, _ bool) error {
+	removed := make([]domain.Message, 0, len(msgIDs))
+	for _, id := range msgIDs {
+		if m, ok := o.messageByID(chatID, id); ok {
+			removed = append(removed, m)
+		}
+	}
+	o.state.ApplyDelete(chatID, msgIDs)
+	if o.cmdErr != nil {
+		for _, m := range removed {
+			o.state.ApplyRestore(m)
+		}
+		return o.cmdErr
+	}
+	return nil
+}
+
+func (o *testOwner) EditMessage(_ context.Context, chatID int64, msgID int, text string, entities []domain.MessageEntity) error {
+	prev, ok := o.messageByID(chatID, msgID)
+	if !ok {
+		return &telerr.Error{Kind: telerr.NotFound}
+	}
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	edited := prev
+	edited.Text = text
+	edited.Entities = entities
+	now := time.Now()
+	edited.EditDate = &now
+	o.state.ApplyEdit(edited)
+	return nil
+}
+
+// messageByID mirrors the owner's helper for the commands that need the
+// pre-change value.
+func (o *testOwner) messageByID(chatID int64, msgID int) (domain.Message, bool) {
+	for _, m := range o.state.Store().Messages(chatID) {
+		if m.ID == msgID {
+			return m, true
+		}
+	}
+	return domain.Message{}, false
 }
 
 func (o *testOwner) ReadReactions(_ context.Context, chatID int64) error {

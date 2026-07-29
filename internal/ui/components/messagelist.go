@@ -141,13 +141,13 @@ func (ml *MessageList) ViewStart() int  { return ml.viewStart }
 func (ml *MessageList) LineOffset() int { return ml.lineOffset }
 func (ml *MessageList) ViewHeight() int { return ml.viewHeight }
 
-func (ml *MessageList) AtTop() bool                   { return ml.viewStart == 0 && ml.lineOffset == 0 }
-func (ml *MessageList) SetIsGroup(v bool)             { ml.isGroup = v; ml.invalidateHeights() }
-func (ml *MessageList) SetOutboxReadMaxID(id int)     { ml.outboxReadMaxID = id }
-func (ml *MessageList) SetInboxReadMaxID(id int)      { ml.inboxReadMaxID = id }
+func (ml *MessageList) AtTop() bool               { return ml.viewStart == 0 && ml.lineOffset == 0 }
+func (ml *MessageList) SetIsGroup(v bool)         { ml.isGroup = v; ml.invalidateHeights() }
+func (ml *MessageList) SetOutboxReadMaxID(id int) { ml.outboxReadMaxID = id }
+func (ml *MessageList) SetInboxReadMaxID(id int)  { ml.inboxReadMaxID = id }
 
 // InboxReadMaxID reports the read pointer the projection last pushed in.
-func (ml *MessageList) InboxReadMaxID() int { return ml.inboxReadMaxID }
+func (ml *MessageList) InboxReadMaxID() int           { return ml.inboxReadMaxID }
 func (ml *MessageList) SetDarkBackground(isDark bool) { ml.hasDarkBackground = isDark }
 
 // SetImageMode tells the list which inline-image backend is active. Static

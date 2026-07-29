@@ -347,13 +347,14 @@ func TestRoot_Draft_FlushedToServerOnChatSwitch(t *testing.T) {
 	require.NotNil(t, cmd)
 	drainMsgs(cmd()) // executes the batched SaveDraft side effect
 
+	o := ownerOf(t, m)
 	var found bool
-	for _, d := range mc.savedDrafts {
-		if d.peerID == 1 && d.text == "hello Alice" {
+	for _, d := range o.savedDrafts {
+		if d.chatID == 1 && d.text == "hello Alice" {
 			found = true
 		}
 	}
-	assert.True(t, found, "switching chats must persist the outgoing draft; got %+v", mc.savedDrafts)
+	assert.True(t, found, "switching chats must persist the outgoing draft; got %+v", o.savedDrafts)
 }
 
 func TestRoot_Draft_EmptyComposerNoServerSave(t *testing.T) {
@@ -366,7 +367,7 @@ func TestRoot_Draft_EmptyComposerNoServerSave(t *testing.T) {
 	if cmd != nil {
 		drainMsgs(cmd())
 	}
-	assert.Empty(t, mc.savedDrafts, "no draft change must not hit messages.saveDraft")
+	assert.Empty(t, ownerOf(t, m).savedDrafts, "no draft change must not hit messages.saveDraft")
 }
 
 func TestRoot_EventDraftMessage_UpdatesStore(t *testing.T) {
@@ -1368,48 +1369,49 @@ func TestRoot_ForwardKey_OpensPicker(t *testing.T) {
 	assert.True(t, m.SearchActive(), "forward key should open the chat picker")
 }
 
-func TestRoot_ForwardToChat_CallsClient(t *testing.T) {
-	mock := &mockTGClient{}
-	m, _ := newRootWithOpenChat(t, mock)
+func TestRoot_ForwardToChat_AsksTheOwner(t *testing.T) {
+	m, _ := newRootWithOpenChat(t, &mockTGClient{})
 	target := domain.Peer{ID: 999, Type: domain.PeerUser, AccessHash: 7}
 
 	newM, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
 	m = newM.(ui.RootModel)
 	require.False(t, m.SearchActive(), "picker should close on confirm")
 	require.NotNil(t, cmd)
-	_ = cmd() // run the managed Cmd performing the RPC
+	drainMsgs(cmd())
 
-	assert.Equal(t, target, mock.lastForwardTo)
-	assert.Equal(t, []int{5}, mock.lastForwardIDs)
-	assert.Equal(t, int64(1), mock.lastForwardFrom.ID, "source peer is the open chat")
+	o := ownerOf(t, m)
+	assert.Equal(t, target, o.forwardTo)
+	assert.Equal(t, []int{5}, o.forwardIDs)
+	assert.Equal(t, int64(1), o.forwardFrom, "source is the open chat")
 }
 
-func TestRoot_ForwardWithComment_SendsCommentThenForwards(t *testing.T) {
-	mock := &mockTGClient{}
-	m, _ := newRootWithOpenChat(t, mock)
+// The comment travels with the command; sending it ahead of the forward is the
+// owner's business now (#198), and becomes an outbox submission in #193.
+func TestRoot_ForwardWithComment_PassesTheComment(t *testing.T) {
+	m, _ := newRootWithOpenChat(t, &mockTGClient{})
 	target := domain.Peer{ID: 999, Type: domain.PeerUser, AccessHash: 7}
 
 	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5, Comment: "look at this"})
 	require.NotNil(t, cmd)
-	_ = cmd() // run the managed Cmd
+	drainMsgs(cmd())
 
-	assert.Equal(t, 1, mock.sendCount, "comment must be sent")
-	assert.Equal(t, "look at this", mock.lastSendText)
-	assert.Equal(t, target, mock.lastForwardTo)
-	assert.Equal(t, []int{5}, mock.lastForwardIDs)
+	o := ownerOf(t, m)
+	assert.Equal(t, "look at this", o.forwardComment)
+	assert.Equal(t, target, o.forwardTo)
+	assert.Equal(t, []int{5}, o.forwardIDs)
 }
 
-func TestRoot_ForwardWithoutComment_DoesNotSend(t *testing.T) {
-	mock := &mockTGClient{}
-	m, _ := newRootWithOpenChat(t, mock)
+func TestRoot_ForwardWithoutComment_PassesNoComment(t *testing.T) {
+	m, _ := newRootWithOpenChat(t, &mockTGClient{})
 	target := domain.Peer{ID: 999, Type: domain.PeerUser}
 
 	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
 	require.NotNil(t, cmd)
-	_ = cmd()
+	drainMsgs(cmd())
 
-	assert.Equal(t, 0, mock.sendCount, "no comment means no extra message")
-	assert.Equal(t, []int{5}, mock.lastForwardIDs)
+	o := ownerOf(t, m)
+	assert.Empty(t, o.forwardComment, "no comment means nothing extra to send")
+	assert.Equal(t, []int{5}, o.forwardIDs)
 }
 
 func TestRoot_Forward_BumpsTargetChatToTop(t *testing.T) {
@@ -1434,8 +1436,9 @@ func TestRoot_Forward_BumpsTargetChatToTop(t *testing.T) {
 }
 
 func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {
-	mock := &mockTGClient{forwardErr: &telerr.Error{Kind: telerr.Forbidden, Detail: "CHAT_FORWARDS_RESTRICTED"}}
-	m, _ := newRootWithOpenChat(t, mock)
+	m, _ := newRootWithOpenChat(t, &mockTGClient{})
+	// The refusal comes back from the owner's command now.
+	ownerOf(t, m).cmdErr = &telerr.Error{Kind: telerr.Forbidden, Detail: "CHAT_FORWARDS_RESTRICTED"}
 	target := domain.Peer{ID: 999, Type: domain.PeerUser}
 
 	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
@@ -1501,8 +1504,11 @@ func TestRoot_DeleteMsgRequest_RemovesFromStore(t *testing.T) {
 
 	require.Len(t, st.Messages(1), 1)
 
-	newM, _ = m.Update(components.DeleteMsgRequest{MsgID: 10, Revoke: false})
+	// Deleting is the owner's command now, so the removal lands when it runs.
+	newM, cmd := m.Update(components.DeleteMsgRequest{MsgID: 10, Revoke: false})
 	_ = newM
+	require.NotNil(t, cmd, "the request must produce an owner command")
+	drainMsgs(cmd())
 
 	assert.Empty(t, st.Messages(1), "message removed from store")
 }
@@ -2024,12 +2030,15 @@ func TestRoot_OpenChat_ClearsUnreadReactionsOptimistically(t *testing.T) {
 	m := newRoot(mock, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
-	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
+	// The badge is cleared by the owner's command, ahead of its request (#198).
+	newM, cmd := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
 	_ = newM.(ui.RootModel)
+	require.NotNil(t, cmd)
+	drainMsgs(cmd())
 
 	c, ok := st.GetChat(1)
 	require.True(t, ok)
-	assert.Equal(t, 0, c.UnreadReactionsCount, "opening a chat optimistically clears its unread reactions")
+	assert.Equal(t, 0, c.UnreadReactionsCount, "opening a chat clears its unread reactions")
 }
 
 func TestRoot_NewMention_BumpsIndicatorOnOtherChat(t *testing.T) {
@@ -2063,12 +2072,14 @@ func TestRoot_OpenChat_ClearsUnreadMentionsOptimistically(t *testing.T) {
 	m := newRoot(mock, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
-	newM, _ := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
+	newM, cmd := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
 	_ = newM.(ui.RootModel)
+	require.NotNil(t, cmd)
+	drainMsgs(cmd())
 
 	c, ok := st.GetChat(1)
 	require.True(t, ok)
-	assert.Equal(t, 0, c.UnreadMentionsCount, "opening a chat optimistically clears its unread mentions")
+	assert.Equal(t, 0, c.UnreadMentionsCount, "opening a chat clears its unread mentions")
 }
 
 func TestRoot_PasteMsg_WhenComposerFocused_InsertsText(t *testing.T) {
@@ -2335,6 +2346,8 @@ func TestRoot_SearchUsersRequestRunsRPCAndRoutesResult(t *testing.T) {
 	}}
 	st := store.NewMemory()
 	m := newRoot(mock, st, 20, false).WithScreen(ui.ScreenMain)
+	// Searching is an owner query now (#198).
+	ownerOf(t, m).searchResult = mock.searchResult
 
 	_, cmd := m.Update(screens.SearchUsersRequest{Query: "zo", Serial: 1})
 	require.NotNil(t, cmd, "SearchUsersRequest should produce a command")
@@ -2346,7 +2359,7 @@ func TestRoot_SearchUsersRequestRunsRPCAndRoutesResult(t *testing.T) {
 		}
 	}
 	require.True(t, found, "expected a SearchUsersResult")
-	assert.Equal(t, "zo", mock.lastSearchQuery)
+	assert.Equal(t, "zo", ownerOf(t, m).lastSearchQuery)
 	require.Len(t, res.Chats, 1)
 	assert.Equal(t, int64(99), res.Chats[0].ID)
 	assert.Equal(t, 1, res.Serial)

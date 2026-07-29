@@ -10,7 +10,9 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 // ownerStub is the in-package twin of the ui_test testOwner: one state and one
@@ -28,6 +30,8 @@ type ownerStub struct {
 	// every command answers with, standing in for a Telegram refusal.
 	calls []cmdCall
 	err   error
+	// participants is what the mention query answers with.
+	participants []domain.ChatMember
 }
 
 // cmdCall is one command the UI issued through the owner.
@@ -89,6 +93,91 @@ func (o *ownerStub) SetUnreadMark(_ context.Context, chatID int64, unread bool) 
 		return o.err
 	}
 	o.state.ApplyUnreadMark(chatID, unread)
+	return nil
+}
+
+func (o *ownerStub) SearchContacts(_ context.Context, _ string, _ int) ([]domain.Chat, error) {
+	return nil, o.err
+}
+
+func (o *ownerStub) GetParticipants(_ context.Context, chatID int64) ([]domain.ChatMember, error) {
+	o.calls = append(o.calls, cmdCall{name: "GetParticipants", chatID: chatID})
+	return o.participants, o.err
+}
+
+func (o *ownerStub) SetTyping(_ context.Context, chatID int64, _ domain.TypingAction) error {
+	o.calls = append(o.calls, cmdCall{name: "SetTyping", chatID: chatID})
+	return o.err
+}
+
+func (o *ownerStub) SaveDraft(_ context.Context, chatID int64, text string) error {
+	o.calls = append(o.calls, cmdCall{name: "SaveDraft", chatID: chatID})
+	o.state.ApplyDraft(chatID, text)
+	return o.err
+}
+
+func (o *ownerStub) Forward(_ context.Context, fromChatID int64, to domain.Peer, _ []int, _ string) error {
+	o.calls = append(o.calls, cmdCall{name: "Forward", chatID: fromChatID})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.Store().BumpChatLastMessage(to.ID, domain.Message{ChatID: to.ID, IsOut: true, Date: time.Now()})
+	o.queued = append(o.queued, o.reg.Refresh()...)
+	return nil
+}
+
+func (o *ownerStub) SendReaction(_ context.Context, chatID int64, msgID int, emoji string) error {
+	o.calls = append(o.calls, cmdCall{name: "SendReaction", chatID: chatID})
+	if o.err != nil {
+		return o.err
+	}
+	o.state.ApplyReactions(chatID, msgID,
+		[]domain.Reaction{{Emoji: emoji, Count: 1, IsChosen: true}}, false)
+	return nil
+}
+
+func (o *ownerStub) DeleteMessages(_ context.Context, chatID int64, msgIDs []int, _ bool) error {
+	o.calls = append(o.calls, cmdCall{name: "DeleteMessages", chatID: chatID})
+	removed := make([]domain.Message, 0, len(msgIDs))
+	for _, m := range o.state.Store().Messages(chatID) {
+		for _, id := range msgIDs {
+			if m.ID == id {
+				removed = append(removed, m)
+			}
+		}
+	}
+	o.state.ApplyDelete(chatID, msgIDs)
+	if o.err != nil {
+		for _, m := range removed {
+			o.state.ApplyRestore(m)
+		}
+		return o.err
+	}
+	return nil
+}
+
+func (o *ownerStub) EditMessage(_ context.Context, chatID int64, msgID int, text string, entities []domain.MessageEntity) error {
+	o.calls = append(o.calls, cmdCall{name: "EditMessage", chatID: chatID})
+	var prev domain.Message
+	found := false
+	for _, m := range o.state.Store().Messages(chatID) {
+		if m.ID == msgID {
+			prev, found = m, true
+			break
+		}
+	}
+	if !found {
+		return &telerr.Error{Kind: telerr.NotFound}
+	}
+	if o.err != nil {
+		return o.err
+	}
+	edited := prev
+	edited.Text = text
+	edited.Entities = entities
+	now := time.Now()
+	edited.EditDate = &now
+	o.state.ApplyEdit(edited)
 	return nil
 }
 

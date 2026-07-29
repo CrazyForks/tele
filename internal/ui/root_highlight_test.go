@@ -8,6 +8,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/stretchr/testify/assert"
@@ -141,9 +142,10 @@ func drainBatch(msg tea.Msg) []tea.Msg {
 
 func TestRoot_DeleteMsgFailed_StartsErrorHighlight(t *testing.T) {
 	m := rootOnOpenChatWithMsg(t, 5) // open chat is 1
-	restored := []domain.Message{{ID: 5, ChatID: 1, Text: "target", Date: time.Now()}}
 
-	newM, cmd := m.Update(deleteMsgFailedMsg{chatID: 1, msgID: 5, messages: restored})
+	newM, cmd := m.Update(deleteMsgFailedMsg{
+		chatID: 1, msgID: 5, err: &telerr.Error{Kind: telerr.Forbidden},
+	})
 	root := newM.(RootModel)
 
 	assert.Equal(t, 5, root.Chat().HighlightedMsgID())
@@ -162,9 +164,10 @@ func TestRoot_DeleteMsgFailed_StartsErrorHighlight(t *testing.T) {
 
 func TestRoot_EditMsgFailed_StartsErrorHighlight(t *testing.T) {
 	m := rootOnOpenChatWithMsg(t, 7)
-	restored := []domain.Message{{ID: 7, ChatID: 1, Text: "orig", Date: time.Now()}}
 
-	newM, cmd := m.Update(editMsgFailedMsg{chatID: 1, msgID: 7, messages: restored})
+	newM, cmd := m.Update(editMsgFailedMsg{
+		chatID: 1, msgID: 7, err: &telerr.Error{Kind: telerr.Forbidden},
+	})
 	root := newM.(RootModel)
 
 	assert.Equal(t, 7, root.Chat().HighlightedMsgID())
@@ -174,9 +177,10 @@ func TestRoot_EditMsgFailed_StartsErrorHighlight(t *testing.T) {
 
 func TestRoot_MsgFailed_NoHighlightForOtherChat(t *testing.T) {
 	m := rootOnOpenChatWithMsg(t, 5) // open chat is 1
-	restored := []domain.Message{{ID: 5, ChatID: 2, Text: "x", Date: time.Now()}}
 
-	newM, cmd := m.Update(deleteMsgFailedMsg{chatID: 2, msgID: 5, messages: restored})
+	newM, cmd := m.Update(deleteMsgFailedMsg{
+		chatID: 2, msgID: 5, err: &telerr.Error{Kind: telerr.Forbidden},
+	})
 	root := newM.(RootModel)
 
 	assert.Equal(t, 0, root.Chat().HighlightedMsgID(),

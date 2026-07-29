@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
 // Owner is the client's view of the connection owner: the subscription surface
@@ -14,9 +15,6 @@ type Owner interface {
 	Subscribe(w project.Window) project.SubID
 	MoveWindow(id project.SubID, w project.Window)
 	Unsubscribe(id project.SubID)
-	// Refresh rebuilds the subscriptions after an optimistic store write that
-	// bypassed the owner. TRANSITIONAL (#193, #195, #196, #198).
-	Refresh()
 
 	// Commands. Each applies its own optimistic change and undoes it if
 	// Telegram refuses, so the client only decides how a failure looks.
@@ -28,16 +26,23 @@ type Owner interface {
 	MarkRead(ctx context.Context, chatID int64, maxID int) error
 	ReadReactions(ctx context.Context, chatID int64) error
 	ReadMentions(ctx context.Context, chatID int64) error
+	EditMessage(ctx context.Context, chatID int64, msgID int, text string, entities []domain.MessageEntity) error
+	DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, revoke bool) error
+	SendReaction(ctx context.Context, chatID int64, msgID int, emoji string) error
+	// Forward names its target by peer: it may be a search hit the owner holds
+	// no chat for.
+	Forward(ctx context.Context, fromChatID int64, to domain.Peer, msgIDs []int, comment string) error
+	SetTyping(ctx context.Context, chatID int64, action domain.TypingAction) error
+	SaveDraft(ctx context.Context, chatID int64, text string) error
+
+	// Queries. One-off answers nobody subscribes to.
+	SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error)
+	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
 }
 
-// refreshProjections repaints after an optimistic write the client made
-// directly. TRANSITIONAL (#198): when commands go through the owner, its commit
-// does this and every call site here disappears.
-func (m *RootModel) refreshProjections() {
-	if m.owner != nil {
-		m.owner.Refresh()
-	}
-}
+// refreshProjections is gone: every mutation the client makes now goes through
+// an owner command, whose commit rebuilds the projections and pushes a delta.
+// Nothing has to remember to repaint (#198).
 
 // WithOwner attaches the owner the model subscribes to.
 func (m RootModel) WithOwner(o Owner) RootModel {

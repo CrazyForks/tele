@@ -87,6 +87,11 @@ func (s *State) ApplyChatRead(chatID int64) (Change, bool) {
 	}
 	chat.UnreadCount = 0
 	chat.UnreadMark = false
+	// The pointer moves too, or the chat opens with a "New messages" divider
+	// above messages the user just declared read.
+	if chat.LastMessage != nil && chat.LastMessage.ID > chat.ReadInboxMaxID {
+		chat.ReadInboxMaxID = chat.LastMessage.ID
+	}
 	s.st.SetChat(chat)
 	c := Change{Kind: ChangeReadInbox, ChatID: chatID}
 	s.commit(c)

@@ -41,6 +41,10 @@ const (
 	// sit next to the unread count.
 	ChangeReactionsRead
 	ChangeMentionsRead
+	// ChangeMessageRestored undoes a delete Telegram refused. It is not
+	// ChangeNewMessage: a restored message is not new and must move no counter
+	// and raise no notification.
+	ChangeMessageRestored
 )
 
 // Change describes one applied difference in domain state, carrying what a

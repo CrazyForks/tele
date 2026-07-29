@@ -93,7 +93,18 @@ func setupDispatcher(
 			}
 		}
 		if shouldSuppress(msg.ID) {
+			// Suppression exists so a client's optimistic bubble is not doubled
+			// by its own echo. A message nobody inserted optimistically — a
+			// forward, or a forward's comment — would vanish here, so say so.
+			log.Debug("forward: echo suppressed",
+				zap.Int64("chat_id", msg.ChatID), zap.Int("msg_id", msg.ID),
+				zap.Bool("is_forward", msg.Forward != nil))
 			return nil
+		}
+		if msg.Forward != nil || msg.IsOut {
+			log.Debug("forward: message from the update stream",
+				zap.Int64("chat_id", msg.ChatID), zap.Int("msg_id", msg.ID),
+				zap.Bool("out", msg.IsOut), zap.Bool("is_forward", msg.Forward != nil))
 		}
 		// Bottom boundary of the update pipeline: a new message reached our
 		// dispatcher and is about to be delivered. Pairs with the envelope log in

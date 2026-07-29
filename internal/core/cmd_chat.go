@@ -57,31 +57,31 @@ func (o *Owner) MarkRead(ctx context.Context, chatID int64, maxID int) error {
 	return nil
 }
 
-// ReadReactions marks every unread reaction in a chat as read. Like MarkRead it
-// clears state only after Telegram confirms.
+// ReadReactions marks every unread reaction in a chat as read.
+//
+// The badge clears before the request, unlike MarkRead: opening a chat is meant
+// to drop its indicators at once (#142, #155), and waiting on the round-trip
+// would leave them lit on a chat the user is already looking at. It is not
+// restored on failure — the count cannot be reconstructed once cleared, and the
+// next dialog-list sync is authoritative anyway.
 func (o *Owner) ReadReactions(ctx context.Context, chatID int64) error {
 	peer, err := o.peer(chatID)
 	if err != nil {
 		return err
 	}
-	if err := o.client.ReadReactions(ctx, peer); err != nil {
-		return err
-	}
 	o.state.ApplyReactionsRead(chatID)
-	return nil
+	return o.client.ReadReactions(ctx, peer)
 }
 
-// ReadMentions marks every unread mention in a chat as read.
+// ReadMentions marks every unread mention in a chat as read, clearing the badge
+// up front for the same reason as ReadReactions.
 func (o *Owner) ReadMentions(ctx context.Context, chatID int64) error {
 	peer, err := o.peer(chatID)
 	if err != nil {
 		return err
 	}
-	if err := o.client.ReadMentions(ctx, peer); err != nil {
-		return err
-	}
 	o.state.ApplyMentionsRead(chatID)
-	return nil
+	return o.client.ReadMentions(ctx, peer)
 }
 
 // AddToFolder adds or removes a chat from a folder filter.

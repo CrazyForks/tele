@@ -61,6 +61,26 @@ func (s *State) ApplyEdit(msg domain.Message) (Change, bool) {
 	return c, true
 }
 
+// ApplyRestore puts a message back after a refused delete. Unlike ApplyIncoming
+// it is not an arrival: no counter moves and nothing is notified.
+func (s *State) ApplyRestore(msg domain.Message) (Change, bool) {
+	s.st.AppendMessage(msg)
+	c := Change{Kind: ChangeMessageRestored, ChatID: msg.ChatID, Message: msg, MsgID: msg.ID}
+	s.commit(c)
+	return c, true
+}
+
+// ApplyEditRestore puts a message back as it was before an edit Telegram
+// refused, including clearing the EditDate the optimistic version stamped on.
+// ApplyEdit cannot do this: a message with no EditDate means "reactions only"
+// there, which is right for the update path and wrong for a rollback.
+func (s *State) ApplyEditRestore(msg domain.Message) (Change, bool) {
+	s.st.ReplaceMessage(msg.ChatID, msg)
+	c := Change{Kind: ChangeMessageEdited, ChatID: msg.ChatID, Message: msg, MsgID: msg.ID}
+	s.commit(c)
+	return c, true
+}
+
 // ApplyReactions records the current reaction set for a message and tracks
 // whether the chat's unread-reaction count moved.
 func (s *State) ApplyReactions(chatID int64, msgID int, r []domain.Reaction, unread bool) (Change, bool) {

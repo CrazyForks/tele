@@ -481,6 +481,21 @@ func (s *SQLiteStore) UpdateMessageMedia(chatID int64, msgID int, photo *domain.
 	}
 }
 
+// ReplaceMessage overwrites a stored message with msg, fields and all. Unlike
+// the field-wise updates it can clear EditDate, which a rolled-back edit must
+// do: the message was never edited (#118).
+func (s *SQLiteStore) ReplaceMessage(chatID int64, msg domain.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.messages[chatID] {
+		if s.messages[chatID][i].ID == msg.ID {
+			s.messages[chatID][i] = msg
+			s.markMsgDirtyLocked(chatID, msg.ID)
+			return
+		}
+	}
+}
+
 func (s *SQLiteStore) RemoveMessage(chatID int64, msgID int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
