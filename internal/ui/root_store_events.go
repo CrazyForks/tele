@@ -30,7 +30,7 @@ func (m RootModel) handleChatListDelta(d *project.ChatListDelta) (RootModel, tea
 	switch d.Kind {
 	case project.ChatListReset:
 		m.chatList.SetWindow(d.Offset, d.Total, d.Rows)
-		m.chatList.SetActiveByID(m.currentChatID)
+		m.chatList.SetActive(m.currentChatID)
 
 	case project.ChatListRow:
 		m.chatList.SetRow(d.Row)

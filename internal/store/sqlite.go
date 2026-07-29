@@ -140,6 +140,11 @@ type SQLiteStore struct {
 	// next write-behind flush, mirroring dirtyPersist for chat rows. See #139.
 	dirtyMsgs   map[int64]map[int]struct{}
 	deletedMsgs map[int64]map[int]struct{}
+	// deletingMsgs holds the deletes handed to a flush that has not committed
+	// yet. The queue is drained under the lock and written without it, and for
+	// that stretch the row is still on disk while nothing marks it deleted — a
+	// chat opened right then would read the message back.
+	deletingMsgs map[int64]map[int]struct{}
 }
 
 // sharedPtsBox reports whether a peer's messages live in the account's common
@@ -196,6 +201,7 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		loaded:             make(map[int64]bool),
 		dirtyMsgs:          make(map[int64]map[int]struct{}),
 		deletedMsgs:        make(map[int64]map[int]struct{}),
+		deletingMsgs:       make(map[int64]map[int]struct{}),
 		db:                 db,
 		log:                log,
 		orderDirty:         true, // build the sorted view lazily on first Chats() call
@@ -242,6 +248,7 @@ func (s *SQLiteStore) Flush() {
 		s.persistChat(c)
 	}
 	s.flushMessageRows(upserts, deletes)
+	s.clearDeletesInFlight(deletes)
 }
 
 // markDirtyLocked queues a chat for the next write-behind flush. Caller holds the lock.

@@ -34,6 +34,39 @@ func TestMarkMsgDirty_SkipsOptimisticNegativeID(t *testing.T) {
 	assert.Equal(t, 0, dirty, "negative-id messages must never be queued for persistence")
 }
 
+// The flusher drains the delete queue under the lock and writes without it.
+// Opening a chat inside that window must not read the deleted row back.
+func TestLoadMessages_IgnoresDeletesInFlight(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s, err := NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	s.SetChat(domain.Chat{ID: 3, Peer: domain.Peer{ID: 3, Type: domain.PeerUser}})
+	s.SetMessages(3, []domain.Message{
+		{ID: 1, ChatID: 3, Text: "kept", Date: time.Unix(1, 0)},
+		{ID: 2, ChatID: 3, Text: "deleted", Date: time.Unix(2, 0)},
+	})
+	require.NoError(t, s.Close())
+
+	s2, err := NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	s2.RemoveMessagesByID([]int{2})
+
+	// Take the snapshot the flusher takes, then open the chat before the
+	// transaction lands.
+	s2.mu.Lock()
+	upserts, deletes := s2.snapshotMessageWritesLocked()
+	s2.mu.Unlock()
+
+	s2.LoadMessages(3)
+	got := s2.Messages(3)
+	require.Len(t, got, 1, "a delete in flight must still hide the row on disk")
+	assert.Equal(t, 1, got[0].ID)
+
+	s2.flushMessageRows(upserts, deletes)
+}
+
 func TestLoadMessages_DoesNotQueueWrites(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 

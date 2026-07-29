@@ -71,6 +71,10 @@ type RootModel struct {
 	// slice rather than applying edits itself.
 	chatWindow project.ChatWindow
 	chatMsgs   []domain.Message
+	// chatUnreadReactions is the open chat's unread-reaction count, from the
+	// projection. Kept so focusing the pane can mark them read: a reaction that
+	// arrived while you were elsewhere is only seen when you look.
+	chatUnreadReactions int
 	// activeFolder is the folder the chatlist window is filtered by, kept so a
 	// window move can repeat it. 0 is All Chats.
 	activeFolder  int

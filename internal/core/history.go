@@ -63,10 +63,14 @@ func (o *Owner) backfill(ctx context.Context, id project.SubID, w project.ChatWi
 		o.publishFailure(Failure{ChatID: w.ChatID, Op: "load history", Err: err})
 		return
 	}
-	if len(fetched) == 0 {
-		return
-	}
 	merged := MergeOlder(fetched, existing)
+	o.log.Debug("history backfill",
+		zap.Int64("chat", w.ChatID),
+		zap.Int("offset_id", offsetID),
+		zap.Int("held", len(existing)),
+		zap.Int("fetched", len(fetched)),
+		zap.Int("merged", len(merged)),
+		zap.Int("want", w.Before+w.After+1))
 	if len(merged) == len(existing) {
 		// Every fetched message was already held: the chat has no more history.
 		return

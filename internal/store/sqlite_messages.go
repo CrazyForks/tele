@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -126,12 +127,41 @@ func (s *SQLiteStore) snapshotMessageWritesLocked() ([]msgUpsert, []msgDelete) {
 
 	var deletes []msgDelete
 	for chatID, ids := range s.deletedMsgs {
+		inFlight := s.deletingMsgs[chatID]
+		if inFlight == nil {
+			inFlight = make(map[int]struct{}, len(ids))
+			s.deletingMsgs[chatID] = inFlight
+		}
 		for msgID := range ids {
 			deletes = append(deletes, msgDelete{chatID: chatID, msgID: msgID})
+			inFlight[msgID] = struct{}{}
 		}
 	}
 	s.deletedMsgs = make(map[int64]map[int]struct{})
 	return upserts, deletes
+}
+
+// clearDeletesInFlight forgets deletes whose flush transaction has finished.
+func (s *SQLiteStore) clearDeletesInFlight(deletes []msgDelete) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range deletes {
+		ids := s.deletingMsgs[d.chatID]
+		delete(ids, d.msgID)
+		if len(ids) == 0 {
+			delete(s.deletingMsgs, d.chatID)
+		}
+	}
+}
+
+// msgDeletePendingLocked reports whether a message is queued for deletion or has
+// a delete in flight, so a read from disk must skip its row. Caller holds the lock.
+func (s *SQLiteStore) msgDeletePendingLocked(chatID int64, msgID int) bool {
+	if _, ok := s.deletedMsgs[chatID][msgID]; ok {
+		return true
+	}
+	_, ok := s.deletingMsgs[chatID][msgID]
+	return ok
 }
 
 // flushMessageRows applies queued upserts and deletes in one transaction. Runs
@@ -217,6 +247,11 @@ func (s *SQLiteStore) LoadMessages(chatID int64) {
 		var m domain.Message
 		if err := json.Unmarshal(data, &m); err != nil {
 			s.log.Error("unmarshal message failed", zap.Int64("chat_id", chatID), zap.Error(err))
+			continue
+		}
+		// A delete that has not reached disk yet already happened as far as the
+		// rest of the app is concerned; its row must not come back on open.
+		if s.msgDeletePendingLocked(chatID, m.ID) {
 			continue
 		}
 		disk = append(disk, m)
@@ -466,22 +501,30 @@ func (s *SQLiteStore) RemoveMessages(chatID int64, msgIDs []int) {
 	s.removeMessagesLocked(chatID, msgIDs)
 }
 
-// removeMessagesLocked drops the given message IDs from one chat and the msgChat
-// index. Caller holds the lock.
+// removeMessagesLocked drops the given message IDs from one chat, the msgChat
+// index and the database. IDs the chat does not hold in memory are queued for
+// deletion all the same: a chat that was not opened this session holds nothing
+// in memory, and leaving its row behind resurrects the message on the next open.
+// Caller holds the lock.
 func (s *SQLiteStore) removeMessagesLocked(chatID int64, msgIDs []int) {
-	if len(s.messages[chatID]) == 0 {
-		return
-	}
 	toRemove := make(map[int]struct{}, len(msgIDs))
 	for _, id := range msgIDs {
 		toRemove[id] = struct{}{}
+		// Only drop the index entry if it points here: message IDs are unique
+		// within the shared pts box, but a channel numbers its own and may reuse
+		// a number that belongs to a private chat.
+		if cid, ok := s.msgChat[id]; ok && cid == chatID {
+			delete(s.msgChat, id)
+		}
+		s.markMsgDeletedLocked(chatID, id)
 	}
 	msgs := s.messages[chatID]
+	if len(msgs) == 0 {
+		return
+	}
 	kept := msgs[:0]
 	for _, m := range msgs {
 		if _, remove := toRemove[m.ID]; remove {
-			delete(s.msgChat, m.ID)
-			s.markMsgDeletedLocked(chatID, m.ID)
 			continue
 		}
 		kept = append(kept, m)
@@ -489,17 +532,64 @@ func (s *SQLiteStore) removeMessagesLocked(chatID int64, msgIDs []int) {
 	s.messages[chatID] = kept
 }
 
-// RemoveMessagesByID resolves each message ID to its owning chat via the index
-// and removes it there, returning the affected chat IDs. Used for the Telegram
-// non-channel delete that carries message IDs but no peer context (issue #72).
+// resolveChatsByMsgIDLocked finds the owning chat of message IDs the in-memory
+// index does not cover, by looking them up on disk. Only shared-pts-box chats
+// count: IDs are globally unique there, whereas a channel's ID space is its own
+// and could collide by number. Caller holds the lock.
+func (s *SQLiteStore) resolveChatsByMsgIDLocked(msgIDs []int) map[int64][]int {
+	if len(msgIDs) == 0 {
+		return nil
+	}
+	args := make([]any, 0, len(msgIDs))
+	for _, id := range msgIDs {
+		args = append(args, id)
+	}
+	q := `SELECT chat_id, msg_id FROM messages WHERE msg_id IN (?` + strings.Repeat(",?", len(msgIDs)-1) + `)`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		s.log.Error("resolve chats by message id failed", zap.Error(err))
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	byChat := make(map[int64][]int)
+	for rows.Next() {
+		var chatID int64
+		var msgID int
+		if err := rows.Scan(&chatID, &msgID); err != nil {
+			s.log.Error("scan message owner failed", zap.Error(err))
+			return nil
+		}
+		if chat, ok := s.chats[chatID]; !ok || !sharedPtsBox(chat.Peer) {
+			continue
+		}
+		byChat[chatID] = append(byChat[chatID], msgID)
+	}
+	if err := rows.Err(); err != nil {
+		s.log.Error("iterate message owners failed", zap.Error(err))
+		return nil
+	}
+	return byChat
+}
+
+// RemoveMessagesByID resolves each message ID to its owning chat and removes it
+// there, returning the affected chat IDs. Used for the Telegram non-channel
+// delete that carries message IDs but no peer context (issue #72). The in-memory
+// index only covers chats touched this session, so the rest are resolved on disk.
 func (s *SQLiteStore) RemoveMessagesByID(msgIDs []int) []int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	byChat := make(map[int64][]int)
+	var unindexed []int
 	for _, id := range msgIDs {
 		if cid, ok := s.msgChat[id]; ok {
 			byChat[cid] = append(byChat[cid], id)
+			continue
 		}
+		unindexed = append(unindexed, id)
+	}
+	for cid, ids := range s.resolveChatsByMsgIDLocked(unindexed) {
+		byChat[cid] = append(byChat[cid], ids...)
 	}
 	affected := make([]int64, 0, len(byChat))
 	for cid, ids := range byChat {

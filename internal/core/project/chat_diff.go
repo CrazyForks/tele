@@ -121,6 +121,19 @@ func diffWindow(prev, next ChatContents) []ChatDelta {
 		return []ChatDelta{{Kind: ChatRemove, MsgIDs: missing(prevIDs, nextIDs)}}
 
 	default:
+		// A window of fixed size anchored on the newest message slides forward
+		// as messages arrive: it drops as many from the head as it gains at the
+		// tail. Saying that plainly keeps the client's viewport where it is;
+		// falling through to Reset would re-seat the message list and scroll a
+		// chat being read back to the bottom.
+		if k := slideBy(prevIDs, nextIDs); k > 0 {
+			out := []ChatDelta{{Kind: ChatRemove, MsgIDs: prevIDs[:k]}}
+			gained := next.Messages[len(prevIDs)-k:]
+			if len(gained) == 1 && !next.HasNewer {
+				return append(out, ChatDelta{Kind: ChatAppend, Message: gained[0]})
+			}
+			return append(out, ChatDelta{Kind: ChatNewer, Messages: gained, HasNewer: next.HasNewer})
+		}
 		return []ChatDelta{{Kind: ChatReset, Contents: next}}
 	}
 }
@@ -158,6 +171,18 @@ func hasPrefix(s, p []int) bool {
 // hasSuffix reports whether s ends with p.
 func hasSuffix(s, p []int) bool {
 	return len(s) >= len(p) && equalInts(s[len(s)-len(p):], p)
+}
+
+// slideBy reports how many entries fell off the head when the window slid
+// forward: the smallest k > 0 for which next begins with prev[k:]. Zero means
+// this is not a slide.
+func slideBy(prev, next []int) int {
+	for k := 1; k < len(prev); k++ {
+		if hasPrefix(next, prev[k:]) {
+			return k
+		}
+	}
+	return 0
 }
 
 // isSubsequence reports whether sub appears in s in order, not necessarily

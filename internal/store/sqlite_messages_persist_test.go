@@ -156,3 +156,143 @@ func TestSQLite_RemoveMessage_DeletesOnDisk(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, 1, got[0].ID)
 }
+
+// A message deleted from another device must be gone from disk too, or it comes
+// back the next time the chat is opened.
+func TestSQLite_RemoveMessagesByID_SurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "kept", Date: time.Unix(3000, 0)})
+	s.AppendMessage(domain.Message{ID: 6, ChatID: 9, Text: "deleted", Date: time.Unix(3001, 0)})
+	affected := s.RemoveMessagesByID([]int{6})
+	require.Equal(t, []int64{9}, affected)
+	require.NoError(t, s.Close())
+
+	s2 := openStore(t, path)
+	defer func() { _ = s2.Close() }()
+	s2.LoadMessages(9)
+
+	got := s2.Messages(9)
+	require.Len(t, got, 1, "the deleted message must not come back from disk")
+	assert.Equal(t, 5, got[0].ID)
+}
+
+// The delete update carries no chat context, so the chat is resolved from an
+// index that only covers chats loaded this session. A chat that was never opened
+// must still lose the message on disk, or it comes back on the next open.
+func TestSQLite_RemoveMessagesByID_ChatNeverOpened(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+	s.SetMessages(9, []domain.Message{
+		{ID: 5, ChatID: 9, Text: "kept", Date: time.Unix(3000, 0)},
+		{ID: 6, ChatID: 9, Text: "deleted", Date: time.Unix(3001, 0)},
+	})
+	require.NoError(t, s.Close())
+
+	// Reopen and delete without ever opening the chat: no LoadMessages, so the
+	// chat holds nothing in memory and nothing in the index.
+	s2 := openStore(t, path)
+	assert.Equal(t, []int64{9}, s2.RemoveMessagesByID([]int{6}), "the owning chat must be resolved from disk")
+	require.NoError(t, s2.Close())
+
+	s3 := openStore(t, path)
+	defer func() { _ = s3.Close() }()
+	s3.LoadMessages(9)
+
+	got := s3.Messages(9)
+	require.Len(t, got, 1, "the deleted message must not come back from disk")
+	assert.Equal(t, 5, got[0].ID)
+}
+
+// Opening the chat right after the delete, before the write-behind flush ran,
+// must not read the deleted row back off disk.
+func TestSQLite_RemoveMessagesByID_ThenOpenBeforeFlush(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+	s.SetMessages(9, []domain.Message{
+		{ID: 5, ChatID: 9, Text: "kept", Date: time.Unix(3000, 0)},
+		{ID: 6, ChatID: 9, Text: "deleted", Date: time.Unix(3001, 0)},
+	})
+	require.NoError(t, s.Close())
+
+	s2 := openStore(t, path)
+	defer func() { _ = s2.Close() }()
+	s2.RemoveMessagesByID([]int{6})
+	s2.LoadMessages(9)
+
+	got := s2.Messages(9)
+	require.Len(t, got, 1, "the pending delete must win over the row still on disk")
+	assert.Equal(t, 5, got[0].ID)
+}
+
+// A channel delete carries an explicit chat, but the chat may still be closed,
+// with nothing of it in memory. The row must go from disk anyway.
+func TestSQLite_RemoveMessages_ChannelNeverOpened(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 50, Peer: domain.Peer{ID: 50, Type: domain.PeerChannel}})
+	s.SetMessages(50, []domain.Message{
+		{ID: 1, ChatID: 50, Text: "kept", Date: time.Unix(1, 0)},
+		{ID: 2, ChatID: 50, Text: "deleted", Date: time.Unix(2, 0)},
+	})
+	require.NoError(t, s.Close())
+
+	s2 := openStore(t, path)
+	s2.RemoveMessages(50, []int{2}) // no LoadMessages: the channel was never opened
+	require.NoError(t, s2.Close())
+
+	s3 := openStore(t, path)
+	defer func() { _ = s3.Close() }()
+	s3.LoadMessages(50)
+
+	got := s3.Messages(50)
+	require.Len(t, got, 1, "the deleted message must not come back from disk")
+	assert.Equal(t, 1, got[0].ID)
+}
+
+// Message IDs are only globally unique in the shared pts box (private chats and
+// basic groups). A channel message that happens to carry the same number must
+// not be swept up by a shared-box delete.
+func TestSQLite_RemoveMessagesByID_LeavesChannelsAlone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 50, Peer: domain.Peer{ID: 50, Type: domain.PeerChannel}})
+	s.SetMessages(50, []domain.Message{{ID: 6, ChatID: 50, Text: "channel", Date: time.Unix(3001, 0)}})
+	require.NoError(t, s.Close())
+
+	s2 := openStore(t, path)
+	assert.Empty(t, s2.RemoveMessagesByID([]int{6}), "a channel message must not resolve as a shared-box delete")
+	require.NoError(t, s2.Close())
+
+	s3 := openStore(t, path)
+	defer func() { _ = s3.Close() }()
+	s3.LoadMessages(50)
+	assert.Len(t, s3.Messages(50), 1, "the channel message must survive")
+}
+
+// The same for a message this client sent: it was stored under an optimistic
+// sentinel id and renumbered when the server confirmed it.
+func TestSQLite_RemoveOfARenumberedMessage_SurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+	s.AppendMessage(domain.Message{ID: -1, ChatID: 9, Text: "mine", IsOut: true, Date: time.Unix(3000, 0)})
+	s.UpdateMessageID(9, -1, 42)
+	require.Equal(t, []int64{9}, s.RemoveMessagesByID([]int{42}))
+	require.NoError(t, s.Close())
+
+	s2 := openStore(t, path)
+	defer func() { _ = s2.Close() }()
+	s2.LoadMessages(9)
+
+	assert.Empty(t, s2.Messages(9), "the deleted message must not come back from disk")
+}

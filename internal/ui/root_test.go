@@ -2342,3 +2342,50 @@ func TestRoot_SearchUsersRequestRunsRPCAndRoutesResult(t *testing.T) {
 	assert.Equal(t, int64(99), res.Chats[0].ID)
 	assert.Equal(t, 1, res.Serial)
 }
+
+// A reaction that lands while the chat is on screen must be marked read, even
+// though the message it landed on may be far outside the window.
+func TestRoot_ReactionWhileChatOpen_MarksItRead(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock) // chat 1 open and focused
+	st.SetMessages(1, []domain.Message{
+		{ID: 10, ChatID: 1, Text: "mine", IsOut: true, Date: time.Unix(1, 0)},
+	})
+	nm, _ := applyHistory(t, m, st, 1)
+	m = nm.(ui.RootModel)
+
+	_, cmd := applyEvent(t, m, st, store.Event{
+		Kind: store.EventReactionsUpdate, ChatID: 1, MsgID: 10,
+		Reactions: []domain.Reaction{{Emoji: "👍", Count: 1}}, ReactionsUnread: true,
+	})
+
+	require.NotNil(t, cmd, "an arriving reaction on the open chat must be read")
+	drainMsgs(cmd())
+	assert.Equal(t, 1, mock.readReactionsCalls)
+}
+
+// A reaction that arrives while the chat pane is not focused is only seen when
+// the user looks at it, so that is when it counts as read.
+func TestRoot_ReactionArrivingUnfocused_IsReadOnFocus(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.SetMessages(1, []domain.Message{
+		{ID: 10, ChatID: 1, Text: "mine", IsOut: true, Date: time.Unix(1, 0)},
+	})
+	nm, _ := applyHistory(t, m, st, 1)
+	m = nm.(ui.RootModel).WithFocus(ui.FocusChatList)
+
+	nm, cmd := applyEvent(t, m, st, store.Event{
+		Kind: store.EventReactionsUpdate, ChatID: 1, MsgID: 10,
+		Reactions: []domain.Reaction{{Emoji: "👍", Count: 1}}, ReactionsUnread: true,
+	})
+	m = nm.(ui.RootModel)
+	assert.Nil(t, cmd, "nobody is looking at the chat pane yet")
+
+	// Focusing the pane is the moment the reaction is seen.
+	out, cmd := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	_ = out
+	require.NotNil(t, cmd, "focusing the chat must read the waiting reaction")
+	drainMsgs(cmd())
+	assert.Equal(t, 1, mock.readReactionsCalls)
+}

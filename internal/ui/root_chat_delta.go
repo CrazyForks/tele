@@ -105,7 +105,10 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 			Online:          c.Online,
 			ReadOutboxMaxID: c.ReadOutboxMaxID,
 		})
-		return m, m.readReactionsOnScreen(c)
+		// Assigned first: the call records the count on the model, and a return
+		// statement gives no guarantee that m is read after it.
+		cmd := m.readReactionsOnScreen(c)
+		return m, cmd
 
 	case project.ChatOlder:
 		if len(d.Messages) == 0 {
@@ -165,7 +168,10 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		m.chatMsgs = kept
 
 	case project.ChatRead:
-		m.chat.SetInboxReadMaxID(d.ReadInboxMaxID)
+		// Only the outbox pointer, which moves the delivery ticks. The inbound
+		// one is deliberately left where the chat was opened: opening marks the
+		// chat read, and following that live would erase the unread separator
+		// the moment it appeared, leaving no sign of where to start reading.
 		m.chat.SetOutboxReadMaxID(d.ReadOutboxMaxID)
 
 	case project.ChatDraft:
@@ -181,7 +187,8 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 // readReactionsOnScreen marks a chat's reactions read when the user is looking
 // at it. The count is per-chat state, so the message the reaction landed on need
 // not be in the window (#199).
-func (m RootModel) readReactionsOnScreen(c project.ChatContents) tea.Cmd {
+func (m *RootModel) readReactionsOnScreen(c project.ChatContents) tea.Cmd {
+	m.chatUnreadReactions = c.UnreadReactions
 	if m.focus != FocusChat || c.UnreadReactions == 0 {
 		return nil
 	}

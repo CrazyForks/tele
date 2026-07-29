@@ -346,8 +346,13 @@ func (m *ChatListModel) ActiveIdx() int {
 	return -1
 }
 
-// SetActiveByID marks a chat as the open one and moves the cursor onto it when
-// the window holds it.
+// SetActive marks a chat as the open one. It does not touch the cursor: the
+// window is replaced on every reorder, and dragging the cursor back to the open
+// chat each time would pin it there for as long as a chat is open.
+func (m *ChatListModel) SetActive(id int64) { m.activeID = id }
+
+// SetActiveByID marks a chat as the open one and moves the cursor onto it. For
+// the moment a chat is opened, where the cursor should follow.
 func (m *ChatListModel) SetActiveByID(id int64) {
 	m.activeID = id
 	m.SetCursorByID(id)

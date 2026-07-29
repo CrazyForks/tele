@@ -240,3 +240,30 @@ func TestDiffChat_EmptyingTheWindowRemovesEveryMessage(t *testing.T) {
 	assert.Equal(t, project.ChatRemove, got[0].Kind, "every message in the window went away")
 	assert.Equal(t, []int{1, 2, 3}, got[0].MsgIDs)
 }
+
+// A window of fixed size anchored on the newest message slides as messages
+// arrive. Calling that a Reset re-seats the message list and scrolls a chat
+// being read back to the bottom.
+func TestDiffChat_SlidingWindowIsARemovePlusAnAppend(t *testing.T) {
+	all := msgs(10)
+	prev := chatContents(all[2:7]) // 3,4,5,6,7
+	next := chatContents(all[3:8]) // 4,5,6,7,8
+
+	got := project.DiffChat(prev, next)
+
+	require.Equal(t, []project.ChatDeltaKind{project.ChatRemove, project.ChatAppend}, kinds(got))
+	assert.Equal(t, []int{3}, got[0].MsgIDs)
+	assert.Equal(t, 8, got[1].Message.ID)
+}
+
+func TestDiffChat_SlidingByMoreThanOne(t *testing.T) {
+	all := msgs(12)
+	prev := chatContents(all[0:5]) // 1..5
+	next := chatContents(all[3:8]) // 4..8
+
+	got := project.DiffChat(prev, next)
+
+	require.Equal(t, []project.ChatDeltaKind{project.ChatRemove, project.ChatNewer}, kinds(got))
+	assert.Equal(t, []int{1, 2, 3}, got[0].MsgIDs)
+	assert.Equal(t, []int{6, 7, 8}, ids(got[1].Messages))
+}
