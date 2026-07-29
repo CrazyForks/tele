@@ -4,7 +4,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
@@ -59,14 +58,6 @@ func (m *RootModel) widenChatWindow() {
 
 // handleChatDelta renders one chat:<id> delta into the chat pane.
 func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
-	// The client end of the path a forward travels: what arrived and what the
-	// pane will render from it.
-	m.debug("chat delta applied",
-		zap.Int("kind", int(d.Kind)),
-		zap.Int64("open_chat", m.currentChatID),
-		zap.Int("window_size", len(d.Contents.Messages)),
-		zap.Int("carried_msgs", len(d.Messages)),
-		zap.Int("appended_id", d.Message.ID))
 	switch d.Kind {
 	case project.ChatReset:
 		c := d.Contents

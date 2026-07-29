@@ -1,8 +1,6 @@
 package core
 
 import (
-	"go.uber.org/zap"
-
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -85,15 +83,6 @@ func (o *Owner) publishChange(chg state.Change) {
 // stale window until the next change, and a resubscribe resyncs it.
 func (o *Owner) publish(ds []project.Delta) {
 	for _, d := range ds {
-		if d.Chat != nil {
-			// The last owner-side step of anything that has to appear in a chat,
-			// forwards included: what the client was actually told.
-			o.log.Debug("chat delta published",
-				zap.Int("sub", int(d.Sub)),
-				zap.Int("kind", int(d.Chat.Kind)),
-				zap.Int("window_size", len(d.Chat.Contents.Messages)),
-				zap.Int("carried_msgs", len(d.Chat.Messages)))
-		}
 		select {
 		case o.deltas <- d:
 		default:
