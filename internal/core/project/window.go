@@ -34,8 +34,11 @@ const (
 )
 
 type Anchor struct {
-	Kind  AnchorKind
-	MsgID int // AnchorMessage only
+	Kind AnchorKind
+	// MsgID names the anchor message. The client sets it for AnchorMessage; for
+	// AnchorFirstUnread the registry fills it in once the window has resolved,
+	// so the window holds still while the read pointer moves.
+	MsgID int
 }
 
 // ChatWindow is a range of one chat's history around an anchor. Before and

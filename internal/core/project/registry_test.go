@@ -179,3 +179,81 @@ func TestRegistry_PresenceReachesOnlyTheSubscribedChat(t *testing.T) {
 	assert.Equal(t, sub1, deltas[0].Sub)
 	assert.Equal(t, project.ChatHeaderUpdate, deltas[0].Chat.Kind)
 }
+
+// Reading through a long unread tail advances the read pointer while the chat
+// stays open. The window must stay where it was opened: recomputing the anchor
+// would walk it forward and drop the messages above out from under the reader.
+func TestRegistry_FirstUnreadWindowHoldsItsAnchorAsMessagesAreRead(t *testing.T) {
+	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
+	r := readerWith(chat, msgs(10))
+	g := project.NewRegistry(r)
+	id, deltas := g.Subscribe(project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
+	})
+	require.Len(t, deltas, 1)
+
+	// The first screen is marked read: the pointer moves, the history does not.
+	chat.ReadInboxMaxID = 8
+	chat.UnreadCount = 2
+	r.chats = []domain.Chat{chat}
+
+	out := g.Refresh()
+
+	for _, d := range out {
+		assert.NotEqual(t, project.ChatRemove, d.Chat.Kind,
+			"messages already on screen must not leave the window when they are read")
+		assert.NotEqual(t, project.ChatReset, d.Chat.Kind,
+			"a moved read pointer must not re-seat the message list")
+	}
+	w, ok := g.Window(id)
+	require.True(t, ok)
+	assert.Equal(t, 7, w.(project.ChatWindow).Anchor.MsgID,
+		"the anchor is pinned to the message the window opened on")
+}
+
+// Pinning must not outlive the message: a pinned anchor that is deleted falls
+// back to resolving the anchor again rather than emptying the window.
+func TestRegistry_PinnedAnchorFallsBackWhenItsMessageIsGone(t *testing.T) {
+	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
+	all := msgs(10)
+	r := readerWith(chat, all)
+	g := project.NewRegistry(r)
+	g.Subscribe(project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
+	})
+
+	// Message 7, the anchor, is deleted elsewhere.
+	kept := append(append([]domain.Message{}, all[:6]...), all[7:]...)
+	r.msgs[1] = kept
+
+	g.Refresh()
+
+	deltas := g.Refresh()
+	assert.Empty(t, deltas, "the window settles instead of rebuilding itself every time")
+}
+
+// Scrolling up widens the window by replacing it, carrying the same anchor
+// description the client opened with. The pin must survive that, or asking for
+// older history would re-anchor the window on whatever is unread by then.
+func TestRegistry_WideningKeepsThePinnedAnchor(t *testing.T) {
+	chat := domain.Chat{ID: 1, UnreadCount: 4, ReadInboxMaxID: 6}
+	r := readerWith(chat, msgs(10))
+	g := project.NewRegistry(r)
+	id, _ := g.Subscribe(project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 2,
+	})
+
+	chat.ReadInboxMaxID = 9
+	chat.UnreadCount = 1
+	r.chats = []domain.Chat{chat}
+	g.Refresh()
+
+	g.MoveWindow(id, project.ChatWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 4,
+	})
+
+	w, ok := g.Window(id)
+	require.True(t, ok)
+	assert.Equal(t, 7, w.(project.ChatWindow).Anchor.MsgID, "the pin survives a widen")
+	assert.Equal(t, 4, w.(project.ChatWindow).Before, "and the widen still took effect")
+}

@@ -193,10 +193,12 @@ func sqliteLastMsgTime(c domain.Chat) time.Time {
 // the tracked message set rather than scanning s.messages, because messages load
 // lazily and a chat never opened this session has none in memory (#189).
 //
-// The server baseline is dropped: an advancing pointer means some of the
-// messages it stood for have been read, and they are identified by a count only.
-// Anything observed locally above maxID survives, and the next dialog-list sync
-// restores a full baseline.
+// The server baseline is a bare count, so what an advancing pointer took out of
+// it has to be worked out: the messages between the old and the new pointer are
+// subtracted when they are known, the whole baseline is cleared when the pointer
+// reaches the newest message, and only when the range is unknown does the stale
+// baseline get dropped wholesale — the next dialog-list sync restores it.
+// Anything observed locally above maxID survives regardless.
 func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
 	s.mu.Lock()
 	chat, ok := s.chats[chatID]
@@ -204,13 +206,23 @@ func (s *SQLiteStore) UpdateChatReadMaxID(chatID int64, maxID int) bool {
 		s.mu.Unlock()
 		return false
 	}
+	read, known := s.countBaselineReadLocked(chatID, chat.ReadInboxMaxID, maxID)
 	chat.ReadInboxMaxID = maxID
 	for id := range s.unreadMsgs[chatID] {
 		if id <= maxID {
 			delete(s.unreadMsgs[chatID], id)
 		}
 	}
-	s.baselineUnread[chatID] = 0
+	switch {
+	case chat.LastMessage != nil && maxID >= chat.LastMessage.ID:
+		s.baselineUnread[chatID] = 0 // read to the end: nothing can be left
+	case !known:
+		s.baselineUnread[chatID] = 0
+	case read >= s.baselineUnread[chatID]:
+		s.baselineUnread[chatID] = 0
+	default:
+		s.baselineUnread[chatID] -= read
+	}
 	s.recomputeUnreadLocked(&chat)
 	s.chats[chatID] = chat
 	s.markDirtyLocked(chatID)

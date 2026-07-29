@@ -42,8 +42,26 @@ func (g *Registry) MoveWindow(id SubID, w Window) []Delta {
 	if !ok {
 		return nil
 	}
-	s.window = w
+	s.window = carryPin(s.window, w)
 	return g.rebuild(id)
+}
+
+// carryPin keeps a first-unread window's pinned anchor across a move that does
+// not name one. Widening for older history repeats the anchor the client opened
+// with, and re-pinning it there would re-anchor the window on whatever happens
+// to be unread by then. A client asking for a different chat, or naming an
+// anchor itself, gets exactly what it asked for.
+func carryPin(prev, next Window) Window {
+	p, okPrev := prev.(ChatWindow)
+	n, okNext := next.(ChatWindow)
+	if !okPrev || !okNext {
+		return next
+	}
+	if p.ChatID != n.ChatID || p.Anchor.Kind != n.Anchor.Kind || n.Anchor.MsgID != 0 {
+		return next
+	}
+	n.Anchor.MsgID = p.Anchor.MsgID
+	return n
 }
 
 func (g *Registry) Unsubscribe(id SubID) {
@@ -98,6 +116,16 @@ func (g *Registry) rebuild(id SubID) []Delta {
 		s.list = next
 	case ChatWindow:
 		next := BuildChat(g.reader, w)
+		// Pin a first-unread window to the message it actually opened on. The
+		// anchor is otherwise a function of the read pointer, which moves as the
+		// user reads: the window would walk forward and drop the messages above
+		// out from under them. Pinning happens on the first rebuild that resolves
+		// an anchor, so a window opened before its history arrived pins once the
+		// backfill lands.
+		if w.Anchor.Kind == AnchorFirstUnread && w.Anchor.MsgID == 0 && next.AnchorMsgID != 0 {
+			w.Anchor.MsgID = next.AnchorMsgID
+			s.window = w
+		}
 		for _, d := range DiffChat(s.chat, next) {
 			out = append(out, Delta{Sub: id, Chat: &d})
 		}

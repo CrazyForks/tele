@@ -98,6 +98,16 @@ func resolveAnchor(all []domain.Message, chat domain.Chat, a Anchor) (int, int) 
 		return -1, a.MsgID
 
 	case AnchorFirstUnread:
+		// Once pinned by the registry the window stops following the read
+		// pointer. A pin that no longer names a stored message (deleted, or
+		// trimmed by the store cap) resolves afresh rather than emptying.
+		if a.MsgID != 0 {
+			for i, m := range all {
+				if m.ID == a.MsgID {
+					return i, m.ID
+				}
+			}
+		}
 		if chat.UnreadCount > 0 {
 			for i, m := range all {
 				if m.ID > chat.ReadInboxMaxID {

@@ -3,6 +3,7 @@ package store_test
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,6 +165,85 @@ func TestUpdateChatReadMaxID_DropsStaleServerBaseline(t *testing.T) {
 
 	c, _ = s.GetChat(1)
 	assert.Equal(t, 1, c.UnreadCount, "only the locally observed message above 15 survives")
+}
+
+// unreadChat seeds a chat whose dialog-list baseline says unread messages sit
+// above readMaxID, with history loaded from firstID to lastID as inbound.
+func unreadChat(t *testing.T, s store.Store, unread, readMaxID, firstID, lastID int) {
+	t.Helper()
+	msgs := make([]domain.Message, 0, lastID-firstID+1)
+	for id := firstID; id <= lastID; id++ {
+		msgs = append(msgs, domain.Message{ID: id, ChatID: 1, Date: time.Unix(int64(id), 0)})
+	}
+	s.SetChat(domain.Chat{
+		ID:             1,
+		Peer:           domain.Peer{ID: 1, Type: domain.PeerUser},
+		UnreadCount:    unread,
+		ReadInboxMaxID: readMaxID,
+		LastMessage:    &msgs[len(msgs)-1],
+	})
+	s.SetMessages(1, msgs)
+}
+
+// Opening a chat marks only the first screen read. The badge must count down by
+// what was read rather than clearing: the baseline is a bare number, but once
+// the chat is open the messages the pointer moved over are known by ID.
+func TestUpdateChatReadMaxID_PartialReadKeepsTheRestOfTheBaseline(t *testing.T) {
+	s := store.NewMemory()
+	unreadChat(t, s, 10, 100, 95, 110) // 101..110 unread, 95..100 already read
+
+	require.True(t, s.UpdateChatReadMaxID(1, 103)) // the first screen ends at 103
+
+	c, _ := s.GetChat(1)
+	assert.Equal(t, 7, c.UnreadCount, "the messages below the viewport are still unread")
+}
+
+func TestUpdateChatReadMaxID_ReadingToTheNewestClearsTheBaseline(t *testing.T) {
+	s := store.NewMemory()
+	unreadChat(t, s, 10, 100, 95, 110)
+
+	require.True(t, s.UpdateChatReadMaxID(1, 110))
+
+	c, _ := s.GetChat(1)
+	assert.Equal(t, 0, c.UnreadCount)
+}
+
+// Own outgoing messages are not part of the unread count, so passing over them
+// must not consume the baseline.
+func TestUpdateChatReadMaxID_PartialReadIgnoresOutgoing(t *testing.T) {
+	s := store.NewMemory()
+	msgs := make([]domain.Message, 0, 16)
+	for id := 95; id <= 110; id++ {
+		msgs = append(msgs, domain.Message{ID: id, ChatID: 1, IsOut: id == 102, Date: time.Unix(int64(id), 0)})
+	}
+	s.SetChat(domain.Chat{
+		ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
+		UnreadCount: 9, ReadInboxMaxID: 100, // 101..110 minus our own 102
+		LastMessage: &msgs[len(msgs)-1],
+	})
+	s.SetMessages(1, msgs)
+
+	require.True(t, s.UpdateChatReadMaxID(1, 103)) // read 101, our own 102, and 103
+
+	c, _ := s.GetChat(1)
+	assert.Equal(t, 7, c.UnreadCount, "only the two incoming messages count as read")
+}
+
+// Messages that arrived this session are counted by ID on top of the baseline,
+// so reading them must not also consume baseline entries.
+func TestUpdateChatReadMaxID_PartialReadDoesNotDoubleCountTrackedMessages(t *testing.T) {
+	s := store.NewMemory()
+	unreadChat(t, s, 10, 100, 95, 110)
+	s.AppendMessage(domain.Message{ID: 111, ChatID: 1, Date: time.Unix(111, 0)})
+	require.True(t, s.ApplyUnreadMessage(1, 111))
+	c, _ := s.GetChat(1)
+	require.Equal(t, 11, c.UnreadCount)
+
+	// Read past the tracked message but not to the end of the baseline run.
+	require.True(t, s.UpdateChatReadMaxID(1, 105))
+
+	c, _ = s.GetChat(1)
+	assert.Equal(t, 6, c.UnreadCount, "five baseline messages read; 111 was counted separately")
 }
 
 func TestUpdateChatReadMaxID_NoAdvanceLeavesCountUntouched(t *testing.T) {
