@@ -220,7 +220,7 @@ func (c *GotdClient) ForwardMessages(ctx context.Context, from domain.Peer, to d
 		// the copies are expected to arrive through the live update path — so
 		// say what came back, which is where a forward that never renders has to
 		// be traced from.
-		c.traceLog.Debug("forward: reply from telegram",
+		c.log.Debug("forward: reply from telegram",
 			zap.Int64("to", to.ID),
 			zap.Strings("updates", describeUpdates(updates)),
 			zap.Ints("new_msg_ids", extractSentMessageIDs(updates, randomIDs)))

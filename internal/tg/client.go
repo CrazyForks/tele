@@ -14,6 +14,7 @@ import (
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/telegram/updates"
+	updhook "github.com/gotd/td/telegram/updates/hook"
 	"github.com/gotd/td/tg"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -192,7 +193,16 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		OnConnectionState: resync.onConnectionState,
 		// Maps every RPC error onto the domain taxonomy exactly once, so tgerr
 		// never leaves this package (#191).
-		Middlewares: []telegram.Middleware{c.errorMiddleware()},
+		// errorMiddleware maps every RPC error onto the domain taxonomy; the
+		// update hook feeds the updates an RPC *reply* carries into the same
+		// pipeline the pushed ones go through.
+		//
+		// Telegram does not push an echo for what this client itself did: the
+		// created message comes back in the reply to messages.forwardMessages (or
+		// sendMessage, sendMedia) and nowhere else, until an unrelated pts gap
+		// forces a getDifference. Without this hook a forward stayed invisible
+		// until the other side happened to read it (#198).
+		Middlewares: []telegram.Middleware{c.errorMiddleware(), updhook.UpdateHook(hook.Handle)},
 	})
 
 	c.log.Debug("connecting to telegram")

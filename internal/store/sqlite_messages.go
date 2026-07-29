@@ -318,9 +318,24 @@ func (s *SQLiteStore) BumpChatLastMessage(chatID int64, msg domain.Message) {
 	s.markDirtyLocked(chatID)
 }
 
+// AppendMessage adds a message to a chat, or replaces it when that ID is already
+// held. The same message legitimately arrives twice — once in the reply to the
+// RPC that created it, once from a later getDifference — and the newer copy may
+// carry more (a resolved sender name, filled-in media refs), so it wins in place
+// rather than appearing a second time. Sentinel IDs are negative and unique, so
+// optimistic messages never collide here.
 func (s *SQLiteStore) AppendMessage(msg domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if msg.ID > 0 {
+		for i := range s.messages[msg.ChatID] {
+			if s.messages[msg.ChatID][i].ID == msg.ID {
+				s.messages[msg.ChatID][i] = msg
+				s.markMsgDirtyLocked(msg.ChatID, msg.ID)
+				return
+			}
+		}
+	}
 	s.messages[msg.ChatID] = append(s.messages[msg.ChatID], msg)
 	// A chat holding more than the cap is holding a scrollback someone loaded on
 	// purpose. An arriving message adds to it rather than pushing the oldest out.
@@ -341,9 +356,24 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) {
 	s.capMessagesLocked(msg.ChatID)
 }
 
+// UpdateMessageID renames a message, which is how an optimistic sentinel becomes
+// the ID the server assigned. When the chat already holds that ID the server's
+// copy got here first — the echo arrives inside the send RPC — so the sentinel is
+// dropped instead, leaving one message rather than two under the same ID.
 func (s *SQLiteStore) UpdateMessageID(chatID int64, oldID, newID int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	held := false
+	for _, m := range s.messages[chatID] {
+		if m.ID == newID {
+			held = true
+			break
+		}
+	}
+	if held {
+		s.removeMessagesLocked(chatID, []int{oldID})
+		return
+	}
 	for i := range s.messages[chatID] {
 		if s.messages[chatID][i].ID == oldID {
 			s.messages[chatID][i].ID = newID

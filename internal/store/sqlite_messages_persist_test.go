@@ -296,3 +296,53 @@ func TestSQLite_RemoveOfARenumberedMessage_SurvivesReopen(t *testing.T) {
 
 	assert.Empty(t, s2.Messages(9), "the deleted message must not come back from disk")
 }
+
+// The same message can arrive twice: once from the reply to the RPC that created
+// it and once from a later getDifference. Appending must be idempotent by id, or
+// the chat shows the message twice.
+func TestSQLite_AppendMessage_SameIDTwiceDoesNotDuplicate(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "state.db"))
+	defer func() { _ = s.Close() }()
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+
+	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "forwarded", Date: time.Unix(1, 0)})
+	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "forwarded", Date: time.Unix(1, 0)})
+
+	got := s.Messages(9)
+	require.Len(t, got, 1, "the second copy must not add a row")
+	assert.Equal(t, "forwarded", got[0].Text)
+}
+
+// A re-delivery may carry more than the first copy did (a sender name resolved,
+// media refs filled in), so the newer version wins in place.
+func TestSQLite_AppendMessage_SameIDAdoptsTheNewerCopy(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "state.db"))
+	defer func() { _ = s.Close() }()
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+
+	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "hi", Date: time.Unix(1, 0)})
+	s.AppendMessage(domain.Message{ID: 5, ChatID: 9, Text: "hi", SenderName: "Ada", Date: time.Unix(1, 0)})
+
+	got := s.Messages(9)
+	require.Len(t, got, 1)
+	assert.Equal(t, "Ada", got[0].SenderName)
+}
+
+// The server's copy can arrive before the client renames its optimistic
+// sentinel: the echo now comes back inside the send RPC. Renaming onto an id the
+// chat already holds must drop the sentinel rather than produce two rows with
+// the same id.
+func TestSQLite_UpdateMessageID_OntoAnExistingIDDropsTheSentinel(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "state.db"))
+	defer func() { _ = s.Close() }()
+	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
+
+	s.AppendMessage(domain.Message{ID: -1, ChatID: 9, Text: "mine", IsOut: true, Date: time.Unix(1, 0)})
+	s.AppendMessage(domain.Message{ID: 42, ChatID: 9, Text: "mine", IsOut: true, Date: time.Unix(1, 0)})
+
+	s.UpdateMessageID(9, -1, 42)
+
+	got := s.Messages(9)
+	require.Len(t, got, 1, "the sentinel must be dropped, not renamed onto a duplicate")
+	assert.Equal(t, 42, got[0].ID)
+}
