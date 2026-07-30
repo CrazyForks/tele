@@ -39,8 +39,10 @@ type ownerStub struct {
 
 	// mediaPaths is what FetchMedia and SaveMedia serve; a slot with no entry
 	// answers NotFound, standing in for a download failure. fetched records what
-	// the client asked for, invalidated what it asked to drop.
+	// the client asked for, invalidated what it asked to drop. mediaErr, when
+	// set, is what both answer with instead, standing in for a named refusal.
 	mediaPaths  map[mediaKey]string
+	mediaErr    error
 	fetched     []mediaKey
 	invalidated []mediaKey
 }
@@ -126,6 +128,9 @@ func (o *ownerStub) GetParticipants(_ context.Context, chatID int64) ([]domain.C
 func (o *ownerStub) FetchMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot) (string, error) {
 	key := mediaKey{chatID, msgID, slot}
 	o.fetched = append(o.fetched, key)
+	if o.mediaErr != nil {
+		return "", o.mediaErr
+	}
 	p, ok := o.mediaPaths[key]
 	if !ok {
 		return "", &telerr.Error{Kind: telerr.NotFound}
@@ -136,6 +141,9 @@ func (o *ownerStub) FetchMedia(_ context.Context, chatID int64, msgID int, slot 
 // SaveMedia copies the registered file into destDir, the way the real owner
 // streams it there.
 func (o *ownerStub) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error) {
+	if o.mediaErr != nil {
+		return "", o.mediaErr
+	}
 	src, ok := o.mediaPaths[mediaKey{chatID, msgID, slot}]
 	if !ok {
 		return "", &telerr.Error{Kind: telerr.NotFound}
@@ -383,6 +391,73 @@ func TestFetchPhotoCmd_InvalidatesAnUndecodableFile(t *testing.T) {
 	}
 	if len(o.invalidated) != 1 || o.invalidated[0] != (mediaKey{1, 5, domain.PhotoThumb}) {
 		t.Fatalf("expected the entry to be invalidated, got %v", o.invalidated)
+	}
+}
+
+// An expired file reference on a preview nobody asked for is not news: the
+// owner refreshes it and logs whatever it could not repair, and the window
+// fetches again once the fresh reference lands. Opening a chat whose messages
+// came back from disk raised one of these per photo, per video poster and per
+// eagerly prefetched full-size photo.
+func TestFetchPhotoCmd_AnExpiredReferenceIsNotReportedToTheUser(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	o.mediaErr = &telerr.Error{Kind: telerr.StaleReference}
+
+	msg := fetchPhotoCmd(context.Background(), o, 1, 5, 9)()
+
+	if msg != nil {
+		t.Fatalf("expected no status message, got %T: %v", msg, msg)
+	}
+}
+
+func TestFetchVideoThumbCmd_AnExpiredReferenceIsNotReportedToTheUser(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	o.mediaErr = &telerr.Error{Kind: telerr.StaleReference}
+
+	msg := fetchVideoThumbCmd(context.Background(), o, 1, 5, 11, false)()
+
+	if msg != nil {
+		t.Fatalf("expected no status message, got %T: %v", msg, msg)
+	}
+}
+
+// Only the expiry is swallowed. Anything else still reaches the status bar,
+// which is the difference between a quiet self-healing case and a silent
+// client.
+func TestFetchPhotoCmd_OtherFailuresAreStillReported(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	o.mediaErr = &telerr.Error{Kind: telerr.Forbidden}
+
+	msg := fetchPhotoCmd(context.Background(), o, 1, 5, 9)()
+
+	if _, ok := msg.(StatusErrMsg); !ok {
+		t.Fatalf("expected a StatusErrMsg, got %T", msg)
+	}
+}
+
+// The eager full-quality prefetch runs for every photo in the window without
+// anyone asking, so it is as silent as the thumbnail fetch.
+func TestSaveFullPhotoCmd_BackgroundPrefetchDoesNotReportAnExpiredReference(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	o.mediaErr = &telerr.Error{Kind: telerr.StaleReference}
+
+	msg := saveFullPhotoCmd(context.Background(), o, 1, 5, 9, t.TempDir(), true)()
+
+	if msg != nil {
+		t.Fatalf("expected no status message, got %T: %v", msg, msg)
+	}
+}
+
+// In the viewer the same failure is worth saying: the user is looking at the
+// photo and would otherwise wonder why it stays at preview quality.
+func TestSaveFullPhotoCmd_TheViewerReportsAnExpiredReference(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	o.mediaErr = &telerr.Error{Kind: telerr.StaleReference}
+
+	msg := saveFullPhotoCmd(context.Background(), o, 1, 5, 9, t.TempDir(), false)()
+
+	if _, ok := msg.(StatusErrMsg); !ok {
+		t.Fatalf("expected a StatusErrMsg, got %T", msg)
 	}
 }
 

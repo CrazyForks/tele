@@ -71,6 +71,29 @@ func TestChatReset_Unanchored_FetchesMedia(t *testing.T) {
 	}
 }
 
+// A refreshed file reference reaches the window as an in-place update of a
+// message already on screen: nothing the user can see changed, but the media
+// behind it is addressable again. The window has to ask for it, because the
+// fetch that failed is what triggered the refresh and nothing else will.
+func TestChatUpdate_FetchesTheMediaOfTheUpdatedMessage(t *testing.T) {
+	o, m := anchorTestModel()
+	m.chatMsgs = mediaWindow()
+
+	_, cmd := m.handleChatDelta(&project.ChatDelta{
+		Kind:    project.ChatUpdate,
+		Message: mediaWindow()[0],
+	})
+
+	runCmdTree(cmd)
+
+	if len(o.fetched) == 0 {
+		t.Fatal("an updated message must have its media fetched")
+	}
+	if o.fetched[0] != (mediaKey{1, 7, domain.PhotoThumb}) {
+		t.Fatalf("fetched %v, want the updated message's photo thumbnail", o.fetched)
+	}
+}
+
 func anchorTestModel() (*ownerStub, RootModel) {
 	st := store.NewMemory()
 	o := newOwnerStub(st)

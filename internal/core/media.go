@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"go.uber.org/zap"
@@ -19,6 +21,11 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
+
+// refreshCooldown is how long a refreshed file reference is trusted. A second
+// expiry inside this window means refreshing did not help, so the next fetch
+// fails instead of asking Telegram again. A variable so tests can shorten it.
+var refreshCooldown = time.Minute
 
 // mediaFetcher downloads media on behalf of clients. It is the only place a
 // file reference is handled: a client names a message slot, this resolves the
@@ -38,10 +45,36 @@ type mediaFetcher struct {
 	// Every repaint asks for the same thumbnails, so without this a slow
 	// download starts again on each pass.
 	inflight singleflight.Group
+
+	// refreshedAt remembers when each key's file reference was last refreshed,
+	// so a reference that keeps expiring costs one round trip rather than one
+	// per repaint. Entries older than the cooldown are dropped as they are
+	// passed, which keeps the map the size of what is currently failing.
+	refreshMu sync.Mutex
+	refreshed map[string]time.Time
 }
 
 func newMediaFetcher(client internaltg.Client, st *state.State, log *zap.Logger) *mediaFetcher {
-	return &mediaFetcher{client: client, state: st, log: log}
+	return &mediaFetcher{client: client, state: st, log: log, refreshed: make(map[string]time.Time)}
+}
+
+// claimRefresh reports whether key may be refreshed now, and records the
+// attempt when it may. A refresh inside the cooldown is refused: the reference
+// it produced expired again, so another one buys nothing.
+func (f *mediaFetcher) claimRefresh(key string) bool {
+	f.refreshMu.Lock()
+	defer f.refreshMu.Unlock()
+	now := time.Now()
+	for k, at := range f.refreshed {
+		if now.Sub(at) >= refreshCooldown {
+			delete(f.refreshed, k)
+		}
+	}
+	if at, ok := f.refreshed[key]; ok && now.Sub(at) < refreshCooldown {
+		return false
+	}
+	f.refreshed[key] = now
+	return true
 }
 
 // mediaRef is a resolved location: exactly one of photo or doc is meaningful,
@@ -135,23 +168,43 @@ func (f *mediaFetcher) streamInto(ctx context.Context, chatID int64, msgID int, 
 		return err
 	}
 
+	// Nothing below is visible on screen: a preview that fails to download is
+	// drawn as nothing at all. Every way out of the recovery therefore says so,
+	// at a level the default log keeps.
+	where := []zap.Field{
+		zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID), zap.String("slot", slot.String()),
+	}
+	if !f.claimRefresh(ref.cacheKey()) {
+		f.log.Warn("media: reference expired again within the refresh cooldown, giving up",
+			append(where, zap.String("key", ref.cacheKey()))...)
+		return err
+	}
+
 	chat, ok := f.state.Store().GetChat(chatID)
 	if !ok {
 		return &telerr.Error{Kind: telerr.PeerNotFound}
 	}
 	fresh, rerr := f.client.RefreshMessage(ctx, chat.Peer, msgID)
 	if rerr != nil {
+		f.log.Warn("media: could not refresh an expired file reference",
+			append(where, zap.Error(rerr))...)
 		return err // the original expiry is the more useful error
 	}
 	f.state.ApplyMediaRef(chatID, msgID, fresh.Photo, fresh.Document)
-	f.log.Debug("media: refreshed an expired file reference",
-		zap.Int64("chat_id", chatID), zap.Int("msg_id", msgID), zap.String("slot", slot.String()))
+	f.log.Debug("media: refreshed an expired file reference", where...)
 
 	freshRef, err := resolveMediaRef(fresh, slot)
 	if err != nil {
+		f.log.Warn("media: the refreshed message no longer carries this media",
+			append(where, zap.Error(err))...)
 		return err
 	}
-	return f.attempt(ctx, freshRef, file)
+	if err := f.attempt(ctx, freshRef, file); err != nil {
+		f.log.Warn("media: download failed after refreshing the file reference",
+			append(where, zap.Error(err))...)
+		return err
+	}
+	return nil
 }
 
 // attempt rewinds file and streams one download into it.

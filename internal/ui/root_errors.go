@@ -72,6 +72,20 @@ func errStatus(action string, err error) tea.Msg {
 	return StatusErrMsg{Text: text, Sev: sev}
 }
 
+// errStatusBackground is errStatus for a download nobody asked for: an inline
+// preview or the eager full-quality prefetch. An expired file reference is the
+// owner's business — it refreshes the reference, logs whatever it could not
+// repair and publishes the fresh one, which brings the fetch back through the
+// window — so saying it here only reports plumbing the user cannot act on. A
+// chat reopened from disk expires several references at once, which is a stack
+// of identical toasts over media that then appears anyway.
+func errStatusBackground(action string, err error) tea.Msg {
+	if telerr.Of(err) == telerr.StaleReference {
+		return nil
+	}
+	return errStatus(action, err)
+}
+
 // formatWait renders a rate-limit wait the way a person would say it.
 func formatWait(d time.Duration) string {
 	switch {

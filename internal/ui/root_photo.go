@@ -91,7 +91,7 @@ func (m RootModel) openPhotoModal(ref domain.PhotoRef, msgID int, sender string,
 	}
 	// Fetch full quality if we don't already have it and the photo has one.
 	if !pv.full && ref.FullThumbSize != "" {
-		cmds = append(cmds, saveFullPhotoCmd(m.ctx, m.owner, m.currentChatID, msgID, ref.ID, m.tmpDir))
+		cmds = append(cmds, saveFullPhotoCmd(m.ctx, m.owner, m.currentChatID, msgID, ref.ID, m.tmpDir, false))
 	}
 	if len(cmds) == 0 {
 		return m, nil

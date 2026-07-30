@@ -201,6 +201,56 @@ func TestFetchMedia_GivesUpAfterOneRefresh(t *testing.T) {
 	assert.Equal(t, 2, photo, "one attempt, one retry, then stop")
 }
 
+// A reference that expires again straight after a refresh must not start a
+// second refresh round. A client re-fetches on every repaint, and the refresh
+// itself publishes a change that provokes the next repaint, so an unrefreshable
+// photo would otherwise turn into an endless stream of round trips.
+func TestFetchMedia_DoesNotRefreshTwiceInARow(t *testing.T) {
+	c := &mediaStub{
+		payload:        "bytes",
+		staleUntilCall: 99,
+		refreshed: domain.Message{
+			ID: 5, ChatID: 1,
+			Photo: &domain.PhotoRef{ID: 9, ThumbSize: "m", FileReference: []byte("fresh")},
+		},
+	}
+	o, _ := newMediaOwner(t, c)
+	_, err := o.FetchMedia(context.Background(), 1, 5, domain.PhotoThumb)
+	require.Error(t, err)
+
+	_, err = o.FetchMedia(context.Background(), 1, 5, domain.PhotoThumb)
+
+	assert.Equal(t, telerr.StaleReference, telerr.Of(err))
+	photo, _, _, refresh := c.calls()
+	assert.Equal(t, 1, refresh, "the second fetch must not refresh again")
+	assert.Equal(t, 3, photo, "one attempt and one retry, then a single attempt")
+}
+
+// The cooldown bounds a burst, not the day: media untouched for long enough is
+// refreshed again, because by then the expiry is a new one.
+func TestFetchMedia_RefreshesAgainAfterTheCooldown(t *testing.T) {
+	c := &mediaStub{
+		payload:        "bytes",
+		staleUntilCall: 99,
+		refreshed: domain.Message{
+			ID: 5, ChatID: 1,
+			Photo: &domain.PhotoRef{ID: 9, ThumbSize: "m", FileReference: []byte("fresh")},
+		},
+	}
+	o, _ := newMediaOwner(t, c)
+	_, err := o.FetchMedia(context.Background(), 1, 5, domain.PhotoThumb)
+	require.Error(t, err)
+
+	prev := refreshCooldown
+	refreshCooldown = 0
+	t.Cleanup(func() { refreshCooldown = prev })
+	_, err = o.FetchMedia(context.Background(), 1, 5, domain.PhotoThumb)
+
+	require.Error(t, err)
+	_, _, _, refresh := c.calls()
+	assert.Equal(t, 2, refresh)
+}
+
 func TestFetchMedia_MissingMediaIsNotFound(t *testing.T) {
 	c := &mediaStub{payload: "bytes"}
 	o, _ := newMediaOwner(t, c)

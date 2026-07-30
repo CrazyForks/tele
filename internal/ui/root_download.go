@@ -36,7 +36,7 @@ func fetchInlineImageCmd(ctx context.Context, o Owner, chatID int64, msgID int, 
 	return func() tea.Msg {
 		path, err := o.FetchMedia(ctx, chatID, msgID, slot)
 		if err != nil {
-			return errStatus(action, err)
+			return errStatusBackground(action, err)
 		}
 		img, derr := decodeImageFile(path)
 		if derr != nil {
@@ -243,10 +243,18 @@ func SetOpenPathForTest(fn func(string)) func() {
 // saveFullPhotoCmd saves the full-quality photo into tmpDir, decodes it for the
 // viewer and removes the file: the viewer holds the decoded image, and the
 // full-size cache is deliberately in memory only.
-func saveFullPhotoCmd(ctx context.Context, o Owner, chatID int64, msgID int, photoID int64, tmpDir string) tea.Cmd {
+//
+// quiet marks the eager prefetch, which runs for every photo in the window
+// without anyone asking and therefore keeps an expired file reference to
+// itself. The viewer passes false: there the user is looking at the photo and
+// would otherwise wonder why it stays at preview quality.
+func saveFullPhotoCmd(ctx context.Context, o Owner, chatID int64, msgID int, photoID int64, tmpDir string, quiet bool) tea.Cmd {
 	return func() tea.Msg {
 		path, err := o.SaveMedia(ctx, chatID, msgID, domain.PhotoFull, tmpDir)
 		if err != nil {
+			if quiet {
+				return errStatusBackground("full photo download", err)
+			}
 			return errStatus("full photo download", err)
 		}
 		defer func() { _ = os.Remove(path) }()
@@ -270,7 +278,7 @@ func (m RootModel) pendingDownloadCmds(msgs []domain.Message) tea.Cmd {
 			}
 			if m.cfg != nil && m.cfg.Photos.EagerFullQuality && msg.Photo.FullThumbSize != "" {
 				if !m.fullImageCache.Contains(msg.Photo.ID) {
-					cmds = append(cmds, saveFullPhotoCmd(m.ctx, m.owner, msg.ChatID, msg.ID, msg.Photo.ID, m.tmpDir))
+					cmds = append(cmds, saveFullPhotoCmd(m.ctx, m.owner, msg.ChatID, msg.ID, msg.Photo.ID, m.tmpDir, true))
 				}
 			}
 		}

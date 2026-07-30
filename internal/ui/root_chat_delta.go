@@ -150,9 +150,15 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 			}
 		}
 		m.chat.SetMessagesKeepScroll(m.chatMsgs)
+		// A replaced media reference arrives here and nowhere else: the fetch
+		// that failed is what made the owner refresh it, so without this the
+		// preview stays blank until the window happens to move. Media already
+		// cached costs nothing here.
+		cmds := []tea.Cmd{m.pendingDownloadCmds([]domain.Message{d.Message})}
 		if m.focus == FocusChat && d.Message.HasUnreadReactions {
-			return m, m.readReactionsCmd(m.currentChatID)
+			cmds = append(cmds, m.readReactionsCmd(m.currentChatID))
 		}
+		return m, tea.Batch(cmds...)
 
 	case project.ChatRemove:
 		gone := make(map[int]struct{}, len(d.MsgIDs))
