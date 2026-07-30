@@ -20,7 +20,13 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
+
+      # Restore only. This job compiles under -race, which keys to different
+      # cache entries than the warmer produces, so the win here is the module
+      # cache and, above all, no longer writing a per-tag entry that nothing can
+      # ever read.
+      - uses: ./.github/actions/go-build-cache
 
       - name: vet
         run: go vet ./...
@@ -81,7 +87,9 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
+
+      - uses: ./.github/actions/go-build-cache
 
       - name: build
         run: go build ./...
@@ -101,7 +109,11 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
+
+      # The job this whole change exists for: eleven cross-compiled targets that
+      # currently start from an empty cache every single release.
+      - uses: ./.github/actions/go-build-cache
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.2

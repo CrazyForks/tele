@@ -1,0 +1,64 @@
+name: Go build cache
+description: >
+  Restore, and in the warming workflow also save, the Go build and module
+  caches shared by every release target.
+
+inputs:
+  save:
+    description: "1 to save the cache when the job ends, 0 to restore only."
+    required: false
+    default: "0"
+
+outputs:
+  cache-hit:
+    description: "true when the exact key was restored."
+    value: ${{ steps.restore.outputs.cache-hit || steps.save.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    # setup-go resolves the go.mod directive to a concrete patch release. That
+    # resolved version belongs in the key: a patch bump changes Go's internal
+    # build IDs and invalidates every entry without touching go.sum, which would
+    # otherwise mean a reported cache hit over a fully cold build.
+    - id: key
+      shell: bash
+      run: |
+        prefix="gocache-release-${{ runner.os }}-$(go env GOVERSION)-"
+        {
+          echo "prefix=${prefix}"
+          echo "value=${prefix}${{ hashFiles('go.sum', '.goreleaser.yaml') }}"
+          echo "gocache=$(go env GOCACHE)"
+          echo "gomodcache=$(go env GOMODCACHE)"
+        } >>"$GITHUB_OUTPUT"
+
+    # Tag-triggered jobs restore only. Anything they saved would land in their
+    # own tag's cache scope, unreadable by the next tag and charged against the
+    # repository's 10 GiB budget.
+    - id: restore
+      if: inputs.save != '1'
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          ${{ steps.key.outputs.gocache }}
+          ${{ steps.key.outputs.gomodcache }}
+        key: ${{ steps.key.outputs.value }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+
+    - id: save
+      if: inputs.save == '1'
+      uses: actions/cache@v6
+      with:
+        path: |
+          ${{ steps.key.outputs.gocache }}
+          ${{ steps.key.outputs.gomodcache }}
+        key: ${{ steps.key.outputs.value }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+
+    - name: Report cache state
+      shell: bash
+      run: |
+        echo "key:      ${{ steps.key.outputs.value }}"
+        echo "hit:      ${{ steps.restore.outputs.cache-hit || steps.save.outputs.cache-hit }}"
+        echo "gocache:  ${{ steps.key.outputs.gocache }}"
+        df -h "$(dirname "${{ steps.key.outputs.gocache }}")" | tail -n 1

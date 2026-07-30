@@ -1,0 +1,52 @@
+name: Warm build cache
+
+# The release workflow runs only on tags, and an Actions cache is readable only
+# from its own ref or from the default branch. Anything release.yml saves is
+# therefore dead on arrival. This workflow exists so the cache is created on
+# main, where every tag run can read it.
+on:
+  push:
+    branches: ["main"]
+    # The key is a hash of go.sum and .goreleaser.yaml, so the cache only needs
+    # rebuilding when dependencies or the target list move. The workflow lists
+    # itself so that adding it triggers the first warm-up.
+    paths:
+      - "go.mod"
+      - "go.sum"
+      - ".goreleaser.yaml"
+      - ".github/workflows/warm-build-cache.yml"
+      - ".github/actions/go-build-cache/action.yml"
+  workflow_dispatch:
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: ./.github/actions/go-build-cache
+        with:
+          save: "1"
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          install-only: true
+
+      # Driving the warm-up through GoReleaser rather than a hand-written go
+      # build loop keeps the compiler flags and build tags byte-identical to the
+      # release, and makes this follow .goreleaser.yaml on its own. A separate
+      # loop would drift apart silently and leave a cold cache behind a green
+      # log. The ldflags differ (no version stamp), which is irrelevant: they
+      # affect linking only, not the cached package compilations.
+      - name: Populate the cache for every release target
+        run: goreleaser build --snapshot --clean
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
