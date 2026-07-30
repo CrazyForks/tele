@@ -99,11 +99,18 @@ func (c *Cache) Path(key string) (string, bool) {
 // until the next Put evicts it; the alternative would be handing back a path to
 // a file that was never stored.
 func (c *Cache) Put(key string, fill func(*os.File) error) (string, error) {
-	tmp := c.path(key) + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
+	// The temp file must be unique per call, not derived from the key. Two
+	// concurrent Puts of one key sharing a temp file corrupt each other: the
+	// second open truncates what the first is still writing, and once the first
+	// renames it into place the second keeps writing through its handle into the
+	// published entry. On Windows it also fails outright, because Go opens files
+	// without FILE_SHARE_DELETE, so neither rename nor remove works while the
+	// other goroutine holds the file open.
+	f, err := os.CreateTemp(c.dir, key+".*.tmp")
 	if err != nil {
 		return "", err
 	}
+	tmp := f.Name()
 	if err := fill(f); err != nil {
 		_ = f.Close()
 		_ = os.Remove(tmp)

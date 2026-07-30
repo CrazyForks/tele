@@ -178,6 +178,44 @@ func TestCache_RemoveDropsTheEntry(t *testing.T) {
 	assert.Equal(t, 0, c.Len())
 }
 
+// Two Put calls for one key must each get their own temp file. Deriving the
+// temp name from the key alone makes them share one: the second open truncates
+// what the first is still writing, and whichever renames first moves the shared
+// file out from under the other, so a fill that completed fine still reports
+// failure. Overlapping fetches of one media file are ordinary, so both calls
+// have to succeed and the last one to finish owns the entry.
+func TestCache_ConcurrentPutsOfOneKeyDoNotShareATempFile(t *testing.T) {
+	c, err := mediacache.New(t.TempDir(), 1<<20)
+	require.NoError(t, err)
+
+	slowOpened := make(chan struct{})
+	fastDone := make(chan struct{})
+
+	var fastErr error
+	go func() {
+		defer close(fastDone)
+		<-slowOpened
+		_, fastErr = c.Put("a", write("fast"))
+	}()
+
+	// The slow fill holds its file open across the whole of the other Put, so
+	// the fast one has finished renaming before this one writes a byte.
+	slowPath, slowErr := c.Put("a", func(f *os.File) error {
+		close(slowOpened)
+		<-fastDone
+		_, werr := f.Write([]byte("slow"))
+		return werr
+	})
+
+	require.NoError(t, fastErr)
+	require.NoError(t, slowErr)
+
+	got, rerr := os.ReadFile(slowPath)
+	require.NoError(t, rerr)
+	assert.Equal(t, "slow", string(got))
+	assert.Equal(t, 1, c.Len())
+}
+
 func TestCache_SurvivesConcurrentPutsAndReads(t *testing.T) {
 	c, err := mediacache.New(t.TempDir(), 1<<20)
 	require.NoError(t, err)
