@@ -118,6 +118,17 @@ func (s *State) ApplyDelete(chatID int64, msgIDs []int) (Change, bool) {
 	return c, true
 }
 
+// ApplyMediaRef replaces a message's photo and document references, which
+// Telegram expires periodically. A nil reference leaves that side untouched.
+// The owner is the only caller: it refreshes a reference mid-download and
+// records the fresh one here so the next fetch does not repeat the round trip.
+func (s *State) ApplyMediaRef(chatID int64, msgID int, photo *domain.PhotoRef, doc *domain.DocumentRef) (Change, bool) {
+	s.st.UpdateMessageMedia(chatID, msgID, photo, doc)
+	c := Change{Kind: ChangeMediaRef, ChatID: chatID, MsgID: msgID}
+	s.commit(c)
+	return c, true
+}
+
 // ApplyHistory replaces a chat's stored messages with a fetched page. The
 // caller merges the page with what is already held (see core.MergeOlder); state
 // stores what it is given and publishes one change, so the chat:<id> projection

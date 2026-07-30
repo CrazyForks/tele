@@ -45,6 +45,10 @@ const (
 	// ChangeNewMessage: a restored message is not new and must move no counter
 	// and raise no notification.
 	ChangeMessageRestored
+	// ChangeMediaRef reports that a message's media file reference was replaced
+	// after Telegram expired the old one. Nothing the user can see changes; the
+	// chat window rebuilds so the next fetch addresses the fresh reference.
+	ChangeMediaRef
 )
 
 // Change describes one applied difference in domain state, carrying what a

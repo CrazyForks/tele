@@ -200,3 +200,27 @@ func TestApplyHistory_ReplacesTheStoredMessages(t *testing.T) {
 
 	assert.Len(t, st.Messages(1), 2, "the caller merges; state stores what it is given")
 }
+
+// A refreshed file reference is not an edit: it changes how the media is
+// addressed, not what the message says, so it must not set an edited marker.
+func TestApplyMediaRef_ReplacesTheReferenceAndPublishes(t *testing.T) {
+	s, st := newState(t)
+	st.SetMessages(1, []domain.Message{{
+		ID: 5, ChatID: 1, Date: time.Unix(1, 0),
+		Photo: &domain.PhotoRef{ID: 9, FileReference: []byte("stale")},
+	}})
+	var seen []state.Change
+	s.OnChange(func(c state.Change) { seen = append(seen, c) })
+
+	chg, ok := s.ApplyMediaRef(1, 5, &domain.PhotoRef{ID: 9, FileReference: []byte("fresh")}, nil)
+
+	require.True(t, ok)
+	assert.Equal(t, state.ChangeMediaRef, chg.Kind)
+	assert.Equal(t, int64(1), chg.ChatID)
+	assert.Equal(t, 5, chg.MsgID)
+	require.Len(t, seen, 1)
+	got := st.Messages(1)
+	require.Len(t, got, 1)
+	assert.Equal(t, []byte("fresh"), got[0].Photo.FileReference)
+	assert.Nil(t, got[0].EditDate, "refreshing a reference must not mark the message edited")
+}
