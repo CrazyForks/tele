@@ -45,8 +45,15 @@ jobs:
       # loop would drift apart silently and leave a cold cache behind a green
       # log. The ldflags differ (no version stamp), which is irrelevant: they
       # affect linking only, not the cached package compilations.
+      #
+      # --parallelism 1 is mandatory, not a preference. GoReleaser defaults to
+      # the CPU count, and go build itself forks up to GOMAXPROCS compile
+      # processes, so four concurrent targets against modernc.org/libc's
+      # generated sources exhaust the runner's 16 GB and it is killed with
+      # exit 143. That is what happened to v0.2.5 in May and to this workflow's
+      # first run. Keep it in step with the same flag in release.yml.
       - name: Populate the cache for every release target
-        run: goreleaser build --snapshot --clean
+        run: goreleaser build --snapshot --clean --parallelism 1
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
