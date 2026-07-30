@@ -78,12 +78,13 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		if cmd := m.readReactionsOnScreen(c); cmd != nil {
 			return m, cmd
 		}
-		// The window was anchored on the first unread: put that message on
-		// screen rather than the tail.
-		if c.AnchorMsgID != 0 && c.AnchorMsgID <= c.ReadInboxMaxID {
-			break
-		}
-		if c.ReadInboxMaxID > 0 {
+		// The window was anchored on the first unread: it already opens on that
+		// message, so scrolling to it again would fight the anchor. Only the
+		// scroll is skipped. Returning early here instead also skipped the media
+		// fetch, the read pointer and the GIF animation, which left every photo
+		// in a chat with unread messages blank until the user scrolled.
+		anchored := c.AnchorMsgID != 0 && c.AnchorMsgID <= c.ReadInboxMaxID
+		if !anchored && c.ReadInboxMaxID > 0 {
 			m.chat.ScrollToFirstUnread(c.ReadInboxMaxID)
 		}
 		// A chat may open with a GIF already selected (newest message) and its
