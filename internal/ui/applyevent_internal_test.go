@@ -2,6 +2,9 @@ package ui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
 // ownerStub is the in-package twin of the ui_test testOwner: one state and one
@@ -32,6 +36,20 @@ type ownerStub struct {
 	err   error
 	// participants is what the mention query answers with.
 	participants []domain.ChatMember
+
+	// mediaPaths is what FetchMedia and SaveMedia serve; a slot with no entry
+	// answers NotFound, standing in for a download failure. fetched records what
+	// the client asked for, invalidated what it asked to drop.
+	mediaPaths  map[mediaKey]string
+	fetched     []mediaKey
+	invalidated []mediaKey
+}
+
+// mediaKey identifies one piece of media the way a client names it.
+type mediaKey struct {
+	chatID int64
+	msgID  int
+	slot   domain.MediaSlot
 }
 
 // cmdCall is one command the UI issued through the owner.
@@ -42,7 +60,7 @@ type cmdCall struct {
 }
 
 func newOwnerStub(st store.Store) *ownerStub {
-	o := &ownerStub{state: state.New(st), reg: project.NewRegistry(st)}
+	o := &ownerStub{state: state.New(st), reg: project.NewRegistry(st), mediaPaths: make(map[mediaKey]string)}
 	o.state.OnChange(func(chg state.Change) {
 		if chg.Kind == state.ChangeTyping {
 			o.typing = append(o.typing, core.Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
@@ -103,6 +121,38 @@ func (o *ownerStub) SearchContacts(_ context.Context, _ string, _ int) ([]domain
 func (o *ownerStub) GetParticipants(_ context.Context, chatID int64) ([]domain.ChatMember, error) {
 	o.calls = append(o.calls, cmdCall{name: "GetParticipants", chatID: chatID})
 	return o.participants, o.err
+}
+
+func (o *ownerStub) FetchMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot) (string, error) {
+	key := mediaKey{chatID, msgID, slot}
+	o.fetched = append(o.fetched, key)
+	p, ok := o.mediaPaths[key]
+	if !ok {
+		return "", &telerr.Error{Kind: telerr.NotFound}
+	}
+	return p, nil
+}
+
+// SaveMedia copies the registered file into destDir, the way the real owner
+// streams it there.
+func (o *ownerStub) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error) {
+	src, ok := o.mediaPaths[mediaKey{chatID, msgID, slot}]
+	if !ok {
+		return "", &telerr.Error{Kind: telerr.NotFound}
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	dst := filepath.Join(destDir, filepath.Base(src))
+	if err := os.WriteFile(dst, data, 0600); err != nil {
+		return "", err
+	}
+	return dst, nil
+}
+
+func (o *ownerStub) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
+	o.invalidated = append(o.invalidated, mediaKey{chatID, msgID, slot})
 }
 
 func (o *ownerStub) SetTyping(_ context.Context, chatID int64, _ domain.TypingAction) error {
@@ -283,5 +333,120 @@ func incomingLike(m RootModel, st store.Store, chg state.Change) core.Incoming {
 		Title:   chat.Title,
 		Preview: preview,
 		Notify:  store.Notifiable(st, chg.ChatID, m.currentChatID, chg.Message.Date, time.Now()),
+	}
+}
+
+// A WEBP sticker only decodes if the decoder is registered, and it is
+// registered by a blank import the compiler will not miss if it is dropped:
+// image.Decode simply answers "unknown format" and stickers silently stop
+// rendering (#196).
+func TestFetchStickerCmd_DecodesAWebpFile(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	data, err := os.ReadFile(filepath.Join("testdata", "sticker.webp"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "sticker.webp")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	o.mediaPaths[mediaKey{1, 5, domain.DocFull}] = path
+
+	msg := fetchStickerCmd(context.Background(), o, 1, 5, 11)()
+
+	ready, ok := msg.(PhotoReadyMsg)
+	if !ok {
+		t.Fatalf("expected a PhotoReadyMsg, got %T", msg)
+	}
+	if ready.PhotoID != 11 {
+		t.Fatalf("PhotoID = %d, want 11", ready.PhotoID)
+	}
+	if ready.Image == nil {
+		t.Fatal("sticker did not decode: is the WEBP decoder registered?")
+	}
+}
+
+// A cached file that will not decode must not wedge: the entry is dropped so
+// the next repaint downloads it again.
+func TestFetchPhotoCmd_InvalidatesAnUndecodableFile(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	path := filepath.Join(t.TempDir(), "broken")
+	if err := os.WriteFile(path, []byte("not an image"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	o.mediaPaths[mediaKey{1, 5, domain.PhotoThumb}] = path
+
+	msg := fetchPhotoCmd(context.Background(), o, 1, 5, 9)()
+
+	if msg != nil {
+		t.Fatalf("expected no message, got %T", msg)
+	}
+	if len(o.invalidated) != 1 || o.invalidated[0] != (mediaKey{1, 5, domain.PhotoThumb}) {
+		t.Fatalf("expected the entry to be invalidated, got %v", o.invalidated)
+	}
+}
+
+func TestSaveFileCmd_ReportsTheSavedPath(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	src := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(src, []byte("video"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	o.mediaPaths[mediaKey{1, 5, domain.DocFull}] = src
+	dest := t.TempDir()
+
+	msg := saveFileCmd(context.Background(), o, 1, 5, domain.DocFull, dest, 0)()
+
+	done, ok := msg.(fileDownloadDoneMsg)
+	if !ok {
+		t.Fatalf("expected a fileDownloadDoneMsg, got %T", msg)
+	}
+	if done.sev != components.SeverityInfo {
+		t.Fatalf("severity = %v, want info", done.sev)
+	}
+	if !strings.Contains(done.text, "Saved to ") || !strings.Contains(done.text, "clip.mp4") {
+		t.Fatalf("text = %q, want it to name the saved file", done.text)
+	}
+}
+
+func TestSaveFileCmd_ReportsAFailureAsAnError(t *testing.T) {
+	o := newOwnerStub(store.NewMemory()) // no media registered: SaveMedia answers NotFound
+
+	msg := saveFileCmd(context.Background(), o, 1, 5, domain.DocFull, t.TempDir(), 0)()
+
+	done, ok := msg.(fileDownloadDoneMsg)
+	if !ok {
+		t.Fatalf("expected a fileDownloadDoneMsg, got %T", msg)
+	}
+	if done.sev == components.SeverityInfo {
+		t.Fatal("a failed save must not report success")
+	}
+	if done.text == "" {
+		t.Fatal("a failed save must say something")
+	}
+}
+
+func TestOpenDocumentCmd_LaunchesTheSavedFile(t *testing.T) {
+	o := newOwnerStub(store.NewMemory())
+	src := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(src, []byte("video"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	o.mediaPaths[mediaKey{1, 5, domain.DocFull}] = src
+	var opened string
+	restore := SetOpenPathForTest(func(p string) { opened = p })
+	defer restore()
+
+	msg := openDocumentCmd(context.Background(), o, 1, 5, t.TempDir(), 0)()
+
+	done, ok := msg.(documentOpenDoneMsg)
+	if !ok {
+		t.Fatalf("expected a documentOpenDoneMsg, got %T", msg)
+	}
+	if done.errText != "" {
+		t.Fatalf("unexpected error: %q", done.errText)
+	}
+	if !strings.Contains(opened, "clip.mp4") {
+		t.Fatalf("opened %q, want the saved clip", opened)
 	}
 }

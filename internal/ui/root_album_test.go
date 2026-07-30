@@ -2,7 +2,6 @@ package ui_test
 
 import (
 	"errors"
-	"image"
 	"testing"
 	"time"
 
@@ -241,12 +240,8 @@ func TestAlbumSend_AdoptedPartsRequestTheirInlineImages(t *testing.T) {
 			Media: &domain.MediaRef{Kind: domain.MediaPhoto},
 		}, nil
 	}
-	var downloads int
-	mc.downloadPhotoFunc = func() (image.Image, error) {
-		downloads++
-		return image.NewRGBA(image.Rect(0, 0, 2, 2)), nil
-	}
 	m, st := newRootOnChat(t, mc)
+	owner := m.Owner().(*testOwner)
 	_ = stageAndSend(t, m, []string{
 		writeTempBytes(t, "a.png", pngBytes),
 		writeTempBytes(t, "b.png", pngBytes),
@@ -256,5 +251,11 @@ func TestAlbumSend_AdoptedPartsRequestTheirInlineImages(t *testing.T) {
 		require.NotNil(t, msg.Photo, "the server photo ref must be adopted")
 		require.NotNil(t, msg.Media, "without a MediaRef the renderer never looks up a preview")
 	}
-	assert.Equal(t, 2, downloads, "each adopted part must fetch its inline image")
+	thumbs := 0
+	for _, k := range owner.fetched {
+		if k.slot == domain.PhotoThumb {
+			thumbs++
+		}
+	}
+	assert.Equal(t, 2, thumbs, "each adopted part must fetch its inline image")
 }

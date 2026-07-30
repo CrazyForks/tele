@@ -270,13 +270,11 @@ func (m RootModel) handleStatusErr(msg StatusErrMsg) (RootModel, tea.Cmd) {
 }
 
 // handleDocumentOpenDone clears the status-bar download indicator for the
-// completed external open, persists any refreshed ref, and on failure surfaces
-// the error (with the usual auto-clear timer).
+// completed external open and on failure surfaces the error (with the usual
+// auto-clear timer). A refreshed file reference is recorded by the owner, not
+// here (#196).
 func (m RootModel) handleDocumentOpenDone(msg documentOpenDoneMsg) (RootModel, tea.Cmd) {
 	m.statusBar.ClearDownload(msg.serial)
-	if msg.doc != nil && m.st != nil {
-		m.st.UpdateMessageMedia(msg.chatID, msg.msgID, nil, msg.doc)
-	}
 	if msg.errText != "" {
 		serial := m.toasts.Add(components.ToastKindOf(msg.sev), msg.errText)
 		d := durationFor(msg.sev)
@@ -285,14 +283,11 @@ func (m RootModel) handleDocumentOpenDone(msg documentOpenDoneMsg) (RootModel, t
 	return m, nil
 }
 
-// handleFileDownloadDone clears the status-bar download indicator, persists any
-// refreshed ref, and surfaces the result (saved path or error) with the usual
-// auto-clear timer.
+// handleFileDownloadDone clears the status-bar download indicator and surfaces
+// the result (saved path or error) with the usual auto-clear timer. A refreshed
+// file reference is recorded by the owner, not here (#196).
 func (m RootModel) handleFileDownloadDone(msg fileDownloadDoneMsg) (RootModel, tea.Cmd) {
 	m.statusBar.ClearDownload(msg.serial)
-	if (msg.doc != nil || msg.photo != nil) && m.st != nil {
-		m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)
-	}
 	// A cancelled download has nothing to say; the indicator is already cleared.
 	if msg.text == "" {
 		return m, nil

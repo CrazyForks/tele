@@ -1,15 +1,12 @@
 package tg
 
+// Downloads are streams, not images: the owner writes them to disk and clients
+// decode from the file, so nothing here decodes and no image decoder is
+// registered in this package any more (#196).
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
-
-	_ "golang.org/x/image/webp" // register WEBP decoder for image.Decode (static stickers)
 
 	"github.com/gotd/td/telegram/downloader"
 	gotdtg "github.com/gotd/td/tg"
@@ -17,32 +14,6 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
-
-func (c *GotdClient) DownloadPhoto(ctx context.Context, ref domain.PhotoRef) (image.Image, error) {
-	api, err := c.acquireAPI()
-	if err != nil {
-		return nil, err
-	}
-
-	loc := &gotdtg.InputPhotoFileLocation{
-		ID:            ref.ID,
-		AccessHash:    ref.AccessHash,
-		FileReference: ref.FileReference,
-		ThumbSize:     ref.ThumbSize,
-	}
-
-	var buf bytes.Buffer
-	d := downloader.NewDownloader()
-	if _, err := d.Download(api, loc).Stream(ctx, &buf); err != nil {
-		return nil, fmt.Errorf("download photo %d: %w", ref.ID, err)
-	}
-
-	img, _, err := image.Decode(&buf)
-	if err != nil {
-		return nil, fmt.Errorf("decode photo %d: %w", ref.ID, err)
-	}
-	return img, nil
-}
 
 // DownloadPhotoToFile streams the raw photo bytes (the size named by
 // ref.ThumbSize) directly into dst without decoding, so a photo can be saved to
@@ -67,27 +38,6 @@ func (c *GotdClient) DownloadPhotoToFile(ctx context.Context, ref domain.PhotoRe
 	return nil
 }
 
-// DownloadDocument fetches the full document file as raw bytes.
-func (c *GotdClient) DownloadDocument(ctx context.Context, ref domain.DocumentRef) ([]byte, error) {
-	api, err := c.acquireAPI()
-	if err != nil {
-		return nil, err
-	}
-
-	loc := &gotdtg.InputDocumentFileLocation{
-		ID:            ref.ID,
-		AccessHash:    ref.AccessHash,
-		FileReference: ref.FileReference,
-	}
-
-	var buf bytes.Buffer
-	d := downloader.NewDownloader()
-	if _, err := d.Download(api, loc).Stream(ctx, &buf); err != nil {
-		return nil, fmt.Errorf("download document %d: %w", ref.ID, err)
-	}
-	return buf.Bytes(), nil
-}
-
 // DownloadDocumentToFile streams the full document into dst without buffering
 // the whole file in memory, so it stays bounded regardless of file size.
 func (c *GotdClient) DownloadDocumentToFile(ctx context.Context, ref domain.DocumentRef, dst io.Writer) error {
@@ -109,15 +59,17 @@ func (c *GotdClient) DownloadDocumentToFile(ctx context.Context, ref domain.Docu
 	return nil
 }
 
-// DownloadDocumentThumb fetches and decodes the document's thumbnail named by
-// ref.ThumbSize for an inline preview.
-func (c *GotdClient) DownloadDocumentThumb(ctx context.Context, ref domain.DocumentRef) (image.Image, error) {
+// DownloadDocumentThumbToFile streams the document's thumbnail (the size named
+// by ref.ThumbSize) into dst. It is separate from DownloadDocumentToFile
+// because that one deliberately ignores ThumbSize and always streams the full
+// file; a poster frame needs the thumbnail location instead.
+func (c *GotdClient) DownloadDocumentThumbToFile(ctx context.Context, ref domain.DocumentRef, dst io.Writer) error {
+	if ref.ThumbSize == "" {
+		return &telerr.Error{Kind: telerr.NotFound, Op: "download document thumb", Detail: "no thumbnail"}
+	}
 	api, err := c.acquireAPI()
 	if err != nil {
-		return nil, err
-	}
-	if ref.ThumbSize == "" {
-		return nil, &telerr.Error{Kind: telerr.NotFound, Op: "download document thumb", Detail: "no thumbnail"}
+		return err
 	}
 
 	loc := &gotdtg.InputDocumentFileLocation{
@@ -127,43 +79,9 @@ func (c *GotdClient) DownloadDocumentThumb(ctx context.Context, ref domain.Docum
 		ThumbSize:     ref.ThumbSize,
 	}
 
-	var buf bytes.Buffer
 	d := downloader.NewDownloader()
-	if _, err := d.Download(api, loc).Stream(ctx, &buf); err != nil {
-		return nil, fmt.Errorf("download document thumb %d: %w", ref.ID, err)
+	if _, err := d.Download(api, loc).Stream(ctx, dst); err != nil {
+		return fmt.Errorf("download document thumb %d: %w", ref.ID, err)
 	}
-
-	img, _, err := image.Decode(&buf)
-	if err != nil {
-		return nil, fmt.Errorf("decode document thumb %d: %w", ref.ID, err)
-	}
-	return img, nil
-}
-
-// DownloadDocumentImage fetches the full document file and decodes it as an
-// image. Used for static WEBP stickers: unlike DownloadDocumentThumb it streams
-// the main file (no ThumbSize), so transparency from the full sticker is kept.
-func (c *GotdClient) DownloadDocumentImage(ctx context.Context, ref domain.DocumentRef) (image.Image, error) {
-	api, err := c.acquireAPI()
-	if err != nil {
-		return nil, err
-	}
-
-	loc := &gotdtg.InputDocumentFileLocation{
-		ID:            ref.ID,
-		AccessHash:    ref.AccessHash,
-		FileReference: ref.FileReference,
-	}
-
-	var buf bytes.Buffer
-	d := downloader.NewDownloader()
-	if _, err := d.Download(api, loc).Stream(ctx, &buf); err != nil {
-		return nil, fmt.Errorf("download document image %d: %w", ref.ID, err)
-	}
-
-	img, _, err := image.Decode(&buf)
-	if err != nil {
-		return nil, fmt.Errorf("decode document image %d: %w", ref.ID, err)
-	}
-	return img, nil
+	return nil
 }

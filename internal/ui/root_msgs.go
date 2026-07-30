@@ -116,41 +116,25 @@ type ClearStatusErrMsg struct{ Serial int }
 // documentOpenDoneMsg reports completion of an external-player document open
 // started via startDocumentOpen. serial identifies the status-bar download
 // indicator to clear. errText is empty on success; on failure it carries the
-// error text and sev its severity. doc is a refreshed ref (or nil).
+// error text and sev its severity.
 type documentOpenDoneMsg struct {
 	serial  int
 	errText string
 	sev     components.Severity
-	chatID  int64
-	msgID   int
-	doc     *domain.DocumentRef
 }
 
 // fileDownloadDoneMsg reports completion of a file download started via
 // startFileDownload. serial identifies the status-bar download indicator to
 // clear. text is the "Saved to <path>" confirmation on success or the error
-// text on failure, with sev distinguishing them. doc is a refreshed ref (or nil).
+// text on failure, with sev distinguishing them.
 type fileDownloadDoneMsg struct {
 	serial int
 	text   string
 	sev    components.Severity
-	chatID int64
-	msgID  int
-	doc    *domain.DocumentRef
-	photo  *domain.PhotoRef
 }
 
 // chatLoadErrMsg reports a failed chat-open history load.
 type chatLoadErrMsg struct {
 	chatID int64
 	text   string
-}
-
-// mediaRefRefreshedMsg carries refreshed media refs after a FILE_REFERENCE_EXPIRED,
-// so the store can keep the fresh refs for subsequent opens.
-type mediaRefRefreshedMsg struct {
-	chatID int64
-	msgID  int
-	photo  *domain.PhotoRef
-	doc    *domain.DocumentRef
 }

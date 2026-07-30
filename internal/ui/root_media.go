@@ -111,7 +111,7 @@ func (m RootModel) openTarget(t components.OpenTarget) (tea.Model, tea.Cmd) {
 				dur, sender := m.selectedVideoInfo()
 				return m.openVideoModal(ref, m.chat.SelectedMessageID(), dur, sender)
 			}
-			return m.startDocumentOpen(ref, m.chat.SelectedMessageID(), m.selectedDownloadLabel())
+			return m.startDocumentOpen(m.chat.SelectedMessageID(), m.selectedDownloadLabel())
 		}
 	case components.OpenTargetPhoto:
 		if ref, ok := m.chat.SelectedMessagePhoto(); ok {
@@ -139,9 +139,9 @@ func (m RootModel) openAlbumPart(i int) (tea.Model, tea.Cmd) {
 		if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
 			return m.openVideoModalAlbum(*p.Doc, p.MsgID, p.DurSecs, p.Sender, parts, idx)
 		}
-		return m.startDocumentOpen(*p.Doc, p.MsgID, p.Sender)
+		return m.startDocumentOpen(p.MsgID, p.Sender)
 	case p.Doc != nil:
-		return m.startDocumentOpen(*p.Doc, p.MsgID, p.Sender)
+		return m.startDocumentOpen(p.MsgID, p.Sender)
 	}
 	return m, nil
 }
@@ -183,5 +183,5 @@ func (m RootModel) handlePlayVoice() (RootModel, tea.Cmd) {
 	if m.voicePlayer.Toggle(ref.ID) {
 		return m, nil // same message: paused/resumed
 	}
-	return m, downloadVoiceCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref)
+	return m, fetchVoiceCmd(m.ctx, m.owner, m.currentChatID, m.chat.SelectedMessageID(), ref.ID)
 }

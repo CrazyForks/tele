@@ -2,6 +2,8 @@ package ui_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -52,10 +54,16 @@ type testOwner struct {
 	searchResult    []domain.Chat
 	participants    []domain.ChatMember
 	lastSearchQuery string
+	// mediaPaths is what FetchMedia and SaveMedia serve; a slot with no entry
+	// answers NotFound, standing in for a download failure. fetched records what
+	// the client asked for, invalidated what it asked to drop.
+	mediaPaths  map[mediaPathKey]string
+	fetched     []mediaPathKey
+	invalidated []mediaPathKey
 }
 
 func newTestOwner(st store.Store) *testOwner {
-	o := &testOwner{state: state.New(st), reg: project.NewRegistry(st)}
+	o := &testOwner{state: state.New(st), reg: project.NewRegistry(st), mediaPaths: make(map[mediaPathKey]string)}
 	o.state.OnChange(func(chg state.Change) {
 		if chg.Kind == state.ChangeTyping {
 			o.typing = append(o.typing, core.Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
@@ -134,6 +142,45 @@ func (o *testOwner) SearchContacts(_ context.Context, q string, _ int) ([]domain
 
 func (o *testOwner) GetParticipants(_ context.Context, _ int64) ([]domain.ChatMember, error) {
 	return o.participants, o.cmdErr
+}
+
+// mediaPathKey identifies one piece of media the way a client names it.
+type mediaPathKey struct {
+	chatID int64
+	msgID  int
+	slot   domain.MediaSlot
+}
+
+func (o *testOwner) FetchMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot) (string, error) {
+	key := mediaPathKey{chatID, msgID, slot}
+	o.fetched = append(o.fetched, key)
+	p, ok := o.mediaPaths[key]
+	if !ok {
+		return "", &telerr.Error{Kind: telerr.NotFound}
+	}
+	return p, nil
+}
+
+// SaveMedia copies the registered file into destDir, the way the real owner
+// streams it there.
+func (o *testOwner) SaveMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error) {
+	src, ok := o.mediaPaths[mediaPathKey{chatID, msgID, slot}]
+	if !ok {
+		return "", &telerr.Error{Kind: telerr.NotFound}
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	dst := filepath.Join(destDir, filepath.Base(src))
+	if err := os.WriteFile(dst, data, 0600); err != nil {
+		return "", err
+	}
+	return dst, nil
+}
+
+func (o *testOwner) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
+	o.invalidated = append(o.invalidated, mediaPathKey{chatID, msgID, slot})
 }
 
 func (o *testOwner) SetTyping(_ context.Context, _ int64, _ domain.TypingAction) error {

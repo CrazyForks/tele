@@ -137,17 +137,5 @@ func TestReconcileKitty_TransmitsOnlyVisible(t *testing.T) {
 	}
 }
 
-func TestExtFromMime(t *testing.T) {
-	cases := map[string]string{
-		"video/quicktime":   ".mov",
-		"video/webm":        ".webm",
-		"video/x-matroska":  ".mkv",
-		"video/mp4":         ".mp4",
-		"application/pdf":   ".pdf", // stdlib table drives non-video types too
-		"image/png":         ".png",
-		"application/weird": ".mp4", // unknown -> default container for Telegram video
-	}
-	for mime, want := range cases {
-		require.Equal(t, want, extFromMime(mime), mime)
-	}
-}
+// Extension derivation moved to the owner in #196; TestExtFromMime in
+// internal/core covers it.

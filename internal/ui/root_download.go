@@ -1,139 +1,86 @@
 package ui
 
 import (
-	"bytes"
 	"context"
 	"image"
-	"image/jpeg"
-	"io"
-	"mime"
 	"os"
-	"path/filepath"
-	"sort"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/gabriel-vasile/mimetype"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
-	"github.com/sorokin-vladimir/tele/internal/mediacache"
-	"github.com/sorokin-vladimir/tele/internal/telerr"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
-// downloadWithRefresh runs download(ref); on a FILE_REFERENCE_EXPIRED error it
-// refreshes the message's media refs once via RefreshMessage and retries with the
-// fresh ref. On a successful retry it returns the refreshed message so the caller
-// can persist the new ref.
-func downloadWithRefresh[T any, R any](
-	ctx context.Context,
-	client internaltg.Client,
-	peer domain.Peer,
-	msgID int,
-	ref R,
-	download func(R) (T, error),
-	pickRef func(domain.Message) (R, bool),
-) (result T, refreshed *domain.Message, err error) {
-	result, err = download(ref)
-	if err == nil {
-		return result, nil, nil
-	}
-	if telerr.Of(err) != telerr.StaleReference {
-		return result, nil, err
-	}
-	msg, rerr := client.RefreshMessage(ctx, peer, msgID)
-	if rerr != nil {
-		return result, nil, err
-	}
-	newRef, ok := pickRef(msg)
-	if !ok {
-		return result, nil, err
-	}
-	result, err = download(newRef)
+// decodeImageFile decodes an image the owner cached for us. A file that has
+// vanished (evicted between the fetch and the open) and a file that will not
+// decode are both errors here; the caller decides what to do about it.
+func decodeImageFile(path string) (image.Image, error) {
+	f, err := os.Open(path)
 	if err != nil {
-		return result, nil, err
+		return nil, err
 	}
-	return result, &msg, nil
+	defer f.Close() //nolint:errcheck
+	img, _, err := image.Decode(f)
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
 }
 
-func downloadPhotoCmd(ctx context.Context, client internaltg.Client, mc *mediacache.Cache, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
+// fetchInlineImageCmd fetches, decodes and hands over one inline image.
+// transform is applied to the decoded image (round notes are cropped to a
+// circle) and may be nil. An undecodable file is dropped from the owner's cache
+// so the next repaint tries again instead of getting the same broken bytes back.
+func fetchInlineImageCmd(ctx context.Context, o Owner, chatID int64, msgID int, slot domain.MediaSlot, imageID int64, action string, transform func(image.Image) image.Image) tea.Cmd {
 	return func() tea.Msg {
-		key := mediacache.PhotoKey(ref.ID, ref.ThumbSize)
-		if mc != nil {
-			if data, ok := mc.Get(key); ok {
-				if img, _, err := image.Decode(bytes.NewReader(data)); err == nil {
-					return PhotoReadyMsg{PhotoID: ref.ID, Image: img}
-				}
-				mc.Remove(key) // corrupt entry; fall through and refetch
-			}
-		}
-		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.PhotoRef) (image.Image, error) {
-				return client.DownloadPhoto(ctx, r)
-			},
-			func(m domain.Message) (domain.PhotoRef, bool) {
-				if m.Photo == nil {
-					return domain.PhotoRef{}, false
-				}
-				return *m.Photo, true
-			},
-		)
+		path, err := o.FetchMedia(ctx, chatID, msgID, slot)
 		if err != nil {
-			return errStatus("photo download", err)
+			return errStatus(action, err)
 		}
-		if mc != nil {
-			if data := encodeCacheJPEG(img); data != nil {
-				mc.Put(key, data)
-			}
+		img, derr := decodeImageFile(path)
+		if derr != nil {
+			o.InvalidateMedia(chatID, msgID, slot)
+			return nil
 		}
-		ready := PhotoReadyMsg{PhotoID: ref.ID, Image: img}
-		if refreshed != nil {
-			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, photo: refreshed.Photo})
+		if transform != nil {
+			img = transform(img)
 		}
-		return ready
+		return PhotoReadyMsg{PhotoID: imageID, Image: img}
 	}
 }
 
-// encodeCacheJPEG re-encodes a decoded inline photo for the on-disk cache.
-// Inline thumbnails are downscaled and re-rendered to cells, so JPEG re-encode
-// is visually lossless here and keeps the cache compact. Returns nil on error
-// (the download still succeeds; only the caching is skipped).
-func encodeCacheJPEG(img image.Image) []byte {
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
-		return nil
+func fetchPhotoCmd(ctx context.Context, o Owner, chatID int64, msgID int, photoID int64) tea.Cmd {
+	return fetchInlineImageCmd(ctx, o, chatID, msgID, domain.PhotoThumb, photoID, "photo download", nil)
+}
+
+func fetchVideoThumbCmd(ctx context.Context, o Owner, chatID int64, msgID int, docID int64, crop bool) tea.Cmd {
+	var transform func(image.Image) image.Image
+	if crop {
+		transform = media.CircleCrop // round video note -> circle
 	}
-	return buf.Bytes()
+	return fetchInlineImageCmd(ctx, o, chatID, msgID, domain.DocThumb, docID, "video thumb download", transform)
 }
 
-// DownloadPhotoCmdForTest exposes downloadPhotoCmd (no disk cache) for tests.
-func DownloadPhotoCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
-	return downloadPhotoCmd(context.Background(), c, nil, peer, msgID, ref)
+func fetchStickerCmd(ctx context.Context, o Owner, chatID int64, msgID int, docID int64) tea.Cmd {
+	return fetchInlineImageCmd(ctx, o, chatID, msgID, domain.DocFull, docID, "sticker download", nil)
 }
 
-// DownloadPhotoCmdCachedForTest exposes downloadPhotoCmd with a disk cache.
-func DownloadPhotoCmdCachedForTest(c internaltg.Client, mc *mediacache.Cache, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
-	return downloadPhotoCmd(context.Background(), c, mc, peer, msgID, ref)
-}
-
-// refreshedBatch emits both the ready image and the store-update message after a
-// successful refresh+retry.
-func refreshedBatch(ready, refreshed tea.Msg) tea.Msg {
-	return tea.BatchMsg{
-		func() tea.Msg { return ready },
-		func() tea.Msg { return refreshed },
-	}
-}
-
-// currentPeer returns the peer of the currently open chat, or the zero peer.
-func (m RootModel) currentPeer() domain.Peer {
-	if m.st != nil {
-		if chat, ok := m.st.GetChat(m.currentChatID); ok {
-			return chat.Peer
+// fetchVoiceCmd fetches a voice note and hands its bytes to the player. Voice
+// notes are a few tens of kilobytes, so reading the whole file is fine.
+func fetchVoiceCmd(ctx context.Context, o Owner, chatID int64, msgID int, docID int64) tea.Cmd {
+	return func() tea.Msg {
+		path, err := o.FetchMedia(ctx, chatID, msgID, domain.DocFull)
+		if err != nil {
+			return errStatus("voice download", err)
 		}
+		data, rerr := os.ReadFile(path)
+		if rerr != nil || len(data) == 0 {
+			o.InvalidateMedia(chatID, msgID, domain.DocFull)
+			return nil
+		}
+		return voicePlayReadyMsg{docID: docID, data: data}
 	}
-	return domain.Peer{}
 }
 
 // handleDownloadSelected saves the selected message's media to the Downloads
@@ -145,11 +92,11 @@ func (m RootModel) handleDownloadSelected() (RootModel, tea.Cmd) {
 		return m, nil
 	}
 	msgID := m.chat.SelectedMessageID()
-	if ref, kind, ok := m.chat.SelectedMessageDownloadDoc(); ok {
-		return m.startFileDownload(ref, kind, msgID)
+	if _, _, ok := m.chat.SelectedMessageDownloadDoc(); ok {
+		return m.startFileDownload(msgID)
 	}
-	if ref, ok := m.chat.SelectedMessagePhoto(); ok {
-		return m.startPhotoDownload(ref, msgID)
+	if _, ok := m.chat.SelectedMessagePhoto(); ok {
+		return m.startPhotoDownload(msgID)
 	}
 	return m, nil
 }
@@ -170,202 +117,84 @@ func (m RootModel) openPhotoExternal(photoID int64) (RootModel, tea.Cmd) {
 // startDocumentOpen sets the status-bar download indicator with label and
 // dispatches the external-player download; the completion message clears the
 // matching indicator (and surfaces any error).
-func (m RootModel) startDocumentOpen(ref domain.DocumentRef, msgID int, label string) (RootModel, tea.Cmd) {
+func (m RootModel) startDocumentOpen(msgID int, label string) (RootModel, tea.Cmd) {
 	serial := m.statusBar.StartDownload(label)
-	return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, m.tmpDir, serial)
+	return m, openDocumentCmd(m.ctx, m.owner, m.currentChatID, msgID, m.tmpDir, serial)
 }
 
 // selectedDownloadLabel returns the download indicator label for the selected
-// media: round notes read "note", everything else "video".
+// media, naming the kind. The owner picks the file name now, so the client no
+// longer has one to show and says what sort of thing is coming instead.
 func (m RootModel) selectedDownloadLabel() string {
+	noun := "file"
 	if m.st != nil && m.chat != nil {
 		id := m.chat.SelectedMessageID()
 		for _, msg := range m.st.Messages(m.currentChatID) {
-			if msg.ID == id {
-				if msg.Media != nil && msg.Media.Kind == domain.MediaVideoNote {
-					return "downloading note…"
-				}
-				break
+			if msg.ID != id {
+				continue
 			}
+			if msg.Media != nil {
+				switch msg.Media.Kind {
+				case domain.MediaVideo:
+					noun = "video"
+				case domain.MediaVideoNote:
+					noun = "note"
+				case domain.MediaVoice:
+					noun = "voice message"
+				case domain.MediaAudio:
+					noun = "audio"
+				case domain.MediaGIF:
+					noun = "GIF"
+				}
+			}
+			break
 		}
 	}
-	return "downloading video…"
+	return "downloading " + noun + "…"
 }
 
 // startFileDownload sets the status-bar download indicator and dispatches a
-// streaming download of a generic file to the Downloads folder.
-func (m RootModel) startFileDownload(ref domain.DocumentRef, kind domain.MediaKind, msgID int) (RootModel, tea.Cmd) {
-	name := downloadFileName(ref, kind)
-	ref.FileName = name
-	serial := m.statusBar.StartDownload("downloading " + name + "…")
-	return m, downloadFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, downloadsDir(), serial)
+// streaming download of a generic file to the Downloads folder. The owner names
+// the file, so the indicator names the media kind instead of the file name.
+func (m RootModel) startFileDownload(msgID int) (RootModel, tea.Cmd) {
+	serial := m.statusBar.StartDownload(m.selectedDownloadLabel())
+	return m, saveFileCmd(m.ctx, m.owner, m.currentChatID, msgID, domain.DocFull, downloadsDir(), serial)
 }
 
 // startPhotoDownload sets the status-bar download indicator and dispatches a
 // streaming download of a photo (full quality) to the Downloads folder.
-func (m RootModel) startPhotoDownload(ref domain.PhotoRef, msgID int) (RootModel, tea.Cmd) {
+func (m RootModel) startPhotoDownload(msgID int) (RootModel, tea.Cmd) {
 	serial := m.statusBar.StartDownload("downloading photo…")
-	return m, downloadPhotoFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, downloadsDir(), serial)
+	return m, saveFileCmd(m.ctx, m.owner, m.currentChatID, msgID, domain.PhotoFull, downloadsDir(), serial)
 }
 
-// downloadPhotoFileCmd streams a photo's full-quality bytes to destDir as
-// photo_<id>.jpg (collision-resolved) and reports the saved path (or an error).
-// Mirrors downloadFileCmd's stream-to-disk + FILE_REFERENCE_EXPIRED retry.
-func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef, destDir string, serial int) tea.Cmd {
-	fullRef := ref
-	fullRef.ThumbSize = ref.FullThumbSize
+// saveFileCmd streams the named media into destDir under the name the owner
+// picks, and reports the saved path (or the error).
+func saveFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, slot domain.MediaSlot, destDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		fail := func(action string, err error) tea.Msg {
-			text, sev, _ := errText(action, err)
+		path, err := o.SaveMedia(ctx, chatID, msgID, slot, destDir)
+		if err != nil {
+			text, sev, _ := errText("download", err)
 			return fileDownloadDoneMsg{serial: serial, text: text, sev: sev}
 		}
-		f, err := createUniqueDownloadFile(destDir, "photo_"+itoa64(ref.ID)+".jpg")
-		if err != nil {
-			return fail("download", err)
-		}
-		name := f.Name()
-
-		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, fullRef,
-			func(r domain.PhotoRef) (struct{}, error) {
-				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
-					return struct{}{}, serr
-				}
-				if terr := f.Truncate(0); terr != nil {
-					return struct{}{}, terr
-				}
-				return struct{}{}, client.DownloadPhotoToFile(ctx, r, f)
-			},
-			func(m domain.Message) (domain.PhotoRef, bool) {
-				if m.Photo == nil {
-					return domain.PhotoRef{}, false
-				}
-				r := *m.Photo
-				r.ThumbSize = r.FullThumbSize
-				return r, true
-			},
-		)
-		if derr != nil {
-			_ = f.Close()
-			_ = os.Remove(name)
-			return fail("download", derr)
-		}
-		if cerr := f.Close(); cerr != nil {
-			_ = os.Remove(name)
-			return fail("download", cerr)
-		}
-		done := fileDownloadDoneMsg{serial: serial, text: "Saved to " + name, sev: components.SeverityInfo, chatID: peer.ID, msgID: msgID}
-		if refreshed != nil {
-			done.photo = refreshed.Photo
-		}
-		return done
+		return fileDownloadDoneMsg{serial: serial, text: "Saved to " + path, sev: components.SeverityInfo}
 	}
 }
 
-// DownloadPhotoFileCmdForTest exposes downloadPhotoFileCmd for tests (serial 0).
-func DownloadPhotoFileCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef, destDir string) tea.Cmd {
-	return downloadPhotoFileCmd(context.Background(), c, peer, msgID, ref, destDir, 0)
-}
-
-// downloadFileCmd streams a document to destDir under its original name
-// (collision-resolved) and reports the saved path (or an error). Mirrors
-// openDocumentCmd's stream-to-disk + FILE_REFERENCE_EXPIRED retry.
-func downloadFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, destDir string, serial int) tea.Cmd {
-	return func() tea.Msg {
-		fail := func(action string, err error) tea.Msg {
-			text, sev, _ := errText(action, err)
-			return fileDownloadDoneMsg{serial: serial, text: text, sev: sev}
-		}
-		f, err := createUniqueDownloadFile(destDir, ref.FileName)
-		if err != nil {
-			return fail("download", err)
-		}
-		name := f.Name()
-
-		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.DocumentRef) (struct{}, error) {
-				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
-					return struct{}{}, serr
-				}
-				if terr := f.Truncate(0); terr != nil {
-					return struct{}{}, terr
-				}
-				return struct{}{}, client.DownloadDocumentToFile(ctx, r, f)
-			},
-			pickDocumentRef,
-		)
-		if derr != nil {
-			_ = f.Close()
-			_ = os.Remove(name)
-			return fail("download", derr)
-		}
-		if cerr := f.Close(); cerr != nil {
-			_ = os.Remove(name)
-			return fail("download", cerr)
-		}
-		done := fileDownloadDoneMsg{serial: serial, text: "Saved to " + name, sev: components.SeverityInfo, chatID: peer.ID, msgID: msgID}
-		if refreshed != nil {
-			done.doc = refreshed.Document
-		}
-		return done
-	}
-}
-
-// openDocumentCmd downloads a document in full and opens it in the OS default
+// openDocumentCmd saves a document into tmpDir and opens it in the OS default
 // application (e.g. a video player). Runs async; the download may be large. It
 // always returns a documentOpenDoneMsg so the caller can clear the status-bar
 // download indicator identified by serial (and surface any error).
-func openDocumentCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string, serial int) tea.Cmd {
+func openDocumentCmd(ctx context.Context, o Owner, chatID int64, msgID int, tmpDir string, serial int) tea.Cmd {
 	return func() tea.Msg {
-		fail := func(action string, err error) tea.Msg {
-			text, sev, _ := errText(action, err)
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir)
+		if err != nil {
+			text, sev, _ := errText("open file", err)
 			return documentOpenDoneMsg{serial: serial, errText: text, sev: sev}
 		}
-		ext := filepath.Ext(ref.FileName)
-		if ext == "" {
-			ext = extFromMime(ref.MimeType)
-		}
-		f, err := createTempMediaFile(tmpDir, ext)
-		if err != nil {
-			return fail("open file", err)
-		}
-		name := f.Name()
-
-		// Stream directly to disk; the whole file is never held in memory. On a
-		// FILE_REFERENCE_EXPIRED retry the file is truncated so a partial first
-		// attempt does not corrupt the result.
-		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.DocumentRef) (struct{}, error) {
-				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
-					return struct{}{}, serr
-				}
-				if terr := f.Truncate(0); terr != nil {
-					return struct{}{}, terr
-				}
-				return struct{}{}, client.DownloadDocumentToFile(ctx, r, f)
-			},
-			pickDocumentRef,
-		)
-		if derr != nil {
-			_ = f.Close()
-			_ = os.Remove(name)
-			return fail("open file", derr)
-		}
-		if cerr := f.Close(); cerr != nil {
-			_ = os.Remove(name)
-			return fail("open file", cerr)
-		}
-		openPath(name)
-		done := documentOpenDoneMsg{serial: serial, chatID: peer.ID, msgID: msgID}
-		if refreshed != nil {
-			done.doc = refreshed.Document
-		}
-		return done
+		openPath(path)
+		return documentOpenDoneMsg{serial: serial}
 	}
-}
-
-// OpenDocumentCmdForTest exposes openDocumentCmd for tests (serial 0).
-func OpenDocumentCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) tea.Cmd {
-	return openDocumentCmd(context.Background(), c, peer, msgID, ref, tmpDir, 0)
 }
 
 // DocumentOpenErrTextForTest reports whether msg is a documentOpenDoneMsg and,
@@ -380,11 +209,6 @@ func DocumentOpenErrTextForTest(msg tea.Msg) (string, bool) {
 // DocumentOpenDoneMsgForTest builds a documentOpenDoneMsg for tests.
 func DocumentOpenDoneMsgForTest(serial int, errText string, sev components.Severity) tea.Msg {
 	return documentOpenDoneMsg{serial: serial, errText: errText, sev: sev}
-}
-
-// DownloadFileCmdForTest exposes downloadFileCmd for tests (serial 0).
-func DownloadFileCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, destDir string) tea.Cmd {
-	return downloadFileCmd(context.Background(), c, peer, msgID, ref, destDir, 0)
 }
 
 // FileDownloadDoneTextForTest reports whether msg is a fileDownloadDoneMsg and,
@@ -416,216 +240,37 @@ func SetOpenPathForTest(fn func(string)) func() {
 	return func() { openPath = prev }
 }
 
-// pickDocumentRef extracts a message's fresh document ref, used as the refresh
-// selector for document downloads.
-func pickDocumentRef(m domain.Message) (domain.DocumentRef, bool) {
-	if m.Document == nil {
-		return domain.DocumentRef{}, false
-	}
-	return *m.Document, true
-}
-
-// downloadFileName returns the on-disk name for a downloaded document: the
-// original FileName when present, otherwise a synthesized "<prefix>_<id><ext>"
-// where the prefix reflects the media kind and the extension is derived from the
-// MIME type. Telegram photos/voice/round notes often carry no file name.
-func downloadFileName(ref domain.DocumentRef, kind domain.MediaKind) string {
-	if ref.FileName != "" {
-		return ref.FileName
-	}
-	prefix := "file"
-	switch kind {
-	case domain.MediaVideo:
-		prefix = "video"
-	case domain.MediaVideoNote:
-		prefix = "video_note"
-	case domain.MediaVoice:
-		prefix = "voice"
-	case domain.MediaAudio:
-		prefix = "audio"
-	case domain.MediaGIF:
-		prefix = "gif"
-	}
-	// Derive the extension from the MIME type via the mimetype library rather
-	// than a hand-rolled table; unknown types yield no extension.
-	ext := ""
-	if mt := mimetype.Lookup(ref.MimeType); mt != nil {
-		ext = mt.Extension()
-	}
-	return prefix + "_" + itoa64(ref.ID) + ext
-}
-
-// canonicalExts are the extensions we promise for common Telegram media. They
-// are registered into the stdlib MIME table (init below) so they resolve even
-// on a minimal host that lacks a system mime.types, and they are preferred by
-// extFromMime when a type maps to several extensions.
-var canonicalExts = map[string]string{
-	".mov":  "video/quicktime",
-	".mkv":  "video/x-matroska",
-	".mp4":  "video/mp4",
-	".webm": "video/webm",
-}
-
-func init() {
-	for ext, typ := range canonicalExts {
-		_ = mime.AddExtensionType(ext, typ)
-	}
-}
-
-// extFromMime picks a file extension for a MIME type from the standard library
-// system MIME table, so the OS opens the media in the right app without a
-// hand-maintained switch. When a type maps to several extensions (order is
-// unspecified) it prefers a canonical one and otherwise takes the
-// lexicographically first for stable behavior. Unknown types fall back to .mp4,
-// the usual Telegram video container.
-func extFromMime(mimeType string) string {
-	exts, _ := mime.ExtensionsByType(mimeType)
-	for _, e := range exts {
-		if _, ok := canonicalExts[e]; ok {
-			return e
-		}
-	}
-	if len(exts) > 0 {
-		sort.Strings(exts)
-		return exts[0]
-	}
-	return ".mp4"
-}
-
-func downloadVoiceCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef) tea.Cmd {
+// saveFullPhotoCmd saves the full-quality photo into tmpDir, decodes it for the
+// viewer and removes the file: the viewer holds the decoded image, and the
+// full-size cache is deliberately in memory only.
+func saveFullPhotoCmd(ctx context.Context, o Owner, chatID int64, msgID int, photoID int64, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
-		data, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.DocumentRef) ([]byte, error) {
-				return client.DownloadDocument(ctx, r)
-			},
-			pickDocumentRef,
-		)
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.PhotoFull, tmpDir)
 		if err != nil {
-			return errStatus("voice download", err)
+			return errStatus("full photo download", err)
 		}
-		if len(data) == 0 {
+		defer func() { _ = os.Remove(path) }()
+		img, derr := decodeImageFile(path)
+		if derr != nil {
 			return nil
 		}
-		ready := voicePlayReadyMsg{docID: ref.ID, data: data}
-		if refreshed != nil {
-			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, doc: refreshed.Document})
-		}
-		return ready
-	}
-}
-
-func downloadVideoThumbCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, crop bool) tea.Cmd {
-	return func() tea.Msg {
-		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.DocumentRef) (image.Image, error) {
-				return client.DownloadDocumentThumb(ctx, r)
-			},
-			func(m domain.Message) (domain.DocumentRef, bool) {
-				if m.Document == nil {
-					return domain.DocumentRef{}, false
-				}
-				return *m.Document, true
-			},
-		)
-		if err != nil || img == nil {
-			if err != nil {
-				return errStatus("video thumb download", err)
-			}
-			return nil
-		}
-		if crop {
-			img = media.CircleCrop(img) // round video note → circle
-		}
-		// Reuse the photo-ready path; the cache is keyed by id (here the document id).
-		ready := PhotoReadyMsg{PhotoID: ref.ID, Image: img}
-		if refreshed != nil {
-			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, doc: refreshed.Document})
-		}
-		return ready
-	}
-}
-
-// downloadStickerCmd downloads and decodes a static WEBP sticker (the full
-// document) and feeds it through the inline-image cache keyed by document id.
-func downloadStickerCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef) tea.Cmd {
-	return func() tea.Msg {
-		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.DocumentRef) (image.Image, error) {
-				return client.DownloadDocumentImage(ctx, r)
-			},
-			func(m domain.Message) (domain.DocumentRef, bool) {
-				if m.Document == nil {
-					return domain.DocumentRef{}, false
-				}
-				return *m.Document, true
-			},
-		)
-		if err != nil || img == nil {
-			if err != nil {
-				return errStatus("sticker download", err)
-			}
-			return nil
-		}
-		ready := PhotoReadyMsg{PhotoID: ref.ID, Image: img}
-		if refreshed != nil {
-			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, doc: refreshed.Document})
-		}
-		return ready
-	}
-}
-
-// DownloadStickerCmdForTest exposes downloadStickerCmd for tests.
-func DownloadStickerCmdForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef) tea.Cmd {
-	return downloadStickerCmd(context.Background(), c, peer, msgID, ref)
-}
-
-func downloadFullPhotoCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.PhotoRef) tea.Cmd {
-	fullRef := ref
-	fullRef.ThumbSize = ref.FullThumbSize
-	return func() tea.Msg {
-		img, refreshed, err := downloadWithRefresh(ctx, client, peer, msgID, fullRef,
-			func(r domain.PhotoRef) (image.Image, error) {
-				return client.DownloadPhoto(ctx, r)
-			},
-			func(m domain.Message) (domain.PhotoRef, bool) {
-				if m.Photo == nil {
-					return domain.PhotoRef{}, false
-				}
-				r := *m.Photo
-				r.ThumbSize = r.FullThumbSize
-				return r, true
-			},
-		)
-		if err != nil || img == nil {
-			if err != nil {
-				return errStatus("full photo download", err)
-			}
-			return nil
-		}
-		ready := FullPhotoReadyMsg{PhotoID: ref.ID, Image: img}
-		if refreshed != nil {
-			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, photo: refreshed.Photo})
-		}
-		return ready
+		return FullPhotoReadyMsg{PhotoID: photoID, Image: img}
 	}
 }
 
 func (m RootModel) pendingDownloadCmds(msgs []domain.Message) tea.Cmd {
+	if m.owner == nil {
+		return nil
+	}
 	var cmds []tea.Cmd
 	for _, msg := range msgs {
-		var peer domain.Peer
-		if m.st != nil {
-			if chat, ok := m.st.GetChat(msg.ChatID); ok {
-				peer = chat.Peer
-			}
-		}
 		if msg.Photo != nil {
 			if !m.imageCache.Contains(msg.Photo.ID) {
-				cmds = append(cmds, downloadPhotoCmd(m.ctx, m.tgClient, m.mediaCache, peer, msg.ID, *msg.Photo))
+				cmds = append(cmds, fetchPhotoCmd(m.ctx, m.owner, msg.ChatID, msg.ID, msg.Photo.ID))
 			}
 			if m.cfg != nil && m.cfg.Photos.EagerFullQuality && msg.Photo.FullThumbSize != "" {
 				if !m.fullImageCache.Contains(msg.Photo.ID) {
-					cmds = append(cmds, downloadFullPhotoCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Photo))
+					cmds = append(cmds, saveFullPhotoCmd(m.ctx, m.owner, msg.ChatID, msg.ID, msg.Photo.ID, m.tmpDir))
 				}
 			}
 		}
@@ -635,13 +280,13 @@ func (m RootModel) pendingDownloadCmds(msgs []domain.Message) tea.Cmd {
 				// Round video notes are cropped to a circle, but only in Kitty mode
 				// (PNG alpha); block-art has no transparency, so keep it square there.
 				crop := msg.Media.Kind == domain.MediaVideoNote && m.imageMode == media.ModeKitty
-				cmds = append(cmds, downloadVideoThumbCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Document, crop))
+				cmds = append(cmds, fetchVideoThumbCmd(m.ctx, m.owner, msg.ChatID, msg.ID, msg.Document.ID, crop))
 			}
 		}
 		// Static WEBP stickers render inline (Kitty only); decode the full document.
 		if m.imageMode == media.ModeKitty && domain.IsStaticSticker(msg.Media, msg.Document) {
 			if !m.imageCache.Contains(msg.Document.ID) {
-				cmds = append(cmds, downloadStickerCmd(m.ctx, m.tgClient, peer, msg.ID, *msg.Document))
+				cmds = append(cmds, fetchStickerCmd(m.ctx, m.owner, msg.ChatID, msg.ID, msg.Document.ID))
 			}
 		}
 	}

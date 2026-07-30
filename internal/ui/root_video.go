@@ -12,7 +12,6 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	vmedia "github.com/sorokin-vladimir/tele/internal/media"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -109,30 +108,13 @@ func (m RootModel) videoModalBox(imgW, imgH int) (int, int) {
 // downloadVideoFileCmd streams a video's bytes to a temp file for the in-app
 // player. Mirrors downloadGifFileCmd but carries the duration for the progress
 // bar and yields a videoFileReadyMsg.
-func downloadVideoFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) tea.Cmd {
+func saveVideoFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, docID int64, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
-		f, err := createTempMediaFile(tmpDir, ".mp4")
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir)
 		if err != nil {
 			return nil
 		}
-		name := f.Name()
-		_, _, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.DocumentRef) (struct{}, error) {
-				if _, serr := f.Seek(0, 0); serr != nil {
-					return struct{}{}, serr
-				}
-				if terr := f.Truncate(0); terr != nil {
-					return struct{}{}, terr
-				}
-				return struct{}{}, client.DownloadDocumentToFile(ctx, r, f)
-			},
-			pickDocumentRef,
-		)
-		_ = f.Close()
-		if derr != nil {
-			return nil
-		}
-		return videoFileReadyMsg{docID: ref.ID, path: name}
+		return videoFileReadyMsg{docID: docID, path: path}
 	}
 }
 
@@ -192,7 +174,7 @@ func (m RootModel) selectedVideoInfo() (int, string) {
 func (m RootModel) openVideoModal(ref domain.DocumentRef, msgID, durSecs int, sender string) (RootModel, tea.Cmd) {
 	cols, rows := m.videoModalBox(16, 9) // provisional box; resized once probed
 	m.videoPlayer = &videoPlayer{docID: ref.ID, durSecs: durSecs, title: sender, cols: cols, rows: rows}
-	return m, downloadVideoFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, m.tmpDir)
+	return m, saveVideoFileCmd(m.ctx, m.owner, m.currentChatID, msgID, ref.ID, m.tmpDir)
 }
 
 // openVideoModalAlbum opens a video that is part of an album, recording the full

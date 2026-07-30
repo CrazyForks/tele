@@ -237,8 +237,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if photoID := m.chat.SelectedMessagePhotoID(); photoID != 0 {
 			return m.openPhotoExternal(photoID)
 		}
-		if ref, ok := m.chat.SelectedMessageVideo(); ok {
-			return m.startDocumentOpen(ref, m.chat.SelectedMessageID(), m.selectedDownloadLabel())
+		if _, ok := m.chat.SelectedMessageVideo(); ok {
+			return m.startDocumentOpen(m.chat.SelectedMessageID(), m.selectedDownloadLabel())
 		}
 		return m, nil
 	}

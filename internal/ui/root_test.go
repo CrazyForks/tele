@@ -56,9 +56,7 @@ type mockTGClient struct {
 	sendErr               error
 	reactionErr           error
 	lastReplyToMsgID      int
-	downloadPhotoFunc     func() (image.Image, error)
 	downloadPhotoFileFunc func(ref domain.PhotoRef, dst io.Writer) error
-	downloadDocImageFunc  func() (image.Image, error)
 	downloadDocFileFunc   func(dst io.Writer) error
 	refreshFunc           func(msgID int) (domain.Message, error)
 	lastSendCtx           context.Context
@@ -210,20 +208,11 @@ func (m *mockTGClient) GetArchivedDialogs(_ context.Context) ([]domain.Chat, err
 	return nil, nil
 }
 func (m *mockTGClient) SetArchived(_ context.Context, _ domain.Peer, _ bool) error { return nil }
-func (m *mockTGClient) DownloadPhoto(_ context.Context, _ domain.PhotoRef) (image.Image, error) {
-	if m.downloadPhotoFunc != nil {
-		return m.downloadPhotoFunc()
-	}
-	return nil, nil
-}
 func (m *mockTGClient) DownloadPhotoToFile(_ context.Context, ref domain.PhotoRef, dst io.Writer) error {
 	if m.downloadPhotoFileFunc != nil {
 		return m.downloadPhotoFileFunc(ref, dst)
 	}
 	return nil
-}
-func (m *mockTGClient) DownloadDocument(_ context.Context, _ domain.DocumentRef) ([]byte, error) {
-	return nil, nil
 }
 func (m *mockTGClient) DownloadDocumentToFile(_ context.Context, _ domain.DocumentRef, dst io.Writer) error {
 	if m.downloadDocFileFunc != nil {
@@ -231,14 +220,8 @@ func (m *mockTGClient) DownloadDocumentToFile(_ context.Context, _ domain.Docume
 	}
 	return nil
 }
-func (m *mockTGClient) DownloadDocumentThumb(_ context.Context, _ domain.DocumentRef) (image.Image, error) {
-	return nil, nil
-}
-func (m *mockTGClient) DownloadDocumentImage(_ context.Context, _ domain.DocumentRef) (image.Image, error) {
-	if m.downloadDocImageFunc != nil {
-		return m.downloadDocImageFunc()
-	}
-	return nil, nil
+func (m *mockTGClient) DownloadDocumentThumbToFile(_ context.Context, _ domain.DocumentRef, _ io.Writer) error {
+	return nil
 }
 func (m *mockTGClient) EditMessage(_ context.Context, _ domain.Peer, _ int, _ string, _ []domain.MessageEntity) error {
 	return nil
@@ -401,14 +384,17 @@ func TestPendingDownloadCmds_GIFThumb_FiresDownload(t *testing.T) {
 		"GIF without a thumb must not fire a download")
 }
 
-func TestDownloadGifFileCmd_EmitsPathOnSuccess(t *testing.T) {
-	mc := &mockTGClient{}
-	docID, path, ok := ui.GifFileReadyForTest(mc,
-		domain.Peer{ID: 1, Type: domain.PeerUser}, 10,
-		domain.DocumentRef{ID: 77, FileName: "anim.mp4"}, t.TempDir())
+func TestSaveGifFileCmd_EmitsPathOnSuccess(t *testing.T) {
+	o := newTestOwner(store.NewMemory())
+	src := filepath.Join(t.TempDir(), "anim.mp4")
+	require.NoError(t, os.WriteFile(src, []byte("mp4"), 0600))
+	o.mediaPaths[mediaPathKey{1, 10, domain.DocFull}] = src
+
+	docID, path, ok := ui.GifFileReadyForTest(o, 1, 10, 77, t.TempDir())
+
 	require.True(t, ok, "command must produce a gif-file-ready result")
 	assert.Equal(t, int64(77), docID)
-	assert.NotEmpty(t, path, "downloaded temp path must be set")
+	assert.NotEmpty(t, path, "saved path must be set")
 }
 
 // Older history entering the window must schedule the downloads for the photos
@@ -443,56 +429,9 @@ func TestRoot_ChatOpenFailure_ClearsSpinnerAndShowsError(t *testing.T) {
 	assert.Contains(t, m.View().Content, "timeout")
 }
 
-func TestDownloadPhotoCmd_RefreshesOnExpiredRef(t *testing.T) {
-	calls := 0
-	mc := &mockTGClient{
-		downloadPhotoFunc: func() (image.Image, error) {
-			calls++
-			if calls == 1 {
-				return nil, &telerr.Error{Kind: telerr.StaleReference, Detail: "FILE_REFERENCE_EXPIRED"}
-			}
-			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
-		},
-		refreshFunc: func(msgID int) (domain.Message, error) {
-			return domain.Message{ID: msgID, ChatID: 7, Photo: &domain.PhotoRef{ID: 1, FileReference: []byte("fresh")}}, nil
-		},
-	}
-	cmd := ui.DownloadPhotoCmdForTest(mc, domain.Peer{ID: 7, Type: domain.PeerUser}, 100, domain.PhotoRef{ID: 1})
-
-	msgs := drainMsgs(cmd())
-	assert.Equal(t, 2, calls) // retried once after refresh
-	var ready *ui.PhotoReadyMsg
-	for _, m := range msgs {
-		if r, ok := m.(ui.PhotoReadyMsg); ok {
-			rr := r
-			ready = &rr
-		}
-	}
-	require.NotNil(t, ready)
-	assert.NotNil(t, ready.Image)
-	assert.Len(t, msgs, 2) // ready image + store-update after refresh
-}
-
-func TestDownloadStickerCmd_EmitsPhotoReady(t *testing.T) {
-	mc := &mockTGClient{
-		downloadDocImageFunc: func() (image.Image, error) {
-			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
-		},
-	}
-	cmd := ui.DownloadStickerCmdForTest(mc, domain.Peer{ID: 7, Type: domain.PeerUser}, 100, domain.DocumentRef{ID: 555, MimeType: "image/webp"})
-
-	msgs := drainMsgs(cmd())
-	var ready *ui.PhotoReadyMsg
-	for _, m := range msgs {
-		if r, ok := m.(ui.PhotoReadyMsg); ok {
-			rr := r
-			ready = &rr
-		}
-	}
-	require.NotNil(t, ready)
-	assert.Equal(t, int64(555), ready.PhotoID)
-	assert.NotNil(t, ready.Image)
-}
+// Inline fetching moved behind the owner in #196. The refresh-on-expired-ref
+// retry is covered by TestFetchMedia_RefreshesAnExpiredReferenceAndRecordsIt in
+// internal/core, and the sticker path by TestFetchStickerCmd_DecodesAWebpFile.
 
 // drainMsgs flattens a (possibly batched) cmd result into its concrete messages.
 // newRootOnChat builds a main-screen RootModel focused on a single chat (id 1),
@@ -897,8 +836,10 @@ func TestRoot_DownloadKey_StartsFileDownload(t *testing.T) {
 	_ = m.View() // establish the selected message
 
 	m2, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
-	// The status-bar download indicator becomes active for the file's name.
-	assert.Contains(t, m2.(ui.RootModel).View().Content, "downloading report.pdf")
+	// The status-bar download indicator becomes active. It names the media kind
+	// rather than the file: the owner picks the name now, so the client has none
+	// to show when the download starts (#196).
+	assert.Contains(t, m2.(ui.RootModel).View().Content, "downloading file…")
 }
 
 func TestRoot_InitialScreen_Login(t *testing.T) {

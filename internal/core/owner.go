@@ -10,6 +10,8 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
@@ -61,6 +63,10 @@ type Owner struct {
 	// currentChatID is the chat a client currently has open, consulted only by
 	// the notification decision. #192 replaces this with a reported focus.
 	currentChatID int64
+
+	// media downloads on behalf of clients and owns the disk cache. It is the
+	// only holder of file references (#196).
+	media *mediaFetcher
 }
 
 func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection, n Notifier) *Owner {
@@ -81,6 +87,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		ctx:          context.Background(),
 		fetching:     make(map[project.SubID]bool),
 	}
+	o.media = newMediaFetcher(client, st, log)
 	if client != nil {
 		o.events = client.Updates()
 	}
@@ -111,6 +118,36 @@ func (o *Owner) onAuth(userID int64, username string) {
 	if o.onAuthFn != nil {
 		o.onAuthFn(userID, username)
 	}
+}
+
+// SetMediaCache gives the owner the directory it caches media in. Call before
+// Start. The cache is account-scoped and process-owned: two processes evicting
+// independently in one directory would fight (#196).
+func (o *Owner) SetMediaCache(c *mediacache.Cache) { o.media.cache = c }
+
+// FetchMedia downloads the named media into the owner's cache if it is not
+// there already, and returns the path. The client decodes the file; the bytes
+// never cross the owner boundary.
+//
+// The returned file may in principle be evicted before the client opens it. A
+// client that cannot open it renders nothing and asks again on the next
+// repaint; see mediacache.Cache.Path.
+func (o *Owner) FetchMedia(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot) (string, error) {
+	return o.media.Fetch(ctx, chatID, msgID, slot)
+}
+
+// SaveMedia streams the named media into destDir, bypassing the cache, and
+// returns the path it actually wrote. The owner picks the name: it follows from
+// the document's own name or its MIME type, which is domain knowledge rather
+// than rendering.
+func (o *Owner) SaveMedia(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error) {
+	return o.media.Save(ctx, chatID, msgID, slot, destDir)
+}
+
+// InvalidateMedia drops a cached file a client could not decode, so the next
+// fetch downloads it again rather than handing back the same broken entry.
+func (o *Owner) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
+	o.media.Invalidate(chatID, msgID, slot)
 }
 
 // Telegram exposes the raw client.

@@ -91,7 +91,7 @@ func (m RootModel) openPhotoModal(ref domain.PhotoRef, msgID int, sender string,
 	}
 	// Fetch full quality if we don't already have it and the photo has one.
 	if !pv.full && ref.FullThumbSize != "" {
-		cmds = append(cmds, downloadFullPhotoCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref))
+		cmds = append(cmds, saveFullPhotoCmd(m.ctx, m.owner, m.currentChatID, msgID, ref.ID, m.tmpDir))
 	}
 	if len(cmds) == 0 {
 		return m, nil
@@ -152,7 +152,7 @@ func (m RootModel) pageModal(delta int) (RootModel, tea.Cmd) {
 		if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
 			m, c = m.openVideoModalAlbum(*p.Doc, p.MsgID, p.DurSecs, p.Sender, album, next)
 		} else {
-			m, c = m.startDocumentOpen(*p.Doc, p.MsgID, p.Sender)
+			m, c = m.startDocumentOpen(p.MsgID, p.Sender)
 		}
 		cmds = append(cmds, c)
 	}

@@ -60,59 +60,6 @@ func xdgDownloadFromUserDirs(home string) string {
 	return ""
 }
 
-// createUniqueDownloadFile creates a new file in dir under fileName's base name,
-// resolving collisions as "name (1).ext", "name (2).ext", ... It uses O_EXCL so
-// the name is claimed atomically (no overwrite, no TOCTOU race). The caller owns
-// the returned file and must Close it.
-func createUniqueDownloadFile(dir, fileName string) (*os.File, error) {
-	base := filepath.Base(filepath.Clean(fileName))
-	if base == "" || base == "." || base == string(filepath.Separator) {
-		base = "file"
-	}
-	ext := filepath.Ext(base)
-	stem := strings.TrimSuffix(base, ext)
-	for i := 0; ; i++ {
-		name := base
-		if i > 0 {
-			name = stem + " (" + itoa(i) + ")" + ext
-		}
-		path := filepath.Join(dir, name)
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
-		if err == nil {
-			return f, nil
-		}
-		if !os.IsExist(err) {
-			return nil, err
-		}
-	}
-}
-
-// itoa avoids importing strconv for a single positive int.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
-}
-
-// itoa64 formats a non-negative int64 (e.g. a media ID) without strconv.
-func itoa64(n int64) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
-}
+// Creating the saved file and naming it moved to the owner in #196: the name
+// follows from the media reference and its MIME type, which is domain knowledge
+// rather than rendering. See core.createUniqueFile and core.savedFileName.

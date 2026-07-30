@@ -2,7 +2,6 @@ package tg
 
 import (
 	"context"
-	"image"
 	"io"
 
 	"github.com/gotd/td/tg"
@@ -62,24 +61,19 @@ type Client interface {
 	GetArchivedDialogs(ctx context.Context) ([]domain.Chat, error)
 	// SetArchived moves a peer into (archived) or out of the Archive folder.
 	SetArchived(ctx context.Context, peer domain.Peer, archived bool) error
-	DownloadPhoto(ctx context.Context, ref domain.PhotoRef) (image.Image, error)
+	// Downloads are streams: the owner writes them to disk and hands clients a
+	// path, so nothing here returns bytes or a decoded image (#196).
+	//
 	// DownloadPhotoToFile streams the raw photo bytes (the size named by
-	// ref.ThumbSize) directly into dst, without decoding. Used to save a photo
-	// to disk at full quality without a lossy re-encode.
+	// ref.ThumbSize) into dst.
 	DownloadPhotoToFile(ctx context.Context, ref domain.PhotoRef, dst io.Writer) error
-	// DownloadDocument fetches the full document file as raw bytes. Suitable
-	// only for small documents (e.g. voice messages); large files should use
-	// DownloadDocumentToFile to avoid buffering in memory.
-	DownloadDocument(ctx context.Context, ref domain.DocumentRef) ([]byte, error)
 	// DownloadDocumentToFile streams the full document directly into dst with
-	// bounded memory, regardless of file size.
+	// bounded memory, regardless of file size. It ignores ref.ThumbSize.
 	DownloadDocumentToFile(ctx context.Context, ref domain.DocumentRef, dst io.Writer) error
-	// DownloadDocumentThumb fetches and decodes the document's thumbnail
-	// (ref.ThumbSize) for an inline preview.
-	DownloadDocumentThumb(ctx context.Context, ref domain.DocumentRef) (image.Image, error)
-	// DownloadDocumentImage fetches the full document file and decodes it as an
-	// image (used for static WEBP stickers; streams the main file, not a thumb).
-	DownloadDocumentImage(ctx context.Context, ref domain.DocumentRef) (image.Image, error)
+	// DownloadDocumentThumbToFile streams the document's thumbnail
+	// (ref.ThumbSize) into dst. Unlike DownloadDocumentToFile, which always
+	// streams the full file, this one addresses the thumbnail location.
+	DownloadDocumentThumbToFile(ctx context.Context, ref domain.DocumentRef, dst io.Writer) error
 	DeleteMessages(ctx context.Context, peer domain.Peer, ids []int, revoke bool) error
 	EditMessage(ctx context.Context, peer domain.Peer, msgID int, text string, entities []domain.MessageEntity) error
 	// ForwardMessages forwards messages by ID from one peer to another via

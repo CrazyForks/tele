@@ -1,11 +1,13 @@
-// Package mediacache is a concurrency-safe, size-bounded on-disk cache of image
-// bytes keyed by a filename-safe string. Recency is the file mtime, so the LRU
-// order and total-size bound survive process restarts. A miss (or any I/O error)
-// transparently falls back to the normal download path. See issue #174.
+// Package mediacache is a concurrency-safe, size-bounded on-disk cache of media
+// files keyed by a filename-safe string. Recency is the file mtime, so the LRU
+// order and total-size bound survive process restarts. Nothing here knows what
+// a photo or a document is: the owner builds the keys. A miss (or any I/O
+// error) transparently falls back to the normal download path. See issues #174
+// and #196.
 package mediacache
 
 import (
-	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,7 +21,7 @@ type entry struct {
 }
 
 // Cache is a fixed-total-size LRU over files in a directory. Safe for concurrent
-// use: download commands populate it from multiple goroutines.
+// use: fetches populate it from multiple goroutines.
 type Cache struct {
 	mu       sync.Mutex
 	dir      string
@@ -51,55 +53,87 @@ func New(dir string, maxBytes int64) (*Cache, error) {
 		c.total += info.Size()
 	}
 	c.mu.Lock()
-	c.evictLocked() // an earlier run may have used a larger bound
+	c.evictLocked("") // an earlier run may have used a larger bound
 	c.mu.Unlock()
 	return c, nil
 }
 
 func (c *Cache) path(key string) string { return filepath.Join(c.dir, key) }
 
-// Get returns the bytes for key and marks it most-recently-used. Missing or
-// unreadable entries return (nil, false).
-func (c *Cache) Get(key string) ([]byte, bool) {
+// Path returns the file holding key and marks it most-recently-used. A key the
+// cache does not hold, or one whose file has disappeared underneath it, is a
+// miss.
+//
+// The returned file may in principle be evicted before the caller opens it. A
+// hit moves the file's mtime, making it the most recently used and therefore
+// the last candidate for eviction, so a reader that opens the path promptly
+// wins the race in practice. A reader that loses it sees ENOENT and must treat
+// that as a miss; do not add a retry here.
+func (c *Cache) Path(key string) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, ok := c.index[key]; !ok {
-		return nil, false
+		return "", false
 	}
-	data, err := os.ReadFile(c.path(key))
-	if err != nil {
+	p := c.path(key)
+	if _, err := os.Stat(p); err != nil {
 		c.removeLocked(key)
-		return nil, false
+		return "", false
 	}
 	now := time.Now()
-	_ = os.Chtimes(c.path(key), now, now)
+	_ = os.Chtimes(p, now, now)
 	e := c.index[key]
 	e.mtime = now
 	c.index[key] = e
-	return data, true
+	return p, true
 }
 
-// Put stores data under key (overwriting), marks it most-recently-used, and
-// evicts least-recently-used entries until the total size is within the bound.
-// Errors are swallowed: a failed write just means a future miss.
-func (c *Cache) Put(key string, data []byte) {
+// Put stores under key whatever fill writes, and returns the path to the stored
+// file. fill receives an empty private temp file and may write, rewind and
+// rewrite it: a download retried after an expired file reference does exactly
+// that, and only what is in the file when fill returns is kept. A fill that
+// returns an error leaves the cache untouched and no temp file behind.
+//
+// Eviction never removes the entry just written, so the returned path is live
+// when Put returns. An entry larger than the whole bound is therefore kept
+// until the next Put evicts it; the alternative would be handing back a path to
+// a file that was never stored.
+func (c *Cache) Put(key string, fill func(*os.File) error) (string, error) {
+	tmp := c.path(key) + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
+	if err != nil {
+		return "", err
+	}
+	if err := fill(f); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	size, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	final := c.path(key)
+	if err := os.Rename(tmp, final); err != nil {
+		_ = os.Remove(tmp)
+		return "", err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	tmp := c.path(key) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
-		_ = os.Remove(tmp)
-		return
-	}
-	if err := os.Rename(tmp, c.path(key)); err != nil {
-		_ = os.Remove(tmp)
-		return
-	}
 	if old, ok := c.index[key]; ok {
 		c.total -= old.size
 	}
-	c.index[key] = entry{size: int64(len(data)), mtime: time.Now()}
-	c.total += int64(len(data))
-	c.evictLocked()
+	c.index[key] = entry{size: size, mtime: time.Now()}
+	c.total += size
+	c.evictLocked(key)
+	return final, nil
 }
 
 // Remove deletes key from the cache.
@@ -116,21 +150,33 @@ func (c *Cache) Len() int {
 	return len(c.index)
 }
 
+// removeLocked drops key from the index only once its file is actually gone.
+// Deleting an open file fails on Windows; dropping the entry anyway would leave
+// the file on disk forever while total no longer counted it, so the bound would
+// silently drift.
 func (c *Cache) removeLocked(key string) {
-	if e, ok := c.index[key]; ok {
-		c.total -= e.size
-		delete(c.index, key)
-		_ = os.Remove(c.path(key))
+	e, ok := c.index[key]
+	if !ok {
+		return
 	}
+	if err := os.Remove(c.path(key)); err != nil && !os.IsNotExist(err) {
+		return
+	}
+	c.total -= e.size
+	delete(c.index, key)
 }
 
-// evictLocked deletes least-recently-used entries until total <= maxBytes.
-func (c *Cache) evictLocked() {
+// evictLocked deletes least-recently-used entries until total <= maxBytes,
+// never touching keep (the entry Put just wrote).
+func (c *Cache) evictLocked(keep string) {
 	if c.total <= c.maxBytes {
 		return
 	}
 	keys := make([]string, 0, len(c.index))
 	for k := range c.index {
+		if k == keep {
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool {
@@ -142,12 +188,4 @@ func (c *Cache) evictLocked() {
 		}
 		c.removeLocked(k)
 	}
-}
-
-// PhotoKey is the cache key for an inline photo of the given id and thumb size.
-func PhotoKey(id int64, thumbSize string) string {
-	if thumbSize == "" {
-		return fmt.Sprintf("photo_%d", id)
-	}
-	return fmt.Sprintf("photo_%d_%s", id, thumbSize)
 }

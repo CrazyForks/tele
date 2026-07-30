@@ -2,7 +2,6 @@ package tg_test
 
 import (
 	"context"
-	"image"
 	"io"
 	"testing"
 
@@ -88,28 +87,16 @@ func (m *mockClient) GetArchivedDialogs(_ context.Context) ([]domain.Chat, error
 
 func (m *mockClient) SetArchived(_ context.Context, _ domain.Peer, _ bool) error { return nil }
 
-func (m *mockClient) DownloadPhoto(_ context.Context, _ domain.PhotoRef) (image.Image, error) {
-	return nil, nil
-}
-
 func (m *mockClient) DownloadPhotoToFile(_ context.Context, _ domain.PhotoRef, _ io.Writer) error {
 	return nil
-}
-
-func (m *mockClient) DownloadDocument(_ context.Context, _ domain.DocumentRef) ([]byte, error) {
-	return nil, nil
 }
 
 func (m *mockClient) DownloadDocumentToFile(_ context.Context, _ domain.DocumentRef, _ io.Writer) error {
 	return nil
 }
 
-func (m *mockClient) DownloadDocumentThumb(_ context.Context, _ domain.DocumentRef) (image.Image, error) {
-	return nil, nil
-}
-
-func (m *mockClient) DownloadDocumentImage(_ context.Context, _ domain.DocumentRef) (image.Image, error) {
-	return nil, nil
+func (m *mockClient) DownloadDocumentThumbToFile(_ context.Context, _ domain.DocumentRef, _ io.Writer) error {
+	return nil
 }
 
 func (m *mockClient) DeleteMessages(_ context.Context, _ domain.Peer, _ []int, _ bool) error {

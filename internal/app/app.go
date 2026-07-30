@@ -32,7 +32,11 @@ type App struct {
 	owner *core.Owner
 	// sqlite is the same object as st, kept concretely because notice
 	// seen-state needs the database handle and store.Store does not expose it.
-	sqlite  *store.SQLiteStore
+	sqlite *store.SQLiteStore
+	// tmpDir holds this run's scratch files: media saved for an external
+	// player, GIFs staged for decoding, and the media cache when the user asked
+	// for no persistent one. Removed on exit.
+	tmpDir  string
 	verbose bool
 	// stateMoved reports that startup migration relocated the account state, so
 	// the user can be told where it went.
@@ -95,12 +99,28 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 	owner.SetOnAuth(func(userID int64, username string) {
 		components.SetSelfIdentity(userID, username)
 	})
+
+	// The temp directory is created here rather than in Run because the media
+	// cache may live inside it, and the owner needs the cache before it starts.
+	tmpDir, err := os.MkdirTemp("", "tele-*")
+	if err != nil {
+		log.Warn("failed to create temp dir for media", zap.Error(err))
+		tmpDir = ""
+	}
+	removeLegacyMediaCache(log)
+	if cache, cerr := openMediaCache(cfg, tmpDir, log); cerr != nil {
+		log.Warn("media cache unavailable; media will not be cached", zap.Error(cerr))
+	} else {
+		owner.SetMediaCache(cache)
+	}
+
 	return &App{
 		cfg:     cfg,
 		log:     log,
 		st:      sqliteStore,
 		sqlite:  sqliteStore,
 		owner:   owner,
+		tmpDir:  tmpDir,
 		verbose: verbose,
 	}, nil
 }
@@ -112,12 +132,7 @@ func (a *App) Run() error {
 		defer func() { _ = sc.Close() }()
 	}
 
-	tmpDir, err := os.MkdirTemp("", "tele-*")
-	if err != nil {
-		a.log.Warn("failed to create temp dir for viewer photos", zap.Error(err))
-		tmpDir = ""
-	}
-	defer os.RemoveAll(tmpDir) //nolint:errcheck
+	defer os.RemoveAll(a.tmpDir) //nolint:errcheck
 
 	authFlow := a.owner.AuthFlow()
 	readyCh := a.owner.Ready()
@@ -139,7 +154,7 @@ func (a *App) Run() error {
 	root.SetOnChatOpen(func(id int64) {
 		a.owner.SetCurrentChat(id)
 	})
-	root.SetTmpDir(tmpDir)
+	root.SetTmpDir(a.tmpDir)
 
 	// One-time startup notices (#197). Seen-state is written on dismissal, so
 	// quitting before the countdown ends shows the notice again next time.
@@ -215,7 +230,7 @@ func (a *App) Run() error {
 		}
 	}()
 
-	_, err = prog.Run()
+	_, err := prog.Run()
 	cancel()
 
 	// Disable OS color-scheme reports (DEC mode 2031) enabled at startup, so the

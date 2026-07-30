@@ -6,19 +6,25 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
-// messageByID returns a copy of one stored message, so a command can keep the
-// pre-change value for its rollback.
-func (o *Owner) messageByID(chatID int64, msgID int) (domain.Message, error) {
-	for _, m := range o.state.Store().Messages(chatID) {
+// messageByID returns a copy of one stored message, so a caller can keep the
+// pre-change value for a rollback or resolve media on it. It is a function
+// rather than a method because the media fetcher needs it without an Owner.
+func messageByID(s *state.State, chatID int64, msgID int) (domain.Message, error) {
+	for _, m := range s.Store().Messages(chatID) {
 		if m.ID == msgID {
 			return m, nil
 		}
 	}
 	return domain.Message{}, &telerr.Error{Kind: telerr.NotFound}
+}
+
+func (o *Owner) messageByID(chatID int64, msgID int) (domain.Message, error) {
+	return messageByID(o.state, chatID, msgID)
 }
 
 // Forward copies messages into another chat, optionally preceded by a comment.

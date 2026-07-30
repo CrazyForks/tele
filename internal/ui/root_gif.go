@@ -3,14 +3,12 @@ package ui
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	vmedia "github.com/sorokin-vladimir/tele/internal/media"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
@@ -47,38 +45,16 @@ func (m *RootModel) updateGifLoadingSpinner() {
 	m.chat.SetGifLoading(loadingID, glyph)
 }
 
-// downloadGifFileCmd streams a GIF's full MP4 to a temp file and reports its
-// path so it can be decoded into frames. It mirrors openDocumentCmd but yields
-// the path instead of launching an external player.
-func downloadGifFileCmd(ctx context.Context, client internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) tea.Cmd {
+// saveGifFileCmd saves a GIF's full MP4 into tmpDir and reports its path so it
+// can be decoded into frames. It mirrors openDocumentCmd but yields the path
+// instead of launching an external player.
+func saveGifFileCmd(ctx context.Context, o Owner, chatID int64, msgID int, docID int64, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
-		ext := filepath.Ext(ref.FileName)
-		if ext == "" {
-			ext = ".mp4"
-		}
-		f, err := createTempMediaFile(tmpDir, ext)
+		path, err := o.SaveMedia(ctx, chatID, msgID, domain.DocFull, tmpDir)
 		if err != nil {
 			return nil
 		}
-		name := f.Name()
-		_, _, derr := downloadWithRefresh(ctx, client, peer, msgID, ref,
-			func(r domain.DocumentRef) (struct{}, error) {
-				if _, serr := f.Seek(0, 0); serr != nil {
-					return struct{}{}, serr
-				}
-				if terr := f.Truncate(0); terr != nil {
-					return struct{}{}, terr
-				}
-				return struct{}{}, client.DownloadDocumentToFile(ctx, r, f)
-			},
-			pickDocumentRef,
-		)
-		_ = f.Close()
-		if derr != nil {
-			_ = os.Remove(name)
-			return nil
-		}
-		return gifFileReadyMsg{docID: ref.ID, msgID: msgID, path: name}
+		return gifFileReadyMsg{docID: docID, msgID: msgID, path: path}
 	}
 }
 
@@ -147,7 +123,7 @@ func (m RootModel) reconcileGifAnim() (RootModel, tea.Cmd) {
 	// Otherwise download the full file, then decode (handled by the msg chain).
 	m.gifActiveID = ref.ID
 	m.gifGen++
-	return m, downloadGifFileCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
+	return m, saveGifFileCmd(m.ctx, m.owner, m.currentChatID, m.chat.SelectedMessageID(), ref.ID, m.tmpDir)
 }
 
 // ensureGifAnimForSelection starts the GIF animation for the currently-selected
@@ -211,11 +187,10 @@ func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 	return m, tea.Batch(transmit, gifTickCmd(m.gifGen))
 }
 
-// GifFileReadyForTest runs downloadGifFileCmd and returns the resulting document
-// id and temp path (ok=false if it did not produce a gifFileReadyMsg). It exists
-// for the external ui_test package, which holds the client mock.
-func GifFileReadyForTest(c internaltg.Client, peer domain.Peer, msgID int, ref domain.DocumentRef, tmpDir string) (int64, string, bool) {
-	msg := downloadGifFileCmd(context.Background(), c, peer, msgID, ref, tmpDir)()
+// GifFileReadyForTest runs saveGifFileCmd and returns the resulting document id
+// and saved path (ok=false if it did not produce a gifFileReadyMsg).
+func GifFileReadyForTest(o Owner, chatID int64, msgID int, docID int64, tmpDir string) (int64, string, bool) {
+	msg := saveGifFileCmd(context.Background(), o, chatID, msgID, docID, tmpDir)()
 	r, ok := msg.(gifFileReadyMsg)
 	if !ok {
 		return 0, "", false

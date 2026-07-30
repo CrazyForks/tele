@@ -38,6 +38,14 @@ type Owner interface {
 	// Queries. One-off answers nobody subscribes to.
 	SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
+
+	// Media. The owner downloads and caches; the client decodes. Paths cross
+	// the boundary, never bytes (#196).
+	FetchMedia(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot) (string, error)
+	SaveMedia(ctx context.Context, chatID int64, msgID int, slot domain.MediaSlot, destDir string) (string, error)
+	// InvalidateMedia drops a cached file that turned out to be undecodable, so
+	// the next fetch downloads it again instead of returning the same bytes.
+	InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot)
 }
 
 // refreshProjections is gone: every mutation the client makes now goes through

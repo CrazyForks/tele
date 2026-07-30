@@ -4,7 +4,6 @@ import (
 	"context"
 	"image"
 	"os"
-	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -15,7 +14,6 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
-	"github.com/sorokin-vladimir/tele/internal/mediacache"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -87,12 +85,13 @@ type RootModel struct {
 	// Pending one-time startup notices (#197). The head of the queue is shown
 	// above every screen, including login; noticeLeft counts down whole seconds
 	// of blocked dismissal.
-	noticeQueue    []notices.Notice
-	noticeLeft     int
-	noticeSeen     notices.Seen
+	noticeQueue []notices.Notice
+	noticeLeft  int
+	noticeSeen  notices.Seen
+	// The decoded in-memory image caches stay here: decoding serves rendering.
+	// The on-disk media cache belongs to the owner (#196).
 	imageCache     *imagecache.Cache
 	fullImageCache *imagecache.Cache
-	mediaCache     *mediacache.Cache
 	// gifFrames caches decoded frames per document id for inline GIF looping.
 	gifFrames      map[int64][]image.Image
 	gifActiveID    int64 // document id currently animating (0 = none)
@@ -253,13 +252,6 @@ func (m RootModel) debug(msg string, fields ...zap.Field) {
 
 func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	m.cfg = cfg
-	if cfg.Photos.DiskCacheSize > 0 {
-		if base, err := os.UserCacheDir(); err == nil {
-			if mc, err := mediacache.New(filepath.Join(base, "tele", "media"), cfg.Photos.DiskCacheSize); err == nil {
-				m.mediaCache = mc
-			}
-		}
-	}
 	m.imageMode = media.DetectMode(cfg.Photos.Mode, os.Getenv)
 	if m.imageMode == media.ModeKitty {
 		m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
@@ -520,11 +512,6 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.chat.SetLoading(true)
 		m.chat.SetLoadError("")
 		m.subscribeChat(msg.chatID, domain.Peer{})
-		return m, nil
-	case mediaRefRefreshedMsg:
-		if m.st != nil {
-			m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)
-		}
 		return m, nil
 	// network/data messages
 	case screens.OpenChatMsg,
