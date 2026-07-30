@@ -93,7 +93,9 @@ func main() {
 		w,
 		level,
 	)
-	log := zap.New(core)
+	// Every line is tagged with the release it came from: a log excerpt from a
+	// user is otherwise impossible to attribute to a build.
+	log := zap.New(core).With(zap.String("v", version.Version))
 	defer log.Sync() //nolint:errcheck
 
 	for _, w := range cfg.Warnings {

@@ -173,11 +173,15 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		},
 	})
 
+	c.log.Info("gotd client", zap.String("gotd", gotdVersion()))
+
 	tc := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
 		UpdateHandler:  hook,
 		SessionStorage: sess,
 		Resolver:       resolver,
-		Logger:         logzap.New(c.log),
+		// The "v" field carries the application version on every line, so gotd's
+		// own stamp of the same name is dropped and reported once above instead.
+		Logger: logzap.New(withoutField(c.log, "v")),
 		// Names this app and this machine in Telegram's active-sessions list;
 		// without it gotd reports the Go toolchain and its own version (#200).
 		Device: deviceConfig(version.Version, os.Hostname),
