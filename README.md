@@ -51,7 +51,7 @@ It is built for:
 
 If tools like lazygit feel natural to you, `tele` will too.
 
-It also runs lean — typically ~35MB RSS at idle vs several hundred MB for desktop clients.
+It also runs lean — typically ~50MB RSS at idle vs several hundred MB for desktop clients.
 
 ---
 
@@ -437,10 +437,10 @@ Planned work lives on the public [**project board**](https://github.com/users/so
 grouped into [milestones](https://github.com/sorokin-vladimir/tele/milestones). Milestones track
 minor lines (`v1.9`, `v1.10`, …); patch releases ship incrementally within a line as fixes land.
 
-| Release             | Focus                                                                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `v1.9` *(in work)*  | Offline history & media internals — SQLite-backed history for instant chat open, on-disk image LRU cache, album sending, `?` shortcuts help modal, Kitty renderer fixes |
-| `v1.10` *(planned)* | Search & chat polish — full-text history search, command palette, in-chat grep, pinned messages, search-modal preview, richer reply UX, plus image-modal and chat-list fixes |
+| Release             | Focus                                                                                                                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v1.9` _(in work)_  | Offline history & media internals — SQLite-backed history for instant chat open, on-disk image LRU cache, album sending, `?` shortcuts help modal, Kitty renderer fixes                                  |
+| `v1.10` _(planned)_ | Search & chat polish — full-text history search, command palette, in-chat grep, pinned messages, search-modal preview, richer reply UX, plus image-modal and chat-list fixes                             |
 | `Backlog`           | Power-user & platform — color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards, voice and round-video messages, notification click routing |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
