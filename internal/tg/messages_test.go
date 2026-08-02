@@ -317,6 +317,19 @@ func TestBuildSendRequest_WithoutReply(t *testing.T) {
 	assert.Nil(t, req.ReplyTo)
 }
 
+// Two requests built for one logical send must carry the same random_id: it is
+// the only thing Telegram deduplicates on, so a retry that changes it sends the
+// message twice (#193).
+func TestBuildSendRequest_CarriesTheCallerRandomIDUnchanged(t *testing.T) {
+	peer := &tg.InputPeerUser{UserID: 10}
+
+	first := buildSendRequest(peer, "hello", 4242, 0, nil)
+	second := buildSendRequest(peer, "hello", 4242, 0, nil)
+
+	assert.Equal(t, int64(4242), first.RandomID)
+	assert.Equal(t, first.RandomID, second.RandomID)
+}
+
 func TestParseHistory_ForwardFromUser_SetsForwardName(t *testing.T) {
 	now := time.Now()
 	fwd := tg.MessageFwdHeader{}

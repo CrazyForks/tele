@@ -76,6 +76,7 @@ type mockTGClient struct {
 	lastForwardIDs        []int
 	lastSendText          string
 	lastSendEntities      []domain.MessageEntity
+	lastSendRandomID      int64
 	participants          []domain.ChatMember
 	sendCount             int
 	lastSearchQuery       string
@@ -129,11 +130,12 @@ func (m *mockTGClient) RefreshMessages(ctx context.Context, _ domain.Peer, ids [
 	}
 	return out, nil
 }
-func (m *mockTGClient) SendMessage(ctx context.Context, _ domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) (int, error) {
+func (m *mockTGClient) SendMessage(ctx context.Context, _ domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (int, error) {
 	m.lastSendCtx = ctx
 	m.lastReplyToMsgID = replyToMsgID
 	m.lastSendText = text
 	m.lastSendEntities = entities
+	m.lastSendRandomID = randomID
 	m.sendCount++
 	if m.sendErr != nil {
 		return 0, m.sendErr

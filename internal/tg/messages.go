@@ -117,7 +117,7 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer domain.Peer, offsetID 
 	return msgs, err
 }
 
-func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) (int, error) {
+func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (int, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return 0, err
@@ -127,12 +127,6 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text str
 	inputPeer := peerToInput(peer)
 	var realID int
 	err = WithRetry(ctx, func() error {
-		var buf [8]byte
-		if _, err := rand.Read(buf[:]); err != nil {
-			return err
-		}
-		randomID := int64(binary.LittleEndian.Uint64(buf[:]))
-
 		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID, entities))
 		if err != nil {
 			c.log.Error("MessagesSendMessage failed", zap.Error(err))
@@ -158,6 +152,10 @@ type SendMediaParams struct {
 	Caption      string
 	ReplyToMsgID int
 	Entities     []domain.MessageEntity
+	// RandomID is the caller's deduplication key. It must stay the same across
+	// every retry of one logical send, or Telegram cannot tell a retry from a
+	// second message (#193).
+	RandomID int64
 }
 
 func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, error) {
@@ -170,18 +168,12 @@ func (c *GotdClient) SendMedia(ctx context.Context, p SendMediaParams) (int, err
 	inputPeer := peerToInput(p.Peer)
 	var realID int
 	err = WithRetry(ctx, func() error {
-		var buf [8]byte
-		if _, err := rand.Read(buf[:]); err != nil {
-			return err
-		}
-		randomID := int64(binary.LittleEndian.Uint64(buf[:]))
-
-		updates, err := api.MessagesSendMedia(ctx, buildSendMediaRequest(inputPeer, p.Media, p.Caption, randomID, p.ReplyToMsgID, p.Entities))
+		updates, err := api.MessagesSendMedia(ctx, buildSendMediaRequest(inputPeer, p.Media, p.Caption, p.RandomID, p.ReplyToMsgID, p.Entities))
 		if err != nil {
 			c.log.Error("MessagesSendMedia failed", zap.Error(err))
 			return err
 		}
-		realID = extractSentMessageID(updates, randomID)
+		realID = extractSentMessageID(updates, p.RandomID)
 		if realID != 0 {
 			c.suppressMu.Lock()
 			c.suppressIDs[realID] = struct{}{}

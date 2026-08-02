@@ -214,8 +214,9 @@ func (s *stubClient) ForwardMessages(_ context.Context, _ domain.Peer, to domain
 	return s.err
 }
 
-func (s *stubClient) SendMessage(_ context.Context, _ domain.Peer, text string, _ int, _ []domain.MessageEntity) (int, error) {
+func (s *stubClient) SendMessage(_ context.Context, _ domain.Peer, text string, _ int, _ []domain.MessageEntity, randomID int64) (int, error) {
 	s.sentText = text
+	s.sentRandomID = randomID
 	if s.err != nil {
 		return 0, s.err
 	}

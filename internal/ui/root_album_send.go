@@ -352,12 +352,20 @@ func (m RootModel) sendAlbumGroupCmd() tea.Cmd {
 	if as.group == 0 {
 		replyTo = as.replyToMsgID
 	}
+	// Generated once per group rather than per attempt: WithRetry may repeat the
+	// request, and fresh keys each time are how one album arrives twice (#193).
+	// They are not persisted — durability for media comes with #195.
+	randomIDs := make([]int64, len(items))
+	for i := range randomIDs {
+		randomIDs[i] = internaltg.NewRandomID()
+	}
 	if len(items) == 1 {
 		it := items[0]
 		return func() tea.Msg {
 			id, err := client.SendMedia(ctx, internaltg.SendMediaParams{
 				Peer: peer, Media: it.Media, Caption: it.Caption,
 				ReplyToMsgID: replyTo, Entities: it.Entities,
+				RandomID: randomIDs[0],
 			})
 			if err != nil {
 				return albumGroupSentMsg{serial: serial, err: err}
@@ -367,7 +375,7 @@ func (m RootModel) sendAlbumGroupCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		ids, err := client.SendAlbum(ctx, internaltg.SendAlbumParams{
-			Peer: peer, Items: items, ReplyToMsgID: replyTo,
+			Peer: peer, Items: items, ReplyToMsgID: replyTo, RandomIDs: randomIDs,
 		})
 		if err != nil {
 			return albumGroupSentMsg{serial: serial, err: err}

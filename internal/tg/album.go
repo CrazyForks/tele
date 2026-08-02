@@ -2,13 +2,12 @@ package tg
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
 	"github.com/gotd/td/tg"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"go.uber.org/zap"
 )
 
@@ -97,6 +96,11 @@ type SendAlbumParams struct {
 	Peer         domain.Peer
 	Items        []AlbumItem
 	ReplyToMsgID int
+	// RandomIDs is one deduplication key per item, in item order. They belong to
+	// the caller and must stay the same across every retry of one logical send:
+	// Telegram deduplicates on them, so fresh ones per attempt are how a retried
+	// album arrives twice (#193).
+	RandomIDs []int64
 }
 
 func buildSendMultiMediaRequest(inputPeer tg.InputPeerClass, items []AlbumItem, randomIDs []int64, replyToMsgID int) *tg.MessagesSendMultiMediaRequest {
@@ -134,26 +138,27 @@ func (c *GotdClient) SendAlbum(ctx context.Context, p SendAlbumParams) ([]int, e
 	if err != nil {
 		return nil, err
 	}
+	if len(p.RandomIDs) != len(p.Items) {
+		return nil, &telerr.Error{
+			Kind:   telerr.Internal,
+			Op:     "messages.sendMultiMedia",
+			Detail: "random id count does not match item count",
+		}
+	}
 	c.traceLog.Debug("SendAlbum", zap.Int64("peer_id", p.Peer.ID), zap.Int("parts", len(p.Items)))
 	inputPeer := peerToInput(p.Peer)
 	var realIDs []int
 	err = WithRetry(ctx, func() error {
-		// Random IDs are regenerated per attempt: a retried batch must not reuse
-		// the IDs of the attempt that failed.
-		randomIDs := make([]int64, len(p.Items))
-		for i := range randomIDs {
-			var buf [8]byte
-			if _, err := rand.Read(buf[:]); err != nil {
-				return err
-			}
-			randomIDs[i] = int64(binary.LittleEndian.Uint64(buf[:]))
-		}
-		updates, err := api.MessagesSendMultiMedia(ctx, buildSendMultiMediaRequest(inputPeer, p.Items, randomIDs, p.ReplyToMsgID))
+		// The random IDs are the caller's and stay put across attempts. They
+		// used to be regenerated here, on the belief that a retried batch must
+		// not reuse the failed attempt's IDs — which is backwards: reusing them
+		// is exactly what stops Telegram from accepting the batch twice (#193).
+		updates, err := api.MessagesSendMultiMedia(ctx, buildSendMultiMediaRequest(inputPeer, p.Items, p.RandomIDs, p.ReplyToMsgID))
 		if err != nil {
 			c.log.Error("MessagesSendMultiMedia failed", zap.Error(err))
 			return err
 		}
-		ids := extractSentMessageIDs(updates, randomIDs)
+		ids := extractSentMessageIDs(updates, p.RandomIDs)
 		c.suppressMu.Lock()
 		for _, id := range ids {
 			if id != 0 {

@@ -24,7 +24,11 @@ type Client interface {
 	// RefreshMessages re-fetches several messages in one round-trip, for the
 	// media refs and grouped_id of a just-sent album.
 	RefreshMessages(ctx context.Context, peer domain.Peer, ids []int) ([]domain.Message, error)
-	SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) (int, error)
+	// SendMessage sends text and returns the confirmed message ID. randomID is
+	// the caller's deduplication key: Telegram deduplicates on it, so it must
+	// stay the same across every retry of one logical send. That is what makes
+	// an at-least-once outbox safe (#193).
+	SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (int, error)
 	// GetParticipants returns mention candidates for a group/channel peer.
 	GetParticipants(ctx context.Context, peer domain.Peer) ([]domain.ChatMember, error)
 	// SendMedia sends a ready-made InputMediaClass via messages.sendMedia,

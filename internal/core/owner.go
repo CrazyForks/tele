@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/core/outbox"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -67,6 +68,13 @@ type Owner struct {
 	// media downloads on behalf of clients and owns the disk cache. It is the
 	// only holder of file references (#196).
 	media *mediaFetcher
+
+	// outbox is the durable send queue. Sends are handed to it and drained by
+	// one worker; nothing about a send lives in a client's memory (#193).
+	outbox *outbox.Store
+	// outboxWake tells the worker to look again without waiting for its timer.
+	// Buffered and dropped when full: one pending wake is as good as ten.
+	outboxWake chan struct{}
 }
 
 func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection, n Notifier) *Owner {
@@ -86,6 +94,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		historyLimit: cfg.UI.HistoryLimit,
 		ctx:          context.Background(),
 		fetching:     make(map[project.SubID]bool),
+		outboxWake:   make(chan struct{}, 1),
 	}
 	o.media = newMediaFetcher(client, st, log)
 	if client != nil {
@@ -119,6 +128,12 @@ func (o *Owner) onAuth(userID int64, username string) {
 		o.onAuthFn(userID, username)
 	}
 }
+
+// SetOutbox gives the owner its durable send queue. Call before Start.
+//
+// It is set after construction rather than passed to New because the queue
+// needs the store's database handle, which the app opens on its own schedule.
+func (o *Owner) SetOutbox(s *outbox.Store) { o.outbox = s }
 
 // SetMediaCache gives the owner the directory it caches media in. Call before
 // Start. The cache is account-scoped and process-owned: two processes evicting

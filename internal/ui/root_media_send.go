@@ -109,6 +109,10 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 	path := job.path
 	buildMedia := job.buildMedia
 	buildMediaCtx := job.buildMediaCtx
+	// Generated once per send rather than per attempt: WithRetry may repeat the
+	// request, and a fresh key each time is how one upload arrives twice (#193).
+	// It is not persisted — durability for media comes with #195.
+	randomID := internaltg.NewRandomID()
 
 	// The uploader callback runs on the upload goroutine and cannot post tea.Msgs
 	// directly, so it forwards (sent,total) over a buffered channel; a pump cmd
@@ -139,6 +143,7 @@ func (m RootModel) handleSendMedia(job mediaSendJob) (RootModel, tea.Cmd) {
 		}
 		realID, err := client.SendMedia(uploadCtx, internaltg.SendMediaParams{
 			Peer: peer, Media: media, Caption: caption, ReplyToMsgID: replyTo, Entities: entities,
+			RandomID: randomID,
 		})
 		if err != nil {
 			return sentMediaConfirmedMsg{chatID: chatID, sentinelID: sentinelID, failed: true}

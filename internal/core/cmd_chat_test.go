@@ -34,6 +34,7 @@ type stubClient struct {
 	forwardedTo  int64
 	forwardedIDs []int
 	sentText     string
+	sentRandomID int64
 	typingCalls  int
 	draftText    string
 	searchedFor  string

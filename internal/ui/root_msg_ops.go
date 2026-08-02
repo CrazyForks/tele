@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -83,8 +84,11 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 	replyToMsgID := msg.ReplyToMsgID
 	entities := msg.Entities
 	chatID := m.currentChatID
+	// Generated once, outside the command: a command that runs again must carry
+	// the same deduplication key, or Telegram sees a second message (#193).
+	randomID := internaltg.NewRandomID()
 	return m, func() tea.Msg {
-		realID, err := client.SendMessage(ctx, peer, text, replyToMsgID, entities)
+		realID, err := client.SendMessage(ctx, peer, text, replyToMsgID, entities, randomID)
 		if err != nil {
 			return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: 0, failed: true}
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
 // messageByID returns a copy of one stored message, so a caller can keep the
@@ -48,7 +49,7 @@ func (o *Owner) Forward(ctx context.Context, fromChatID int64, to domain.Peer, m
 	}
 	if comment != "" {
 		// TRANSITIONAL (#193): becomes an outbox submission; the signature stays.
-		id, err := o.client.SendMessage(ctx, to, comment, 0, nil)
+		id, err := o.client.SendMessage(ctx, to, comment, 0, nil, internaltg.NewRandomID())
 		if err != nil {
 			return err
 		}
