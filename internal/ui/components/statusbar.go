@@ -37,6 +37,7 @@ type StatusBar struct {
 	// pickerOpen is true while the file-picker overlay is open. Both drive hints.
 	attachStaged bool
 	pickerOpen   bool
+	version      string // build version shown at the right edge, "" hides it
 }
 
 func NewStatusBar(width int) *StatusBar {
@@ -52,6 +53,7 @@ func (sb *StatusBar) SetActivePane(p string)   { sb.activePane = p }
 func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
 func (sb *StatusBar) SetAttachStaged(v bool)   { sb.attachStaged = v }
 func (sb *StatusBar) SetPickerOpen(v bool)     { sb.pickerOpen = v }
+func (sb *StatusBar) SetVersion(v string)      { sb.version = v }
 
 // StartTransfer shows a transient, animated transfer indicator with label and
 // returns the serial identifying it, so a later UpdateTransfer/ClearTransfer
@@ -118,7 +120,28 @@ func (sb *StatusBar) View() string {
 	}
 
 	sep := barSepStyle.Render(" │ ")
-	return barStyle.Width(sb.width).Render(strings.Join(segs, sep))
+	left := strings.Join(segs, sep)
+
+	// The version sits flush right, separated from the hints by at least one
+	// space. It is dropped first when the bar runs out of room: hints and
+	// transfer progress are worth more than the build number.
+	if ver := versionLabel(sb.version); ver != "" {
+		if gap := sb.width - lipgloss.Width(left) - lipgloss.Width(ver); gap >= 1 {
+			// Filler and version each set their own colors: the segments before
+			// them end with a reset, so an enclosing style would not survive.
+			return left + barStyle.Render(strings.Repeat(" ", gap)) + barStyle.Render(ver)
+		}
+	}
+	return barStyle.Width(sb.width).Render(left)
+}
+
+// versionLabel formats the build version for the bar: local builds keep their
+// "dev" marker, releases get a "v" prefix (goreleaser injects a bare "1.2.3").
+func versionLabel(v string) string {
+	if v == "" || v == "dev" || strings.HasPrefix(v, "v") {
+		return v
+	}
+	return "v" + v
 }
 
 // footerKind classifies a footer hint item.

@@ -9,6 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestVersionLabel(t *testing.T) {
+	assert.Equal(t, "", versionLabel(""))
+	assert.Equal(t, "dev", versionLabel("dev"))
+	assert.Equal(t, "v1.2.3", versionLabel("1.2.3"))
+	assert.Equal(t, "v1.2.3", versionLabel("v1.2.3"))
+}
+
 func TestOverlayHint_JoinsPairs(t *testing.T) {
 	out := OverlayHint([][2]string{{"space", "pause"}, {"q", "close"}}, nil)
 	if !strings.Contains(out, "pause") || !strings.Contains(out, "close") {
@@ -133,6 +140,21 @@ func TestApplyAccent_NonAccentRunUsesBaseStyle(t *testing.T) {
 func TestJoinHints_SeparatorKeepsBarBackground(t *testing.T) {
 	out := joinHints("a", "b")
 	assert.Contains(t, out, barStyle.Render(" · "))
+}
+
+func TestStatusBar_VersionFillerAndTextKeepBarStyle(t *testing.T) {
+	sb := NewStatusBar(80)
+	sb.SetMode(keys.ModeNormal)
+	sb.SetVersion("1.2.3")
+	out := sb.View()
+
+	// The filler between the segments and the version must carry the bar
+	// background itself: the preceding run ends with a reset, so plain spaces
+	// would show the terminal background instead.
+	gap := 80 - lipgloss.Width(normalMode.Render("NORMAL")) - lipgloss.Width("v1.2.3")
+	assert.Contains(t, out, barStyle.Render(strings.Repeat(" ", gap)))
+	// The version reads in the bar's normal text color, like a hint's wording.
+	assert.Contains(t, out, barStyle.Render("v1.2.3"))
 }
 
 func TestAccentStyle_FollowsMode(t *testing.T) {

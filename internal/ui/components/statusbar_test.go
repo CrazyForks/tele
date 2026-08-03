@@ -256,3 +256,39 @@ func TestTransfer_ClearMatchingSerialClearsIt(t *testing.T) {
 
 	assert.False(t, sb.DownloadActive())
 }
+
+func TestStatusBar_VersionRendersRightAligned(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	sb.SetMode(keys.ModeNormal)
+	sb.SetVersion("1.2.3")
+
+	line := strip(sb.View())
+	assert.True(t, strings.HasSuffix(line, "v1.2.3"), "want version at the right edge, got %q", line)
+}
+
+func TestStatusBar_VersionKeepsBarWidth(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	sb.SetKeyMap(keys.DefaultKeyMap())
+	sb.SetActivePane("chatlist")
+	sb.SetVersion("1.2.3")
+
+	assert.Equal(t, 80, xansi.StringWidth(strip(sb.View())))
+}
+
+func TestStatusBar_VersionHiddenWhenNoRoom(t *testing.T) {
+	sb := components.NewStatusBar(30)
+	sb.SetKeyMap(keys.DefaultKeyMap())
+	sb.SetActivePane("chat")
+	sb.SetVersion("1.2.3")
+
+	line := strip(sb.View())
+	assert.NotContains(t, line, "v1.2.3")
+	assert.Contains(t, line, "NORMAL", "left side must survive intact")
+}
+
+func TestStatusBar_NoVersionSetRendersNothing(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	sb.SetMode(keys.ModeNormal)
+
+	assert.Equal(t, "NORMAL", strings.TrimSpace(strip(sb.View())))
+}

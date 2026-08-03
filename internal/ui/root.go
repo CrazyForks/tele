@@ -22,6 +22,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
+	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
 type Screen int
@@ -169,6 +170,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(80)
 	sb.SetKeyMap(km)
+	sb.SetVersion(version.Version)
 	ts := components.NewToastStack(80, 24, 3, components.ZoneBottomRight, components.ZoneTopRight)
 	ts.SetDarkBackground(true) // matches hasDarkBackground default; updated on theme detection
 	cl := screens.NewChatListModel()
