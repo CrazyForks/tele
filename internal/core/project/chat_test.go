@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -215,4 +216,30 @@ func TestBuildChat_FirstUnreadWindowReachesTheNewestMessage(t *testing.T) {
 	assert.Equal(t, []int{5, 6, 7, 8, 9, 10}, ids(got.Messages),
 		"After is 0, yet the unread tail is still in the window")
 	assert.False(t, got.HasNewer)
+}
+
+func TestBuildChat_CarriesTheChatsOutboxEntries(t *testing.T) {
+	r := readerWith(domain.Chat{ID: 1, Title: "Ada"}, msgs(3))
+	r.outbox = map[int64][]domain.OutboxEntry{
+		1: {{Ref: "r1", ChatID: 1, State: domain.OutboxQueued}},
+	}
+
+	got := project.BuildChat(r, project.ChatWindow{ChatID: 1, Before: 10})
+
+	require.Len(t, got.Outbox, 1)
+	assert.Equal(t, "r1", got.Outbox[0].Ref)
+}
+
+func TestBuildChat_CarriesTheOutboxWhenTheChatHasNoHistory(t *testing.T) {
+	// A queued send is the only thing an empty chat has to show, so it must not
+	// be lost to the early return that skips window slicing.
+	r := readerWith(domain.Chat{ID: 1, Title: "Ada"}, nil)
+	r.outbox = map[int64][]domain.OutboxEntry{
+		1: {{Ref: "r1", ChatID: 1, State: domain.OutboxQueued}},
+	}
+
+	got := project.BuildChat(r, project.ChatWindow{ChatID: 1, Before: 10})
+
+	require.Len(t, got.Outbox, 1)
+	assert.Empty(t, got.Messages)
 }

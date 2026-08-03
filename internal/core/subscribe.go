@@ -3,12 +3,12 @@ package core
 import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
-	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-// store.Store is the reader every projection is built from. Asserted here so a
-// change to either interface fails at compile time rather than at wiring time.
-var _ project.Reader = (store.Store)(nil)
+// projectionReader is what every projection is built from: the store plus the
+// send queue. Asserted here so a change to either interface fails at compile
+// time rather than at wiring time.
+var _ project.Reader = projectionReader{}
 
 // Deltas is the stream every attached client consumes. Raw state changes do not
 // reach a client: a client sees only the projections it subscribed to.
@@ -52,7 +52,7 @@ func (o *Owner) maybeBackfill(id project.SubID, w project.Window) {
 	if !ok || o.client == nil {
 		return
 	}
-	if !needsBackfill(project.BuildChat(o.state.Store(), cw), cw) {
+	if !needsBackfill(project.BuildChat(o.reader(), cw), cw) {
 		return
 	}
 	go o.backfill(o.ctx, id, cw)
@@ -74,6 +74,13 @@ func (o *Owner) publishChange(chg state.Change) {
 	if chg.Kind == state.ChangeTyping {
 		o.publishTyping(Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
 		return
+	}
+	// A message arriving may be one this owner queued. Dropping the entry here,
+	// before the rebuild, is what makes the pending bubble and the real message
+	// swap inside a single delta rather than across two, with a frame showing
+	// neither in between (#193).
+	if chg.Kind == state.ChangeNewMessage {
+		o.clearSentOutbox(chg.ChatID)
 	}
 	o.publish(o.registry.Refresh())
 }

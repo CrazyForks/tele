@@ -15,6 +15,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
+	"github.com/sorokin-vladimir/tele/internal/core/outbox"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -100,6 +101,15 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 		components.SetSelfIdentity(userID, username)
 	})
 
+	// The send queue shares the account database: the file DB runs on a single
+	// connection (#119), and a second one to the same file is how SQLITE_BUSY
+	// came back last time.
+	sendQueue, err := outbox.NewStore(sqliteStore.DB())
+	if err != nil {
+		return nil, fmt.Errorf("open outbox: %w", err)
+	}
+	owner.SetOutbox(sendQueue)
+
 	// The temp directory is created here rather than in Run because the media
 	// cache may live inside it, and the owner needs the cache before it starts.
 	tmpDir, err := os.MkdirTemp("", "tele-*")
@@ -142,6 +152,7 @@ func (a *App) Run() error {
 	a.owner.SetContext(ctx)
 	go func() { tgErr <- a.owner.Start(ctx) }()
 	go a.owner.RunUpdates(ctx)
+	go a.owner.RunOutbox(ctx)
 
 	// Build bubbletea model
 	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), a.cfg.KeybindingOverrides())

@@ -9,7 +9,6 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
 // messageByID returns a copy of one stored message, so a caller can keep the
@@ -48,26 +47,15 @@ func (o *Owner) Forward(ctx context.Context, fromChatID int64, to domain.Peer, m
 		return err
 	}
 	if comment != "" {
-		// TRANSITIONAL (#193): becomes an outbox submission; the signature stays.
-		id, err := o.client.SendMessage(ctx, to, comment, 0, nil, internaltg.NewRandomID())
-		if err != nil {
+		// The comment goes through the durable queue like any other message. The
+		// ApplyIncoming that used to sit here existed only because echo
+		// suppression hid the comment and no optimistic bubble would ever show
+		// it; with suppression gone for text it arrives the ordinary way (#193).
+		if err := o.Send(ctx, SendRequest{Ref: NewRef(), ChatID: to.ID, Text: comment}); err != nil {
+			o.log.Debug("forward: comment could not be queued", zap.Error(err))
 			return err
 		}
-		// SendMessage suppresses the echo update for the id it just sent, so a
-		// client that inserted an optimistic bubble does not end up with two.
-		// A forward comment has no optimistic bubble, so nothing would ever show
-		// it: the owner records it here instead.
-		o.log.Debug("forward: comment sent", zap.Int64("to_peer", to.ID), zap.Int("msg_id", id))
-		if id != 0 {
-			o.state.ApplyIncoming(domain.Message{
-				ID:     id,
-				ChatID: to.ID,
-				Text:   comment,
-				Date:   time.Now(),
-				IsOut:  true,
-			})
-			o.log.Debug("forward: comment stored", zap.Int64("chat_id", to.ID), zap.Int("msg_id", id))
-		}
+		o.log.Debug("forward: comment queued", zap.Int64("to_peer", to.ID))
 	}
 	if err := o.client.ForwardMessages(ctx, from, to, msgIDs); err != nil {
 		o.log.Debug("forward: telegram refused", zap.Error(err))

@@ -29,6 +29,11 @@ const (
 	ChatRemove
 	ChatRead
 	ChatDraft
+	// ChatOutbox carries the chat's queued sends. Separate from the window
+	// deltas because an entry is not a message: it has no ID to diff by, and
+	// the whole list is small enough that replacing it is simpler than
+	// describing how it changed (#193).
+	ChatOutbox
 )
 
 type ChatDelta struct {
@@ -42,6 +47,7 @@ type ChatDelta struct {
 	ReadInboxMaxID  int
 	ReadOutboxMaxID int
 	Draft           string
+	Outbox          []domain.OutboxEntry
 }
 
 // DiffChat turns a pair of successive contents into deltas. The message window
@@ -68,6 +74,9 @@ func DiffChat(prev, next ChatContents) []ChatDelta {
 	}
 	if prev.Draft != next.Draft {
 		out = append(out, ChatDelta{Kind: ChatDraft, Draft: next.Draft})
+	}
+	if !reflect.DeepEqual(prev.Outbox, next.Outbox) {
+		out = append(out, ChatDelta{Kind: ChatOutbox, Outbox: next.Outbox})
 	}
 	return out
 }

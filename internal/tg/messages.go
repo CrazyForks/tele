@@ -132,12 +132,12 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text str
 			c.log.Error("MessagesSendMessage failed", zap.Error(err))
 			return err
 		}
+		// The echo is deliberately not suppressed. Suppression existed only so an
+		// optimistic client-side bubble would not double up, and the durable
+		// outbox has no optimistic bubble: the message arrives the ordinary way,
+		// through the updates the reply carries, and the queue entry goes when it
+		// does (#193). Media keeps suppressing until #195.
 		realID = extractSentMessageID(updates, randomID)
-		if realID != 0 {
-			c.suppressMu.Lock()
-			c.suppressIDs[realID] = struct{}{}
-			c.suppressMu.Unlock()
-		}
 		c.traceLog.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID), zap.Int("real_id", realID))
 		return nil
 	})

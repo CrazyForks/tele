@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,11 +35,20 @@ type stubClient struct {
 	forwardedTo  int64
 	forwardedIDs []int
 	sentText     string
-	sentRandomID int64
 	typingCalls  int
 	draftText    string
 	searchedFor  string
 	searchLimit  int
+
+	// Send bookkeeping for the outbox worker (#193). Guarded because the worker
+	// calls from its own goroutine while the test asserts from another.
+	sendMu       sync.Mutex
+	sendCount    int
+	sentRandomID int64
+	sentID       int
+	// sendBlock, when set, holds SendMessage open so a test can catch an entry
+	// mid-flight and drop the owner under it.
+	sendBlock chan struct{}
 }
 
 func (s *stubClient) Connect(context.Context, *config.Config, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {

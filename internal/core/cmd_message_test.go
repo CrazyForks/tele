@@ -215,12 +215,35 @@ func (s *stubClient) ForwardMessages(_ context.Context, _ domain.Peer, to domain
 }
 
 func (s *stubClient) SendMessage(_ context.Context, _ domain.Peer, text string, _ int, _ []domain.MessageEntity, randomID int64) (int, error) {
+	s.sendMu.Lock()
+	s.sendCount++
 	s.sentText = text
 	s.sentRandomID = randomID
+	block := s.sendBlock
+	sentID := s.sentID
+	s.sendMu.Unlock()
+	if block != nil {
+		<-block
+	}
 	if s.err != nil {
 		return 0, s.err
 	}
+	if sentID != 0 {
+		return sentID, nil
+	}
 	return 777, nil
+}
+
+func (s *stubClient) sendCalls() int {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return s.sendCount
+}
+
+func (s *stubClient) lastRandomID() int64 {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return s.sentRandomID
 }
 
 func TestForward_SendsToTheGivenTarget(t *testing.T) {
@@ -261,9 +284,12 @@ func TestForward_SendsTheCommentFirst(t *testing.T) {
 	o, st := newCmdOwner(t, c)
 	st.SetChat(domain.Chat{ID: 2, Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
+	o.SetOutbox(newOutboxStore(t))
+	ctx := runWorker(t, o)
 
-	require.NoError(t, o.Forward(context.Background(), 1, bob, []int{5}, "look"))
+	require.NoError(t, o.Forward(ctx, 1, bob, []int{5}, "look"))
 
+	waitFor(t, "the comment was never sent", func() bool { return c.sendCalls() == 1 })
 	assert.Equal(t, "look", c.sentText)
 }
 
@@ -295,20 +321,35 @@ func TestForward_DoesNotBumpWhenTheForwardFails(t *testing.T) {
 	assert.Nil(t, target.LastMessage, "a refused forward must not surface the target")
 }
 
-// The comment is sent through SendMessage, which suppresses its own echo update
-// so an optimistic bubble is not duplicated. A forward comment has no optimistic
-// bubble, so the owner has to record the message itself or it never appears.
-func TestForward_CommentAppearsInTheTargetChat(t *testing.T) {
-	c := &stubClient{}
-	o, st := newCmdOwner(t, c)
+// The comment is queued for the target chat like any other message. It used to
+// be written into the store here by hand, because echo suppression hid it and no
+// optimistic bubble would ever show it; with the comment on the queue and
+// suppression gone for text, it arrives through the update path instead (#193).
+func TestForward_QueuesTheCommentForTheTargetChat(t *testing.T) {
+	o, st := newCmdOwner(t, &stubClient{})
 	st.SetChat(domain.Chat{ID: 2, Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
+	q := newOutboxStore(t)
+	o.SetOutbox(q)
 
 	require.NoError(t, o.Forward(context.Background(), 1, bob, []int{5}, "look"))
 
-	got := st.Messages(2)
-	require.Len(t, got, 1, "the comment must land in the target chat")
-	assert.Equal(t, 777, got[0].ID, "stored under the id Telegram assigned")
-	assert.Equal(t, "look", got[0].Text)
-	assert.True(t, got[0].IsOut)
+	queued := q.ForChat(2)
+	require.Len(t, queued, 1, "the comment must be queued for the target, not the source")
+	require.NotNil(t, queued[0].Message)
+	assert.Equal(t, "look", queued[0].Message.Text)
+}
+
+// A target the owner cannot address stops the forward before anything is
+// copied: the comment would be lost and the messages would arrive without it.
+func TestForward_StopsWhenTheCommentCannotBeQueued(t *testing.T) {
+	c := &stubClient{}
+	o, st := newCmdOwner(t, c)
+	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
+	o.SetOutbox(newOutboxStore(t))
+
+	err := o.Forward(context.Background(), 1, bob, []int{5}, "look")
+
+	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
+	assert.Empty(t, c.forwardedIDs, "nothing may be copied when the comment could not be queued")
 }

@@ -4,9 +4,6 @@ import "github.com/sorokin-vladimir/tele/internal/domain"
 
 // ChatContents is everything a chat subscription currently shows: the message
 // window plus the header and per-chat state the pane renders around it.
-//
-// #193 adds the outbox entries for this chat here, alongside the window: the
-// durable outbox replaces the client-side optimistic sentinel messages.
 type ChatContents struct {
 	ChatID int64
 	Title  string
@@ -26,6 +23,12 @@ type ChatContents struct {
 	// and the client still has to mark it read while the user is looking.
 	UnreadReactions int
 	Draft           string
+	// Outbox is this chat's queued sends, oldest first. It is a separate list
+	// rather than synthetic messages because an entry has no message ID and
+	// carries what a message does not: attempts, an error kind, a retry time.
+	// A pending send is by definition newer than the window, so a client
+	// appends rather than merges (#193).
+	Outbox []domain.OutboxEntry
 }
 
 // BuildChat resolves the window's anchor against the stored history and slices
@@ -48,6 +51,9 @@ func BuildChat(r Reader, w ChatWindow) ChatContents {
 		out.UnreadReactions = chat.UnreadReactionsCount
 		out.Draft = chat.Draft
 	}
+	// Read before the empty-history return below: a chat with nothing stored can
+	// still hold a queued send, and that is the only thing it has to show.
+	out.Outbox = r.Outbox(w.ChatID)
 
 	all := r.Messages(w.ChatID)
 	if len(all) == 0 {

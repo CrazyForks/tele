@@ -17,6 +17,7 @@ type fakeReader struct {
 	chats   []domain.Chat
 	msgs    map[int64][]domain.Message
 	filters []domain.FolderFilter
+	outbox  map[int64][]domain.OutboxEntry
 }
 
 func (f *fakeReader) Chats() []domain.Chat { return f.chats }
@@ -33,6 +34,8 @@ func (f *fakeReader) GetChat(id int64) (domain.Chat, bool) {
 func (f *fakeReader) Messages(chatID int64) []domain.Message { return f.msgs[chatID] }
 
 func (f *fakeReader) FolderFilters() []domain.FolderFilter { return f.filters }
+
+func (f *fakeReader) Outbox(chatID int64) []domain.OutboxEntry { return f.outbox[chatID] }
 
 func chats(n int) []domain.Chat {
 	out := make([]domain.Chat, 0, n)

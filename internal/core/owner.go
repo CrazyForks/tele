@@ -89,13 +89,15 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		incoming:     make(chan Incoming, 32),
 		failures:     make(chan Failure, 32),
 		typing:       make(chan Typing, 32),
-		registry:     project.NewRegistry(st.Store()),
 		readyCh:      make(chan struct{}),
 		historyLimit: cfg.UI.HistoryLimit,
 		ctx:          context.Background(),
 		fetching:     make(map[project.SubID]bool),
 		outboxWake:   make(chan struct{}, 1),
 	}
+	// Built from the owner, not from the store alone: the projection reads the
+	// send queue too, and the queue arrives later through SetOutbox (#193).
+	o.registry = project.NewRegistry(projectionReader{Store: st.Store(), owner: o})
 	o.media = newMediaFetcher(client, st, log)
 	if client != nil {
 		o.events = client.Updates()

@@ -62,8 +62,15 @@ type testOwner struct {
 	invalidated []mediaPathKey
 }
 
+// storeReader lends a bare store the projection's fifth method. The real owner
+// composes the store with its send queue (#193); this stub has no queue, and an
+// empty one reads the same.
+type storeReader struct{ store.Store }
+
+func (storeReader) Outbox(int64) []domain.OutboxEntry { return nil }
+
 func newTestOwner(st store.Store) *testOwner {
-	o := &testOwner{state: state.New(st), reg: project.NewRegistry(st), mediaPaths: make(map[mediaPathKey]string)}
+	o := &testOwner{state: state.New(st), reg: project.NewRegistry(storeReader{st}), mediaPaths: make(map[mediaPathKey]string)}
 	o.state.OnChange(func(chg state.Change) {
 		if chg.Kind == state.ChangeTyping {
 			o.typing = append(o.typing, core.Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})

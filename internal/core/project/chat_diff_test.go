@@ -267,3 +267,44 @@ func TestDiffChat_SlidingByMoreThanOne(t *testing.T) {
 	assert.Equal(t, []int{1, 2, 3}, got[0].MsgIDs)
 	assert.Equal(t, []int{6, 7, 8}, ids(got[1].Messages))
 }
+
+func TestDiffChat_EmitsAnOutboxDeltaWhenTheQueueChanges(t *testing.T) {
+	prev := project.ChatContents{ChatID: 1, Messages: []domain.Message{{ID: 10}}}
+	next := prev
+	next.Outbox = []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxQueued}}
+
+	got := project.DiffChat(prev, next)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, project.ChatOutbox, got[0].Kind)
+	require.Len(t, got[0].Outbox, 1)
+	assert.Equal(t, "r1", got[0].Outbox[0].Ref)
+}
+
+func TestDiffChat_SaysNothingWhenTheQueueIsUnchanged(t *testing.T) {
+	prev := project.ChatContents{
+		ChatID:   1,
+		Messages: []domain.Message{{ID: 10}},
+		Outbox:   []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxQueued}},
+	}
+
+	got := project.DiffChat(prev, prev)
+
+	assert.Empty(t, got)
+}
+
+func TestDiffChat_AnEntryChangingStateIsAnOutboxDelta(t *testing.T) {
+	prev := project.ChatContents{
+		ChatID:   1,
+		Messages: []domain.Message{{ID: 10}},
+		Outbox:   []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxQueued}},
+	}
+	next := prev
+	next.Outbox = []domain.OutboxEntry{{Ref: "r1", State: domain.OutboxFailed}}
+
+	got := project.DiffChat(prev, next)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, project.ChatOutbox, got[0].Kind)
+	assert.Equal(t, domain.OutboxFailed, got[0].Outbox[0].State)
+}
