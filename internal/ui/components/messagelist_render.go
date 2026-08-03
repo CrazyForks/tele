@@ -27,6 +27,13 @@ type bubbleMetrics struct {
 // renderMessage returns the display lines for a single message bubble.
 // selected: when true, draws the selection indicator bar beside the bubble.
 func (ml *MessageList) renderMessage(msg domain.Message, selected bool) []string {
+	return ml.renderBubble(msg, selected, "")
+}
+
+// renderBubble draws a message, optionally overriding the delivery indicator in
+// the bottom border. The override is how a queued send shows where it has got
+// to: it has no message id yet, so the ✓/✓✓ path has nothing to say (#193).
+func (ml *MessageList) renderBubble(msg domain.Message, selected bool, statusOverride string) []string {
 	if ml.viewWidth <= 0 {
 		return []string{""}
 	}
@@ -34,7 +41,7 @@ func (ml *MessageList) renderMessage(msg domain.Message, selected bool) []string
 		return ml.renderBareMedia(msg, selected)
 	}
 
-	m := ml.measureBubble(msg)
+	m := ml.measureBubbleWithStatus(msg, statusOverride)
 	top, bottom := ml.bubbleBorders(msg, m)
 	sideLines := ml.bubbleContentLines(msg, m)
 
@@ -50,6 +57,10 @@ func (ml *MessageList) renderMessage(msg domain.Message, selected bool) []string
 // (timestamp, reactions) for a message, widening as needed for the text, media
 // placeholder/art, forward and reply blocks, and the sender-name title.
 func (ml *MessageList) measureBubble(msg domain.Message) bubbleMetrics {
+	return ml.measureBubbleWithStatus(msg, "")
+}
+
+func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverride string) bubbleMetrics {
 	maxBubbleW := ml.viewWidth * 3 / 4
 	if maxBubbleW < 10 {
 		maxBubbleW = 10
@@ -164,8 +175,8 @@ func (ml *MessageList) measureBubble(msg domain.Message) bubbleMetrics {
 	innerW := actualW + 2
 
 	// Timestamp + optional status indicator in bottom border.
-	var statusStr string
-	if msg.IsOut {
+	statusStr := statusOverride
+	if statusStr == "" && msg.IsOut {
 		if msg.ID > 0 && msg.ID <= ml.outboxReadMaxID {
 			statusStr = " " + readStyle.Render("✓✓")
 		} else if msg.ID > 0 {
@@ -564,6 +575,9 @@ func (ml *MessageList) renderItem(i int, selected bool) []string {
 	if item.kind == itemUnreadSeparator {
 		return ml.renderUnreadSeparator()
 	}
+	if item.kind == itemOutbox {
+		return ml.renderBubble(item.msg, selected, outboxStatusGlyph(item.entry))
+	}
 	if len(item.parts) > 1 {
 		return ml.renderGroupBubble(item.parts, selected)
 	}
@@ -739,14 +753,21 @@ func (ml *MessageList) View() string {
 	}
 
 	selectedID := ml.computeSelectedMsgID()
+	// A queued send has no message id, so it has to be recognised by its ref —
+	// otherwise the selection indicator is never drawn beside it even though the
+	// cursor is there (#193).
+	selectedRef := ml.SelectedOutboxRef()
 
 	var allLines []string
 	reachedEnd := true
 	selTopRaw, selHeight, selLeft, selWidth := 0, 0, 0, 0
 	for i := ml.viewStart; i < len(ml.items); i++ {
 		var selected bool
-		if ml.items[i].kind == itemMessage {
+		switch ml.items[i].kind {
+		case itemMessage:
 			selected = ml.items[i].msg.ID == selectedID
+		case itemOutbox:
+			selected = selectedRef != "" && ml.items[i].entry.Ref == selectedRef
 		}
 		itemLines := ml.renderItem(i, selected)
 

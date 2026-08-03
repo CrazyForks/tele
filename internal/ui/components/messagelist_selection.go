@@ -197,7 +197,41 @@ func (ml *MessageList) computeSelectedMsgID() int {
 	return 0
 }
 
+// SelectedOutboxRef returns the ref of the selected queued send, or "" when the
+// selection is a message or there is none.
+func (ml *MessageList) SelectedOutboxRef() string {
+	if ml.cursorOutboxRef == "" {
+		return ""
+	}
+	for _, e := range ml.outbox {
+		if e.Ref == ml.cursorOutboxRef {
+			return e.Ref
+		}
+	}
+	return ""
+}
+
+// SelectedOutboxEntry returns the selected queued send. ok is false when the
+// selection is a message.
+func (ml *MessageList) SelectedOutboxEntry() (domain.OutboxEntry, bool) {
+	if ml.cursorOutboxRef == "" {
+		return domain.OutboxEntry{}, false
+	}
+	for _, e := range ml.outbox {
+		if e.Ref == ml.cursorOutboxRef {
+			return e, true
+		}
+	}
+	return domain.OutboxEntry{}, false
+}
+
 func (ml *MessageList) computeSelectedMsg() *domain.Message {
+	// The two halves of the cursor are mutually exclusive. An entry has no
+	// message ID, so every action keyed on one must miss rather than hit a
+	// neighbouring message (#193).
+	if ml.cursorOutboxRef != "" {
+		return nil
+	}
 	if len(ml.items) == 0 {
 		return nil
 	}

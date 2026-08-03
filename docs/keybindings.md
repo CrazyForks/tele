@@ -44,6 +44,13 @@
 | `O`       | Open the selected video in the external player |
 | `p`       | Play voice message (in-app)    |
 | `Space`   | Context menu                   |
+| `Enter`   | Retry a failed send (when one is selected) |
+
+A message that could not be sent stays in the chat, marked `✕` in its bottom
+border; selecting it names the reason in the status bar. `Enter` queues it
+again, and `Space` opens a short menu offering Retry and Discard. `x` is
+unaffected — it still clears a staged reply, edit or upload, never a queued
+send.
 
 ## Compose (insert mode)
 

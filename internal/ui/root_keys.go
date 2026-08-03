@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -262,6 +263,13 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if action == keys.ActionOpenContextMenu && m.focus == FocusChat {
 		if m.chat != nil {
+			// A queued send gets its own short menu: none of the message
+			// actions apply to something that was never sent (#193).
+			if entry, ok := m.chat.SelectedOutboxEntry(); ok {
+				failed := entry.State == domain.OutboxFailed
+				m.contextMenu = components.NewOutboxContextMenu(entry.Ref, failed, m.keyMap)
+				return m, nil
+			}
 			msgID := m.chat.SelectedMessageID()
 			isOut := m.chat.SelectedMessageIsOut()
 			if msgID != 0 {
@@ -311,6 +319,25 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if action == keys.ActionConfirm && m.focus == FocusChat {
+		// enter was already bound in the chat pane with no handler behind it
+		// (internal/ui/keys/keys.go): an inert binding whose meaning — activate
+		// the selected item — is exactly retrying a failed send. Reply keeps a
+		// clean r, with no shift-variant beside it (#193).
+		if m.chat != nil && m.owner != nil {
+			if entry, ok := m.chat.SelectedOutboxEntry(); ok && entry.State == domain.OutboxFailed {
+				owner, ref := m.owner, entry.Ref
+				return m, func() tea.Msg {
+					if err := owner.RetryOutbox(ref); err != nil {
+						return errStatus("retry", err)
+					}
+					return nil
+				}
+			}
+		}
+		return m, nil
+	}
+
 	if action != keys.ActionNone {
 		before := m.chat.SelectedMessageID()
 		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
@@ -319,6 +346,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.chat.SelectedMessageID() != before {
 			m, gifCmd = m.reconcileGifAnim()
 		}
+		m.showOutboxReason()
 		return m, tea.Batch(cmd, m.markReadCmd(), gifCmd)
 	}
 

@@ -13,6 +13,23 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- A message you send now survives the app. Sending used to live entirely in the
+  window that typed it: quitting mid-send lost the message silently, with no
+  record that it was ever attempted, and a failure took the text with it. Sends
+  are now queued on disk and driven by the app itself, so an unfinished one is
+  picked up again on the next start. Where a send has got to shows in the
+  bubble's bottom border, in the same place the delivery ticks appear once it
+  lands: `⋯` waiting, `↻ 4s` waiting out a retry, `↑` on its way, `✓` delivered,
+  `✓✓` read. A send that fails for a reason a retry cannot change — a chat you
+  may not post in, a chat that no longer exists — is marked `✕` and stays in the
+  conversation instead of vanishing; the reason is said once when it happens and
+  again in the status bar whenever the message is selected. Press `Enter` to try
+  again, or `Space` for a short menu offering Retry and Discard. Rate limits and network failures are retried on their own, for as
+  long as it takes, because nobody lost the message and giving up on it is your
+  decision rather than a timer's. Messages to one chat keep their order — a
+  stuck one holds up that conversation and no other. This covers text messages;
+  photos, files and albums still send the old way and follow in the next release
+  (#193).
 - One-time startup notices for changes that are easy to mistake for a bug. A
   notice appears once, before anything else including the login screen, and
   cannot be dismissed for seven seconds so it is actually read. Each is shown
@@ -74,6 +91,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   twelve minutes with nothing on screen to explain it, and because each pause
   also consumed a retry, a single action could sit through five of them in a row
   (#201).
+- Cached media is now stored per account and written straight to disk. Every
+  account used to share one cache directory with no arbiter, so two accounts
+  running at once evicted each other's files; each account now has its own
+  directory under the system cache location. Downloads also stream to disk
+  instead of being held in memory in full, which is what a large video used to
+  cost. The old shared directory is deleted on first run — nothing to do, and
+  the files are re-fetched as they are needed (#196).
 
 ### Fixed
 
@@ -98,6 +122,49 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Cancelling a download no longer reports it as a failure. Quitting or
   interrupting mid-download produced `download failed: context canceled`, an
   error message in answer to your own keypress (#191).
+- Losing the connection is no longer treated as an unexpected error. A request
+  the server never acknowledged, and a request cut off by a closed connection,
+  were both classified as internal faults — which are not worth retrying, so
+  the action was abandoned and reported as "unexpected error". Both are now
+  what they are, a transient transport failure, and are waited out (#191, #193).
+- An offline session no longer fills with toasts. Marking a chat read follows
+  the cursor, so it runs on nearly every keypress; with the connection down,
+  each one raised its own error. Work nobody asked for and cannot act on —
+  marking read, clearing reaction and mention badges — now stays quiet about
+  failures that repair themselves when the connection returns.
+- A forwarded message now appears in the target chat straight away. Telegram
+  does not push an echo for what this client itself did — the created message
+  comes back only in the reply to the forward — so a forward stayed invisible
+  until something unrelated forced a full resync, often not until the other side
+  read it (#198).
+- The "new messages" divider no longer drifts upward while you read. Opening a
+  chat anchored the window on the first unread message, but the anchor kept
+  following the read pointer, so the divider re-seated itself on whatever was
+  unread by then and the view crept away from where the chat was opened. The
+  anchor is now pinned for the life of the window (#202).
+- An album is now marked read. Reading counted the album's first message only,
+  and since the whole album renders as one bubble there was nothing left to
+  scroll past to advance the pointer — so the remaining parts stayed unread
+  indefinitely and the chat kept a badge that would not clear.
+- Photos no longer stay blank when a chat opens on its first unread message. The
+  window was already positioned, so the scroll was skipped — and skipping it
+  also skipped the media fetch, leaving every picture and video poster in the
+  chat empty until the reader scrolled far enough to trigger a redraw.
+- Reopening a chat no longer produces a stack of toasts about expired file
+  references. Telegram expires the references for stored media, and a chat
+  restored from disk expires several at once; the app refreshes them by itself
+  and the pictures appear regardless, so the warnings reported plumbing nobody
+  could act on. Failures for media you asked for by hand are still reported.
+- Two downloads of the same picture at once no longer corrupt it. Both wrote
+  through one temporary file, so the second truncated what the first was still
+  writing and then kept writing into the entry the first had already published.
+  On Windows it failed outright instead. Each download now gets its own
+  temporary file.
+- Windows: a second instance can now name the process already holding the state
+  directory. The lock covered the same bytes as the recorded process ID, and
+  Windows byte-range locks are mandatory, so reading that ID failed in exactly
+  the process that needed it — leaving the refusal with nothing to point at
+  (#188).
 
 ## [1.9.1] - 2026-07-25
 

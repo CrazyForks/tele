@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/bin"
+	"github.com/gotd/td/rpc"
 	"github.com/gotd/td/telegram"
 	gotdtg "github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
@@ -56,6 +57,17 @@ func (c *GotdClient) mapError(op string, err error) error {
 	var ne net.Error
 	if errors.As(err, &ne) {
 		return &telerr.Error{Kind: telerr.Network, Op: op, Detail: ne.Error(), Transient: true, Cause: err}
+	}
+
+	// gotd's own transport failures. Neither is a tgerr and neither satisfies
+	// net.Error, so both used to land in Internal — which is terminal, so an
+	// offline send was given up on instead of waited out (#193).
+	//
+	// RetryLimitReachedErr is gotd saying the server never acknowledged the
+	// request. The request may well have arrived: repeating it is safe only
+	// because the caller keeps its random_id, which is what the outbox is for.
+	if errors.Is(err, &rpc.RetryLimitReachedErr{}) || errors.Is(err, rpc.ErrEngineClosed) {
+		return &telerr.Error{Kind: telerr.Network, Op: op, Detail: err.Error(), Transient: true, Cause: err}
 	}
 
 	return &telerr.Error{Kind: telerr.Internal, Op: op, Detail: err.Error(), Cause: err}

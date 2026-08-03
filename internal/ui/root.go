@@ -114,18 +114,21 @@ type RootModel struct {
 	kittyCap          int // max live placements; from config, 0 → default
 	searchModel       *screens.SearchModel
 	onChatOpen        func(int64)
-	nextSentinel      int
-	contextMenu       *components.ContextMenu
-	chatMenu          *components.ChatContextMenu
-	reactionPicker    *components.ReactionPicker
-	help              *components.HelpModal
-	openPicker        *components.OpenPicker
-	reactionTargetID  int
-	mentionPopup      *components.MentionPopup
-	mentionMembers    map[int64][]domain.ChatMember
-	folderBar         *screens.FoldersModel
-	logo              components.LogoLoader
-	typingSerial      int
+	// nextSentinel numbers the optimistic media bubbles the client still drives
+	// itself. Text left this path for the durable queue (#193); media follows
+	// with #195, and this goes with it.
+	nextSentinel     int
+	contextMenu      *components.ContextMenu
+	chatMenu         *components.ChatContextMenu
+	reactionPicker   *components.ReactionPicker
+	help             *components.HelpModal
+	openPicker       *components.OpenPicker
+	reactionTargetID int
+	mentionPopup     *components.MentionPopup
+	mentionMembers   map[int64][]domain.ChatMember
+	folderBar        *screens.FoldersModel
+	logo             components.LogoLoader
+	typingSerial     int
 	// msgHighlightSerial guards the jump-to message-highlight fade loop so a
 	// newer highlight or a stale tick is ignored.
 	msgHighlightSerial int
@@ -444,8 +447,6 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleVideoProbed(msg)
 	case videoTickMsg:
 		return m.handleVideoTick(msg)
-	case sentMsgConfirmedMsg:
-		return m.handleSentMsgConfirmed(msg)
 	case reactionFailedMsg:
 		return m.handleReactionFailed(msg)
 	case deleteMsgFailedMsg:
@@ -462,6 +463,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleParticipantsLoaded(msg)
 	case components.DeleteMsgRequest:
 		return m.handleDeleteMsg(msg)
+	case components.RetryOutboxRequest:
+		return m.handleRetryOutbox(msg)
+	case components.DiscardOutboxRequest:
+		return m.handleDiscardOutbox(msg)
 	case screens.ForwardToChatRequest:
 		return m.handleForwardToChat(msg)
 	case screens.SearchUsersRequest:

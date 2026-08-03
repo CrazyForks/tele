@@ -73,6 +73,9 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		m.chat.SetInboxReadMaxID(c.ReadInboxMaxID)
 		m.chatMsgs = c.Messages
 		m.chat.SetMessages(m.chatMsgs)
+		// After SetMessages: it rebuilds the item list wholesale, so the queue
+		// has to be re-seated on top of the fresh window (#193).
+		m.chat.SetOutbox(c.Outbox)
 		m.chat.SetLoading(false)
 		m.chat.SetLoadError("")
 		if cmd := m.readReactionsOnScreen(c); cmd != nil {
@@ -187,6 +190,9 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		if !m.chat.ComposerFocused() {
 			m.chat.SetComposerValue(d.Draft)
 		}
+
+	case project.ChatOutbox:
+		m.chat.SetOutbox(d.Outbox)
 	}
 	return m, nil
 }

@@ -182,28 +182,74 @@ func TestWorker_RestartResendsWithTheSameRandomID(t *testing.T) {
 		"the resend must reuse the random_id, or Telegram cannot deduplicate it")
 }
 
-func TestWorker_TheEntryGoesWhenTheMessageLands(t *testing.T) {
-	// The pending bubble and the real message must swap inside one delta. The
-	// worker therefore leaves the entry alone on success and the change listener
-	// removes it, so no delta carries neither one (#193).
+// Telegram sends no echo for a message this account sent — a send into a user
+// chat answers with an updateShortSentMessage carrying no body — so waiting for
+// the update stream to deliver it means waiting forever. The message comes back
+// from the send itself and the worker records it; the entry then goes in the
+// same commit, so the pending bubble and the real message swap inside one delta
+// (#193).
+func TestWorker_RecordsTheSentMessageAndDropsTheEntry(t *testing.T) {
 	c := &stubClient{sentID: 77}
+	o, st := newCmdOwner(t, c)
+	q := newOutboxStore(t)
+	o.SetOutbox(q)
+	ctx := runWorker(t, o)
+
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "hi"}))
+
+	waitFor(t, "the sent message never reached the store", func() bool {
+		for _, m := range st.Messages(1) {
+			if m.ID == 77 {
+				return true
+			}
+		}
+		return false
+	})
+	waitFor(t, "the entry outlived its message", func() bool {
+		_, still := q.Get("r1")
+		return !still
+	})
+
+	msgs := st.Messages(1)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "hi", msgs[0].Text)
+	assert.True(t, msgs[0].IsOut)
+}
+
+// A send that names no message id cannot be recorded. The send still happened,
+// so the entry goes rather than being retried into a duplicate.
+func TestWorker_DropsTheEntryWhenTheSendNamesNoMessage(t *testing.T) {
+	c := &stubClient{sentID: -1} // -1 makes the stub answer with id 0
 	o, _ := newCmdOwner(t, c)
 	q := newOutboxStore(t)
 	o.SetOutbox(q)
 	ctx := runWorker(t, o)
 
 	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "hi"}))
-	waitFor(t, "the entry was never sent", func() bool { return c.sendCalls() == 1 })
 
-	entry, ok := q.Get("r1")
-	require.True(t, ok, "the entry must outlive the request that succeeded")
-	assert.Equal(t, 77, entry.SentMsgID)
-
-	// The update path applies the message the reply carried.
-	o.state.ApplyIncoming(domain.Message{ID: 77, ChatID: 1, Text: "hi", IsOut: true})
-
-	waitFor(t, "the delivered entry was never removed", func() bool {
+	waitFor(t, "the entry was never dropped", func() bool {
 		_, still := q.Get("r1")
 		return !still
 	})
+	assert.Equal(t, 1, c.sendCalls(), "a send that happened must not be repeated")
+}
+
+// A queue that frees its head has to wake the worker. The sent entry stays the
+// head of its chat until it goes, so the next message is not eligible — and
+// without a nudge the worker sleeps out its idle interval first (#193).
+func TestWorker_TheNextMessageFollowsWithoutWaitingForTheIdleTick(t *testing.T) {
+	c := &stubClient{sentID: 77}
+	o, _ := newCmdOwner(t, c)
+	q := newOutboxStore(t)
+	o.SetOutbox(q)
+	ctx := runWorker(t, o)
+
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "first"}))
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r2", ChatID: 1, Text: "second"}))
+
+	// Both go well inside waitFor's two seconds; idleInterval is a minute.
+	waitFor(t, "the second message waited for the idle tick", func() bool {
+		return c.sendCalls() == 2
+	})
+	waitFor(t, "the queue never drained", func() bool { return len(q.All()) == 0 })
 }

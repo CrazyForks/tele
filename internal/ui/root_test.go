@@ -130,7 +130,7 @@ func (m *mockTGClient) RefreshMessages(ctx context.Context, _ domain.Peer, ids [
 	}
 	return out, nil
 }
-func (m *mockTGClient) SendMessage(ctx context.Context, _ domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (int, error) {
+func (m *mockTGClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error) {
 	m.lastSendCtx = ctx
 	m.lastReplyToMsgID = replyToMsgID
 	m.lastSendText = text
@@ -138,12 +138,16 @@ func (m *mockTGClient) SendMessage(ctx context.Context, _ domain.Peer, text stri
 	m.lastSendRandomID = randomID
 	m.sendCount++
 	if m.sendErr != nil {
-		return 0, m.sendErr
+		return domain.Message{}, m.sendErr
 	}
+	id := 42
 	if m.sendFunc != nil {
-		return m.sendFunc(), nil
+		id = m.sendFunc()
 	}
-	return 42, nil
+	return domain.Message{
+		ID: id, ChatID: peer.ID, Text: text, Entities: entities,
+		ReplyToMsgID: replyToMsgID, IsOut: true,
+	}, nil
 }
 func (m *mockTGClient) GetParticipants(_ context.Context, _ domain.Peer) ([]domain.ChatMember, error) {
 	return m.participants, nil
@@ -252,42 +256,37 @@ func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Eve
 
 var _ internaltg.Client = (*mockTGClient)(nil)
 
-func TestRoot_SendFailure_SurfacesErrorAndRemovesSentinel(t *testing.T) {
-	mc := &mockTGClient{sendErr: errors.New("offline")}
-	m, st := newRootWithOpenChat(t, mc)
+// A refused submission is the only synchronous failure a send has left: the
+// owner could not address the chat. Everything past that is the queue's, and
+// there is no optimistic message to roll back (#193).
+func TestRoot_SubmissionRefused_SurfacesError(t *testing.T) {
+	m, st := newRootWithOpenChat(t, &mockTGClient{})
+	owner := m.Owner().(*testOwner)
+	owner.cmdErr = &telerr.Error{Kind: telerr.PeerNotFound}
 
 	_, cmd := m.Update(screens.SendMsgRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Text: "hi"})
-	require.Len(t, st.Messages(1), 1) // optimistic sentinel inserted
 	require.NotNil(t, cmd)
 
-	var sawErr bool
-	for _, msg := range drainMsgs(cmd()) { // run the SendMessage cmd
-		nm, c2 := m.Update(msg)
-		m = nm.(ui.RootModel)
-		if c2 != nil {
-			if _, ok := c2().(ui.StatusErrMsg); ok {
-				sawErr = true
-			}
-		}
-	}
-	assert.True(t, sawErr, "send failure should surface a StatusErrMsg")
-	assert.Empty(t, st.Messages(1), "failed sentinel should be rolled back")
+	_, isErr := cmd().(ui.StatusErrMsg)
+	assert.True(t, isErr, "a refused submission should surface a StatusErrMsg")
+	assert.Empty(t, st.Messages(1), "nothing is written to the store on the send path any more")
+	assert.Empty(t, owner.sent)
 }
 
 type ctxKey struct{}
 
 func TestRoot_ThreadsAppContextIntoCommands(t *testing.T) {
 	appCtx := context.WithValue(context.Background(), ctxKey{}, "tele")
-	mock := &mockTGClient{}
-	m, _ := newRootWithOpenChat(t, mock)
+	m, _ := newRootWithOpenChat(t, &mockTGClient{})
 	m = m.WithContext(appCtx)
+	owner := m.Owner().(*testOwner)
 
 	_, cmd := m.Update(screens.SendMsgRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Text: "hi"})
 	require.NotNil(t, cmd)
-	cmd() // run the SendMessage cmd
+	cmd() // run the submission cmd
 
-	require.NotNil(t, mock.lastSendCtx)
-	assert.Equal(t, "tele", mock.lastSendCtx.Value(ctxKey{}),
+	require.NotNil(t, owner.lastSendCtx)
+	assert.Equal(t, "tele", owner.lastSendCtx.Value(ctxKey{}),
 		"command should use the app context, not context.Background()")
 }
 
@@ -1110,59 +1109,24 @@ func newRootWithOpenChat(t *testing.T, mock *mockTGClient) (ui.RootModel, store.
 	return openChat(t, m, 1, "Alice"), st
 }
 
-func TestRoot_Send_ShowsSentinelImmediately(t *testing.T) {
-	mock := &mockTGClient{}
-	m, st := newRootWithOpenChat(t, mock)
+// Sending submits to the durable queue and writes nothing locally. What appears
+// on screen is the queue's own entry, arriving through the projection (#193).
+func TestRoot_Send_SubmitsToTheQueueAndTouchesNoStore(t *testing.T) {
+	m, st := newRootWithOpenChat(t, &mockTGClient{})
+	owner := m.Owner().(*testOwner)
 
-	_, _ = m.Update(screens.SendMsgRequest{
+	_, cmd := m.Update(screens.SendMsgRequest{
 		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "hello",
 	})
-
-	msgs := st.Messages(1)
-	require.Len(t, msgs, 1)
-	assert.Less(t, msgs[0].ID, 0, "sentinel should have a negative ID")
-	assert.Equal(t, "hello", msgs[0].Text)
-	assert.True(t, msgs[0].IsOut)
-}
-
-func TestRoot_Send_ConfirmationReplacesSentinel(t *testing.T) {
-	mock := &mockTGClient{}
-	m, st := newRootWithOpenChat(t, mock)
-
-	newM, cmd := m.Update(screens.SendMsgRequest{
-		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
-		Text: "hello",
-	})
-	m = newM.(ui.RootModel)
 	require.NotNil(t, cmd)
+	cmd()
 
-	confirmMsg := cmd()
-	newM, _ = m.Update(confirmMsg)
-	_ = newM
-
-	msgs := st.Messages(1)
-	require.Len(t, msgs, 1)
-	assert.Equal(t, 42, msgs[0].ID, "sentinel should be replaced with real ID")
-}
-
-func TestRoot_Send_FailedSendRemovesSentinel(t *testing.T) {
-	mock := &mockTGClient{sendFunc: func() int { return 0 }}
-	m, st := newRootWithOpenChat(t, mock)
-
-	newM, cmd := m.Update(screens.SendMsgRequest{
-		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
-		Text: "hello",
-	})
-	m = newM.(ui.RootModel)
-	require.NotNil(t, cmd)
-
-	confirmMsg := cmd()
-	newM, _ = m.Update(confirmMsg)
-	_ = newM
-
-	msgs := st.Messages(1)
-	assert.Empty(t, msgs, "sentinel should be removed when send fails")
+	require.Len(t, owner.sent, 1)
+	assert.Equal(t, "hello", owner.sent[0].Text)
+	assert.Equal(t, int64(1), owner.sent[0].ChatID)
+	assert.NotEmpty(t, owner.sent[0].Ref, "the client owns the idempotency key")
+	assert.Empty(t, st.Messages(1), "no optimistic message is inserted any more")
 }
 
 func TestRootModel_PhotoDownloadDispatchedOnHistory(t *testing.T) {
@@ -1185,35 +1149,29 @@ func TestRootModel_PhotoReadyMsg_StoresImage(t *testing.T) {
 	// No panic — image cache updated without crashing
 }
 
-func TestRoot_Send_ConcurrentSentinelsHaveDistinctIDs(t *testing.T) {
-	mock := &mockTGClient{}
-	m, st := newRootWithOpenChat(t, mock)
+// Two sends must carry distinct refs: the ref is the idempotency key, and a
+// repeated one would make the second message a no-op resubmission of the first.
+func TestRoot_Send_ConcurrentSubmissionsHaveDistinctRefs(t *testing.T) {
+	m, _ := newRootWithOpenChat(t, &mockTGClient{})
+	owner := m.Owner().(*testOwner)
 
-	// Send first message
-	newM, _ := m.Update(screens.SendMsgRequest{
+	newM, first := m.Update(screens.SendMsgRequest{
 		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "first",
 	})
 	m = newM.(ui.RootModel)
+	require.NotNil(t, first)
+	first()
 
-	msgs := st.Messages(1)
-	require.Len(t, msgs, 1)
-	id1 := msgs[0].ID
-	assert.Less(t, id1, 0, "first sentinel should have a negative ID")
-
-	// Send second message without running any cmds
-	newM, _ = m.Update(screens.SendMsgRequest{
+	_, second := m.Update(screens.SendMsgRequest{
 		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "second",
 	})
-	_ = newM
+	require.NotNil(t, second)
+	second()
 
-	msgs = st.Messages(1)
-	require.Len(t, msgs, 2)
-
-	id2 := msgs[1].ID
-	assert.Less(t, id2, 0, "second sentinel should have a negative ID")
-	assert.NotEqual(t, id1, id2, "two sentinel messages must have distinct IDs")
+	require.Len(t, owner.sent, 2)
+	assert.NotEqual(t, owner.sent[0].Ref, owner.sent[1].Ref)
 }
 
 func TestRoot_Space_OpensContextMenu(t *testing.T) {
@@ -1503,15 +1461,18 @@ func TestRoot_Send_WithReply_PassesReplyToMsgID(t *testing.T) {
 	newM, _ := applyHistory(t, m, st, 1)
 	m = newM.(ui.RootModel)
 
+	owner := m.Owner().(*testOwner)
+
 	_, cmd := m.Update(screens.SendMsgRequest{
 		Peer:         domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text:         "my reply",
 		ReplyToMsgID: 10,
 	})
 	require.NotNil(t, cmd)
-	cmd() // triggers mock.SendMessage
+	cmd() // submits to the queue
 
-	assert.Equal(t, 10, mock.lastReplyToMsgID)
+	require.Len(t, owner.sent, 1)
+	assert.Equal(t, 10, owner.sent[0].ReplyToMsgID)
 }
 
 func TestRoot_R_Key_ActivatesReplyMode(t *testing.T) {
@@ -1547,21 +1508,6 @@ func TestRoot_OpenChat_ClearsPendingReply(t *testing.T) {
 	m = newM.(ui.RootModel)
 
 	assert.Equal(t, 0, m.Chat().ReplyToMsgID(), "switching chat must clear pending reply")
-}
-
-func TestRoot_Send_SentinelCarriesReplyToMsgID(t *testing.T) {
-	mock := &mockTGClient{}
-	m, st := newRootWithOpenChat(t, mock)
-
-	_, _ = m.Update(screens.SendMsgRequest{
-		Peer:         domain.Peer{ID: 1, Type: domain.PeerUser},
-		Text:         "my reply",
-		ReplyToMsgID: 10,
-	})
-
-	msgs := st.Messages(1)
-	require.Len(t, msgs, 1)
-	assert.Equal(t, 10, msgs[0].ReplyToMsgID, "sentinel must carry ReplyToMsgID")
 }
 
 func TestRoot_h_CyclesFocusLeft(t *testing.T) {

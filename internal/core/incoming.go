@@ -33,6 +33,12 @@ type Failure struct {
 	Err    error
 }
 
+// OpSend names a send the queue gave up on. Clients single it out: a refused
+// send is not a window that failed to fill, so it belongs in a toast rather
+// than in the pane's load-error banner, and the message is still on screen to
+// retry (#193).
+const OpSend = "send"
+
 // Typing reports that someone started or stopped composing in a chat. An empty
 // Label means stopped.
 //

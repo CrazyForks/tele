@@ -3,11 +3,13 @@ package tg
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/gotd/td/bin"
+	"github.com/gotd/td/rpc"
 	gotdtg "github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/stretchr/testify/assert"
@@ -145,4 +147,41 @@ func TestMapError_PreservesTgerrForGotd(t *testing.T) {
 	var te *tgerr.Error
 	require.True(t, errors.As(mapped, &te))
 	assert.Equal(t, 420, te.Code)
+}
+
+// gotd reports a request the server never acknowledged as RetryLimitReachedErr.
+// Its own documentation calls it exactly that — "server does not acknowledge
+// request after multiple retries" — which is a transient transport failure, not
+// a bug. Left unmapped it became Internal, which is terminal: an offline send
+// was marked failed forever instead of waiting for the connection (#193).
+func TestMapError_UnacknowledgedRequestIsTransientNetwork(t *testing.T) {
+	c := testClient()
+
+	got := c.mapError("messages.sendMessage", &rpc.RetryLimitReachedErr{Retries: 5})
+
+	e, ok := telerr.As(got)
+	require.True(t, ok)
+	assert.Equal(t, telerr.Network, e.Kind)
+	assert.True(t, e.Transient, "an unacknowledged request is worth repeating")
+}
+
+func TestMapError_AClosedEngineIsTransientNetwork(t *testing.T) {
+	c := testClient()
+
+	got := c.mapError("messages.sendMessage", rpc.ErrEngineClosed)
+
+	e, ok := telerr.As(got)
+	require.True(t, ok)
+	assert.Equal(t, telerr.Network, e.Kind)
+	assert.True(t, e.Transient)
+}
+
+// Wrapped the way gotd actually delivers it, through rpcDoRequest.
+func TestMapError_UnacknowledgedRequestThroughAWrapChain(t *testing.T) {
+	c := testClient()
+	wrapped := fmt.Errorf("rpcDoRequest: %w", &rpc.RetryLimitReachedErr{Retries: 5})
+
+	got := c.mapError("messages.sendMessage", wrapped)
+
+	assert.Equal(t, telerr.Network, telerr.Of(got))
 }

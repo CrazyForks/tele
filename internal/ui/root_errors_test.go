@@ -154,3 +154,25 @@ func TestHandleFileDownloadDone_TextStillRaisesToast(t *testing.T) {
 	m2, _ := m.handleFileDownloadDone(fileDownloadDoneMsg{serial: 1, text: "Saved to /tmp/x.jpg"})
 	assert.False(t, m2.toasts.Empty())
 }
+
+// Background work that failed because the connection is down needs no toast: it
+// repeats itself when the connection returns. Marking read runs on nearly every
+// keypress, so saying it each time is how an offline session fills with toasts
+// nobody can act on (#193).
+func TestErrStatusBackground_SwallowsATransientNetworkFailure(t *testing.T) {
+	got := errStatusBackground("mark read", &telerr.Error{Kind: telerr.Network, Transient: true})
+
+	assert.Nil(t, got)
+}
+
+func TestErrStatusBackground_ReportsAFailureThatWillNotRepair(t *testing.T) {
+	got := errStatusBackground("mark read", &telerr.Error{Kind: telerr.Forbidden})
+
+	assert.NotNil(t, got, "a refusal is not going to fix itself")
+}
+
+func TestErrStatusBackground_ReportsAPermanentNetworkFailure(t *testing.T) {
+	got := errStatusBackground("mark read", &telerr.Error{Kind: telerr.Network})
+
+	assert.NotNil(t, got)
+}

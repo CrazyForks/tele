@@ -45,6 +45,11 @@ type ownerStub struct {
 	mediaErr    error
 	fetched     []mediaKey
 	invalidated []mediaKey
+
+	// The durable send queue (#193): what the UI submitted, retried, discarded.
+	sent      []core.SendRequest
+	retried   []string
+	discarded []string
 }
 
 // mediaKey identifies one piece of media the way a client names it.
@@ -178,6 +183,26 @@ func (o *ownerStub) SetTyping(_ context.Context, chatID int64, _ domain.TypingAc
 func (o *ownerStub) SaveDraft(_ context.Context, chatID int64, text string) error {
 	o.calls = append(o.calls, cmdCall{name: "SaveDraft", chatID: chatID})
 	o.state.ApplyDraft(chatID, text)
+	return o.err
+}
+
+// The durable send queue (#193). The stub records submissions rather than
+// draining them: what the UI is responsible for is handing the message over.
+func (o *ownerStub) Send(_ context.Context, req core.SendRequest) error {
+	if o.err != nil {
+		return o.err
+	}
+	o.sent = append(o.sent, req)
+	return nil
+}
+
+func (o *ownerStub) RetryOutbox(ref string) error {
+	o.retried = append(o.retried, ref)
+	return o.err
+}
+
+func (o *ownerStub) DiscardOutbox(ref string) error {
+	o.discarded = append(o.discarded, ref)
 	return o.err
 }
 

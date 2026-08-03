@@ -19,6 +19,16 @@ type DeleteMsgRequest struct {
 	Revoke bool
 }
 
+// RetryOutboxRequest and DiscardOutboxRequest address a queued send by its ref.
+// An entry has no message ID: it was never sent (#193).
+type RetryOutboxRequest struct {
+	Ref string
+}
+
+type DiscardOutboxRequest struct {
+	Ref string
+}
+
 // JumpToMsgRequest is emitted when the user selects "Jump to original".
 type JumpToMsgRequest struct {
 	MsgID int
@@ -104,6 +114,9 @@ type ContextMenu struct {
 	hasText      bool
 	openTargets  []OpenTarget
 	keyMap       keys.KeyMap
+	// outboxRef addresses a queued send instead of a message. A message menu
+	// leaves it empty; an entry has no ID to be addressed by (#193).
+	outboxRef string
 }
 
 // NewContextMenu builds the chat message context menu. mediaKind is the kind of
@@ -127,6 +140,30 @@ func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind domain.Me
 	cm.setItems(mainItems(isOut, replyToMsgID != 0, mediaKind, hasMedia, hasText, openTargets))
 	return cm
 }
+
+// NewOutboxContextMenu builds the menu for a queued send. Two items, because an
+// entry is not a message: nothing else in the message menu applies to it.
+//
+// Discard lives here rather than on a key of its own for the same reason
+// deleting a message does — destructive actions stay behind the menu (#193).
+func NewOutboxContextMenu(ref string, failed bool, km keys.KeyMap) *ContextMenu {
+	cm := &ContextMenu{
+		outboxRef: ref,
+		keyMap:    km,
+		list:      NewListView(true),
+	}
+	var items []menuItem
+	// Retrying something already on its way would only reset its backoff.
+	if failed {
+		items = append(items, menuItem{label: "Retry send", action: keys.ActionConfirm})
+	}
+	items = append(items, menuItem{label: "Discard", action: keys.ActionDelete})
+	cm.setItems(items)
+	return cm
+}
+
+// OutboxRef is the queued send this menu addresses, or "" for a message menu.
+func (cm *ContextMenu) OutboxRef() string { return cm.outboxRef }
 
 // setItems swaps the menu items and re-seeds the list: non-navigable rows
 // (ActionNone separators) are skipped and the cursor resets to the first
@@ -277,6 +314,9 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 
 func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 	action := cm.items[cm.list.Cursor()].action
+	if cm.outboxRef != "" {
+		return cm.executeOutbox(action)
+	}
 	switch action {
 	case keys.ActionJumpToOriginal:
 		replyToMsgID := cm.replyToMsgID
@@ -317,6 +357,20 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 		return nil, func() tea.Msg { return PlayVoiceRequest{} }
 	}
 	return cm, nil
+}
+
+// executeOutbox resolves a queued send's menu. Separate from the message
+// actions because none of them apply: an entry has no ID to address, and
+// discarding it asks no "for everyone?" question — it was never sent.
+func (cm *ContextMenu) executeOutbox(action keys.Action) (*ContextMenu, tea.Cmd) {
+	ref := cm.outboxRef
+	switch action {
+	case keys.ActionConfirm:
+		return nil, func() tea.Msg { return RetryOutboxRequest{Ref: ref} }
+	case keys.ActionDelete:
+		return nil, func() tea.Msg { return DiscardOutboxRequest{Ref: ref} }
+	}
+	return nil, func() tea.Msg { return CloseContextMenuMsg{} }
 }
 
 func (cm *ContextMenu) View() string {

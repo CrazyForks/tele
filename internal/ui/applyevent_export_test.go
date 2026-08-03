@@ -49,6 +49,12 @@ type testOwner struct {
 	forwardIDs     []int
 	forwardComment string
 	savedDrafts    []ownerDraft
+	// The durable send queue (#193): what the UI submitted, retried, discarded,
+	// and the context it submitted under.
+	sent        []core.SendRequest
+	retried     []string
+	discarded   []string
+	lastSendCtx context.Context
 	// searchResult and participants are what the queries answer with;
 	// lastSearchQuery records what was asked.
 	searchResult    []domain.Chat
@@ -197,6 +203,27 @@ func (o *testOwner) SetTyping(_ context.Context, _ int64, _ domain.TypingAction)
 func (o *testOwner) SaveDraft(_ context.Context, chatID int64, text string) error {
 	o.savedDrafts = append(o.savedDrafts, ownerDraft{chatID: chatID, text: text})
 	o.state.ApplyDraft(chatID, text)
+	return o.cmdErr
+}
+
+// The durable send queue (#193). The double records submissions rather than
+// draining them: what the UI is responsible for is handing the message over.
+func (o *testOwner) Send(ctx context.Context, req core.SendRequest) error {
+	o.lastSendCtx = ctx
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.sent = append(o.sent, req)
+	return nil
+}
+
+func (o *testOwner) RetryOutbox(ref string) error {
+	o.retried = append(o.retried, ref)
+	return o.cmdErr
+}
+
+func (o *testOwner) DiscardOutbox(ref string) error {
+	o.discarded = append(o.discarded, ref)
 	return o.cmdErr
 }
 

@@ -72,15 +72,26 @@ func errStatus(action string, err error) tea.Msg {
 	return StatusErrMsg{Text: text, Sev: sev}
 }
 
-// errStatusBackground is errStatus for a download nobody asked for: an inline
-// preview or the eager full-quality prefetch. An expired file reference is the
-// owner's business — it refreshes the reference, logs whatever it could not
-// repair and publishes the fresh one, which brings the fetch back through the
-// window — so saying it here only reports plumbing the user cannot act on. A
-// chat reopened from disk expires several references at once, which is a stack
-// of identical toasts over media that then appears anyway.
+// errStatusBackground is errStatus for work nobody asked for: an inline
+// preview, the eager full-quality prefetch, the read pointer following the
+// viewport. Two kinds are swallowed, both because they repair themselves and
+// neither because they are unimportant.
+//
+// An expired file reference is the owner's business — it refreshes the
+// reference, logs whatever it could not repair and publishes the fresh one,
+// which brings the fetch back through the window. A chat reopened from disk
+// expires several at once, which is a stack of identical toasts over media that
+// then appears anyway.
+//
+// A transient network failure means the connection is down, and background work
+// is re-attempted as soon as it returns. Marking read fires on every cursor
+// move, so an offline session otherwise fills with a toast per keypress about a
+// thing the reader cannot act on and did not ask for.
 func errStatusBackground(action string, err error) tea.Msg {
 	if telerr.Of(err) == telerr.StaleReference {
+		return nil
+	}
+	if e, ok := telerr.As(err); ok && e.Kind == telerr.Network && e.Transient {
 		return nil
 	}
 	return errStatus(action, err)

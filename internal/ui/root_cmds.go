@@ -10,6 +10,10 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
+// markReadCmd advances the read pointer to what the viewport shows. It follows
+// the cursor, so it runs on nearly every keypress — which is why its failures
+// go through errStatusBackground: the reader did not ask for this and cannot
+// act on it, and it is re-attempted as the viewport moves again.
 func (m RootModel) markReadCmd() tea.Cmd {
 	if m.owner == nil || m.currentChatID == 0 || m.focus != FocusChat {
 		return nil
@@ -21,7 +25,7 @@ func (m RootModel) markReadCmd() tea.Cmd {
 	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
 	return func() tea.Msg {
 		if err := owner.MarkRead(ctx, chatID, maxID); err != nil {
-			return errStatus("mark read", err)
+			return errStatusBackground("mark read", err)
 		}
 		return nil
 	}
@@ -36,7 +40,7 @@ func (m RootModel) readReactionsCmd(chatID int64) tea.Cmd {
 	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
 		if err := owner.ReadReactions(ctx, chatID); err != nil {
-			return errStatus("read reactions", err)
+			return errStatusBackground("read reactions", err)
 		}
 		return nil
 	}
@@ -50,7 +54,7 @@ func (m RootModel) readMentionsCmd(chatID int64) tea.Cmd {
 	ctx, owner := m.ctx, m.owner
 	return func() tea.Msg {
 		if err := owner.ReadMentions(ctx, chatID); err != nil {
-			return errStatus("read mentions", err)
+			return errStatusBackground("read mentions", err)
 		}
 		return nil
 	}

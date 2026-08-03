@@ -86,7 +86,7 @@ func (o *Owner) attempt(ctx context.Context, e domain.OutboxEntry) {
 	o.log.Debug("outbox: sending",
 		zap.String("ref", e.Ref), zap.Int64("chat_id", e.ChatID), zap.Int("attempt", e.Attempts))
 
-	msgID, err := o.client.SendMessage(ctx, peer, e.Message.Text, e.Message.ReplyToMsgID, e.Message.Entities, e.RandomID)
+	sent, err := o.client.SendMessage(ctx, peer, e.Message.Text, e.Message.ReplyToMsgID, e.Message.Entities, e.RandomID)
 	if ctx.Err() != nil {
 		// The owner is going away. The row stays in "sending" on purpose: the
 		// next process resets it and resends with the same random_id.
@@ -96,7 +96,7 @@ func (o *Owner) attempt(ctx context.Context, e domain.OutboxEntry) {
 		o.recordFailure(e, err)
 		return
 	}
-	o.recordSent(e, msgID)
+	o.recordSent(e, sent)
 }
 
 // recordFailure applies the queue's policy to a refused send.
@@ -115,6 +115,9 @@ func (o *Owner) recordFailure(e domain.OutboxEntry, err error) {
 		}
 		o.log.Warn("outbox: send failed for good",
 			zap.String("ref", e.Ref), zap.String("kind", string(e.ErrKind)))
+		// Said once, when it happens. The bubble keeps only a glyph; the reason
+		// is repeated by the client when the cursor rests on the entry (#193).
+		o.publishFailure(Failure{ChatID: e.ChatID, Op: OpSend, Err: err})
 	} else {
 		e.State = domain.OutboxQueued
 		e.NextAttemptAt = time.Now().Add(delay)
@@ -128,20 +131,39 @@ func (o *Owner) recordFailure(e domain.OutboxEntry, err error) {
 	o.Refresh()
 }
 
-// recordSent hands the entry over to the update path.
+// recordSent puts the sent message into domain state, which is what makes the
+// pending bubble become a real one.
 //
-// The row is deliberately not deleted here. The reply to messages.sendMessage
-// is fed into the update pipeline (updhook, #198), but applied to state by the
-// update loop on another goroutine. Deleting here and refreshing would publish
-// one delta carrying neither the pending bubble nor the message: a visible
-// flicker on every send. So the entry is marked with the confirmed ID and
-// removed by the change listener once the message is actually in the chat.
-func (o *Owner) recordSent(e domain.OutboxEntry, msgID int) {
-	e.SentMsgID = msgID
+// Telegram sends no echo for a message this account sent: a send into a user
+// chat answers with an updateShortSentMessage that carries no body, so nothing
+// arrives through the update stream to record. The message comes back from the
+// send itself and is applied here.
+//
+// The entry is not deleted here either. Applying commits, the commit listener
+// runs clearSentOutbox, and that is where the row goes — so the bubble and the
+// message swap inside one delta instead of across two with a frame showing
+// neither (#193).
+func (o *Owner) recordSent(e domain.OutboxEntry, sent domain.Message) {
+	if sent.ID == 0 {
+		// The send succeeded but named no message. Nothing can be recorded and
+		// nothing should be re-sent: drop the entry and let the next history
+		// fetch surface the message.
+		o.log.Warn("outbox: send confirmed no message id", zap.String("ref", e.Ref))
+		o.dropEntry(e.Ref)
+		return
+	}
+	e.SentMsgID = sent.ID
 	if err := o.outbox.Update(e); err != nil {
 		o.log.Error("outbox: could not record a send", zap.Error(err))
 	}
-	o.log.Debug("outbox: sent", zap.String("ref", e.Ref), zap.Int("msg_id", msgID))
+	o.log.Debug("outbox: sent", zap.String("ref", e.Ref), zap.Int("msg_id", sent.ID))
+
+	// Commits, so the listener clears the entry before the projections rebuild.
+	o.state.ApplyIncoming(sent)
+
+	// The listener normally has the row already. This is the backstop for the
+	// case where it did not: the send happened, and a bubble stuck at "sending"
+	// would be the lie.
 	go o.dropIfUndelivered(e.Ref)
 }
 
@@ -156,10 +178,20 @@ func (o *Owner) dropIfUndelivered(ref string) {
 	}
 	o.log.Warn("outbox: no update for a sent message, dropping the entry",
 		zap.String("ref", ref), zap.Int("msg_id", cur.SentMsgID))
-	if err := o.outbox.Delete(ref); err != nil {
-		o.log.Error("outbox: could not drop a sent entry", zap.Error(err))
-	}
+	o.dropEntry(ref)
 	o.Refresh()
+}
+
+// dropEntry removes a row and lets the worker know. The wake is the point: a
+// sent entry stays the head of its chat until it goes, so the next message in
+// that chat is not eligible — and without a nudge the worker would sleep out
+// its idle interval before noticing (#193).
+func (o *Owner) dropEntry(ref string) {
+	if err := o.outbox.Delete(ref); err != nil {
+		o.log.Error("outbox: could not drop an entry", zap.Error(err))
+		return
+	}
+	o.wakeOutbox()
 }
 
 // clearSentOutbox removes entries whose message has arrived. Called from the
@@ -176,8 +208,6 @@ func (o *Owner) clearSentOutbox(chatID int64) {
 		if _, err := o.messageByID(chatID, e.SentMsgID); err != nil {
 			continue
 		}
-		if err := o.outbox.Delete(e.Ref); err != nil {
-			o.log.Error("outbox: could not remove a delivered entry", zap.Error(err))
-		}
+		o.dropEntry(e.Ref)
 	}
 }

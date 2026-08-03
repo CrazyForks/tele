@@ -829,3 +829,51 @@ func TestSelectMessagesByIDs_KeepsOnlyRequested(t *testing.T) {
 	assert.Equal(t, 5, got[0].ID)
 	assert.Equal(t, 9, got[1].ID)
 }
+
+// Telegram does not echo your own message back: messages.sendMessage answers
+// with updateShortSentMessage, which carries an id and a date and nothing else.
+// The created message has to be assembled from the request, or nothing would
+// ever show it (#193).
+func TestSentMessage_FromShortSentReply(t *testing.T) {
+	peer := domain.Peer{ID: 42, Type: domain.PeerUser}
+	ents := []domain.MessageEntity{{Type: "bold", Offset: 0, Length: 2}}
+	reply := &tg.UpdateShortSentMessage{ID: 777, Date: 1700000000}
+
+	got := sentMessage(reply, 123, peer, "hi", 10, ents)
+
+	assert.Equal(t, 777, got.ID)
+	assert.Equal(t, int64(42), got.ChatID)
+	assert.Equal(t, "hi", got.Text)
+	assert.Equal(t, 10, got.ReplyToMsgID)
+	assert.Equal(t, ents, got.Entities)
+	assert.True(t, got.IsOut)
+	assert.Equal(t, int64(1700000000), got.Date.Unix(), "the server's date, not the client's clock")
+}
+
+// A group or channel answers with the whole message. Prefer it: it carries what
+// the server decided rather than what was asked for.
+func TestSentMessage_PrefersTheServerMessageWhenTheReplyCarriesOne(t *testing.T) {
+	peer := domain.Peer{ID: 42, Type: domain.PeerChannel}
+	reply := &tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateMessageID{ID: 555, RandomID: 123},
+		&tg.UpdateNewChannelMessage{Message: &tg.Message{
+			ID:      555,
+			PeerID:  &tg.PeerChannel{ChannelID: 42},
+			Message: "server text",
+			Date:    1700000123,
+			Out:     true,
+		}},
+	}}
+
+	got := sentMessage(reply, 123, peer, "asked text", 0, nil)
+
+	assert.Equal(t, 555, got.ID)
+	assert.Equal(t, "server text", got.Text)
+	assert.Equal(t, int64(1700000123), got.Date.Unix())
+}
+
+func TestSentMessage_NoIDWhenTheReplyNamesNone(t *testing.T) {
+	got := sentMessage(&tg.Updates{}, 123, domain.Peer{ID: 42}, "hi", 0, nil)
+
+	assert.Zero(t, got.ID)
+}

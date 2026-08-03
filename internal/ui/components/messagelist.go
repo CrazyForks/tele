@@ -40,10 +40,21 @@ type MessageList struct {
 	selRect   Rect
 	selRectOK bool
 
+	// outbox is the chat's queued sends, drawn after the window. They are not
+	// messages: they have no ID, and they carry a state and a reason instead
+	// (#193).
+	outbox []domain.OutboxEntry
+
 	// cursorMsgID is the explicit "active message" the user steps over with
 	// CursorUp/CursorDown. 0 means unset; selection then falls back to the
 	// newest visible message. It is the target for per-message actions.
 	cursorMsgID int
+
+	// cursorOutboxRef is set instead of cursorMsgID when the cursor sits on a
+	// queued send. The two are mutually exclusive: an entry has no message ID,
+	// and every action keyed on one must miss rather than hit a neighbouring
+	// message. placeCursor is the only writer of the pair (#193).
+	cursorOutboxRef string
 
 	// highlightedMsgID is the message currently flashed by a highlight;
 	// highlightStep counts down HighlightFadeSteps → 0 (0 = none);

@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 )
@@ -34,6 +35,14 @@ type Owner interface {
 	Forward(ctx context.Context, fromChatID int64, to domain.Peer, msgIDs []int, comment string) error
 	SetTyping(ctx context.Context, chatID int64, action domain.TypingAction) error
 	SaveDraft(ctx context.Context, chatID int64, text string) error
+
+	// The durable send queue. Send returns once the entry is on disk, not once
+	// Telegram answered: ordering, backoff and surviving a restart are the
+	// queue's business, and its entries reach the client in the projection
+	// rather than being guessed at locally (#193).
+	Send(ctx context.Context, req core.SendRequest) error
+	RetryOutbox(ref string) error
+	DiscardOutbox(ref string) error
 
 	// Queries. One-off answers nobody subscribes to.
 	SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error)

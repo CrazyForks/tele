@@ -10,11 +10,15 @@ import (
 )
 
 var (
-	inNameStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	editNameStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
-	tsStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	sentStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	readStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	inNameStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	editNameStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
+	tsStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	sentStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	readStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	// outboxStyle marks a send still on its way: the same weight as the sent
+	// tick it will become. failedStyle is the only red in a bubble border.
+	outboxStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	failedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	quoteStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	sepStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))

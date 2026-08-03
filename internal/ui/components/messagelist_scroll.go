@@ -124,7 +124,7 @@ func (ml *MessageList) ScrollToFirstUnread(readMaxID int) bool {
 			if i > 0 && ml.items[i-1].kind == itemUnreadSeparator {
 				start = i - 1
 			}
-			ml.cursorMsgID = item.msg.ID
+			ml.placeCursor(i)
 			ml.viewStart = start
 			ml.lineOffset = 0
 			lines := 0
@@ -217,7 +217,7 @@ func (ml *MessageList) ScrollToMessage(id int) bool {
 		if item.kind != itemMessage || item.msg.ID != id {
 			continue
 		}
-		ml.cursorMsgID = id
+		ml.placeCursor(i)
 		ml.viewStart = i
 		ml.lineOffset = 0
 		lines := 0

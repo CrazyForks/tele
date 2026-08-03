@@ -209,6 +209,22 @@ func (m *ChatModel) saveDraft(id int64, text string) {
 	m.drafts[id] = text
 }
 func (m *ChatModel) SetMessages(msgs []domain.Message) { m.msgList.SetMessages(msgs) }
+
+// SetOutbox replaces the queued sends drawn below the window (#193).
+func (m *ChatModel) SetOutbox(entries []domain.OutboxEntry) { m.msgList.SetOutbox(entries) }
+
+// Outbox returns the queued sends currently drawn.
+func (m *ChatModel) Outbox() []domain.OutboxEntry { return m.msgList.Outbox() }
+
+// SelectedOutboxRef is the queued send under the cursor, or "" when a message
+// is selected. While it is set, SelectedMessageID reports 0.
+func (m *ChatModel) SelectedOutboxRef() string { return m.msgList.SelectedOutboxRef() }
+
+// SelectedOutboxEntry is the queued send under the cursor; ok is false when a
+// message is selected.
+func (m *ChatModel) SelectedOutboxEntry() (domain.OutboxEntry, bool) {
+	return m.msgList.SelectedOutboxEntry()
+}
 func (m *ChatModel) SetMessagesKeepScroll(msgs []domain.Message) {
 	m.msgList.SetMessagesKeepScroll(msgs)
 }

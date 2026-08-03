@@ -7,19 +7,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/domain"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
-
-type sentMsgConfirmedMsg struct {
-	chatID     int64
-	sentinelID int
-	realID     int
-	failed     bool
-}
 
 // reactionFailedMsg reports a refused reaction for presentation only: the owner
 // has already restored the previous reactions.
@@ -56,62 +49,77 @@ type forwardDoneMsg struct {
 	err error
 }
 
+// handleSendMsg hands the message to the durable queue and returns. Nothing is
+// inserted into the store and nothing is guessed at: the queue's own entry is
+// what appears on screen, so an unfinished send survives this process and is
+// visible to every attached client rather than only to the one that typed it
+// (#193).
 func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd) {
-	if m.tgClient == nil {
+	if m.owner == nil {
 		return m, nil
 	}
-	m.nextSentinel--
-	sentinelID := m.nextSentinel
-	sentinel := domain.Message{
-		ID:           sentinelID,
+	ctx, owner := m.ctx, m.owner
+	req := core.SendRequest{
+		Ref:          core.NewRef(),
 		ChatID:       m.currentChatID,
 		Text:         msg.Text,
-		Date:         time.Now(),
-		IsOut:        true,
+		Entities:     msg.Entities,
 		ReplyToMsgID: msg.ReplyToMsgID,
-		// Carry mention entities so an outgoing @mention is highlighted
-		// immediately in the optimistic bubble, not only after a server refresh.
-		Entities: msg.Entities,
 	}
-	if m.st != nil {
-		m.st.AppendMessage(sentinel)
-		m.chat.SetMessages(m.st.Messages(m.currentChatID))
-	}
-	ctx := m.ctx
-	client := m.tgClient
-	peer := msg.Peer
-	text := msg.Text
-	replyToMsgID := msg.ReplyToMsgID
-	entities := msg.Entities
-	chatID := m.currentChatID
-	// Generated once, outside the command: a command that runs again must carry
-	// the same deduplication key, or Telegram sees a second message (#193).
-	randomID := internaltg.NewRandomID()
 	return m, func() tea.Msg {
-		realID, err := client.SendMessage(ctx, peer, text, replyToMsgID, entities, randomID)
-		if err != nil {
-			return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: 0, failed: true}
+		if err := owner.Send(ctx, req); err != nil {
+			return errStatus("send", err)
 		}
-		return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: realID}
+		return nil
 	}
 }
 
-func (m RootModel) handleSentMsgConfirmed(msg sentMsgConfirmedMsg) (RootModel, tea.Cmd) {
-	if m.st == nil {
+// showOutboxReason names why the selected send failed, in the status bar. The
+// bubble carries only a glyph, so this is where the reason lives once the toast
+// that announced it has gone (#193).
+func (m *RootModel) showOutboxReason() {
+	if m.chat == nil {
+		return
+	}
+	entry, ok := m.chat.SelectedOutboxEntry()
+	if !ok || entry.State != domain.OutboxFailed {
+		return
+	}
+	m.statusBar.SetStatus("not sent: " + components.OutboxReason(entry.ErrKind) +
+		" — " + m.keyMap.KeyFor(keys.ContextChat, keys.ActionConfirm) + " to retry")
+}
+
+// handleRetryOutbox puts a failed send back in the queue. The entry's new state
+// reaches the pane through the projection like every other change, so nothing
+// is updated here (#193).
+func (m RootModel) handleRetryOutbox(msg components.RetryOutboxRequest) (RootModel, tea.Cmd) {
+	m.contextMenu = nil
+	if m.owner == nil {
 		return m, nil
 	}
-	if msg.realID != 0 {
-		m.st.UpdateMessageID(msg.chatID, msg.sentinelID, msg.realID)
-	} else {
-		m.st.RemoveMessage(msg.chatID, msg.sentinelID)
+	owner, ref := m.owner, msg.Ref
+	return m, func() tea.Msg {
+		if err := owner.RetryOutbox(ref); err != nil {
+			return errStatus("retry", err)
+		}
+		return nil
 	}
-	if msg.chatID == m.currentChatID {
-		m.chat.SetMessages(m.st.Messages(msg.chatID))
+}
+
+// handleDiscardOutbox drops a queued send. The text goes with it: that is what
+// the action is for, and it is the only way an entry leaves the queue unsent.
+func (m RootModel) handleDiscardOutbox(msg components.DiscardOutboxRequest) (RootModel, tea.Cmd) {
+	m.contextMenu = nil
+	if m.owner == nil {
+		return m, nil
 	}
-	if msg.failed {
-		return m, func() tea.Msg { return StatusErrMsg{Text: "send failed", Sev: components.SeverityWarning} }
+	owner, ref := m.owner, msg.Ref
+	return m, func() tea.Msg {
+		if err := owner.DiscardOutbox(ref); err != nil {
+			return errStatus("discard", err)
+		}
+		return nil
 	}
-	return m, nil
 }
 
 func (m RootModel) handleEditSend(msg screens.EditSendRequest) (RootModel, tea.Cmd) {

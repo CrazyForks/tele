@@ -5,9 +5,39 @@ package components
 // it survives item rebuilds (prepend/edit). The viewport follows the cursor and
 // keeps it vertically centered, clamped at the top and natural bottom.
 
-// cursorIndex returns the items index of the cursor message, or -1 when unset or
-// no longer present.
+// placeCursor puts the cursor on one item, whichever kind it is. It is the only
+// writer of cursorMsgID and cursorOutboxRef: the invariant that at most one of
+// them is set lives nowhere else (#193).
+func (ml *MessageList) placeCursor(i int) {
+	if i < 0 || i >= len(ml.items) {
+		ml.cursorMsgID, ml.cursorOutboxRef = 0, ""
+		return
+	}
+	if ml.items[i].kind == itemOutbox {
+		ml.cursorMsgID, ml.cursorOutboxRef = 0, ml.items[i].entry.Ref
+		return
+	}
+	ml.cursorMsgID, ml.cursorOutboxRef = ml.items[i].msg.ID, ""
+}
+
+// selectable reports whether the cursor may rest on an item: messages and
+// queued sends, not separators.
+func (ml *MessageList) selectable(i int) bool {
+	k := ml.items[i].kind
+	return k == itemMessage || k == itemOutbox
+}
+
+// cursorIndex returns the items index the cursor is on, or -1 when unset or no
+// longer present.
 func (ml *MessageList) cursorIndex() int {
+	if ml.cursorOutboxRef != "" {
+		for i := range ml.items {
+			if ml.items[i].kind == itemOutbox && ml.items[i].entry.Ref == ml.cursorOutboxRef {
+				return i
+			}
+		}
+		return -1
+	}
 	if ml.cursorMsgID == 0 {
 		return -1
 	}
@@ -19,15 +49,16 @@ func (ml *MessageList) cursorIndex() int {
 	return -1
 }
 
-// setCursorNewest parks the cursor on the newest (last) message.
+// setCursorNewest parks the cursor on the newest selectable item — a queued
+// send when there is one, since it sits below every message.
 func (ml *MessageList) setCursorNewest() {
 	for i := len(ml.items) - 1; i >= 0; i-- {
-		if ml.items[i].kind == itemMessage {
-			ml.cursorMsgID = ml.items[i].msg.ID
+		if ml.selectable(i) {
+			ml.placeCursor(i)
 			return
 		}
 	}
-	ml.cursorMsgID = 0
+	ml.placeCursor(-1)
 }
 
 // CursorUp moves the active-message cursor one bubble toward older history and
@@ -43,10 +74,10 @@ func (ml *MessageList) CursorUp() bool {
 		}
 	}
 	for i := idx - 1; i >= 0; i-- {
-		if ml.items[i].kind == itemMessage {
-			ml.cursorMsgID = ml.items[i].msg.ID
+		if ml.selectable(i) {
+			ml.placeCursor(i)
 			ml.revealCursorUp()
-			return ml.cursorMsgID == ml.OldestID()
+			return ml.cursorMsgID != 0 && ml.cursorMsgID == ml.OldestID()
 		}
 	}
 	// Already on the oldest loaded message.
@@ -61,8 +92,8 @@ func (ml *MessageList) CursorDown() {
 		return
 	}
 	for i := idx + 1; i < len(ml.items); i++ {
-		if ml.items[i].kind == itemMessage {
-			ml.cursorMsgID = ml.items[i].msg.ID
+		if ml.selectable(i) {
+			ml.placeCursor(i)
 			ml.revealCursorDown()
 			return
 		}
@@ -186,9 +217,9 @@ func (ml *MessageList) clampCursorToViewport() {
 		return
 	}
 	if idx < first {
-		ml.cursorMsgID = ml.items[first].msg.ID
+		ml.placeCursor(first)
 	} else if idx > last {
-		ml.cursorMsgID = ml.items[last].msg.ID
+		ml.placeCursor(last)
 	}
 }
 

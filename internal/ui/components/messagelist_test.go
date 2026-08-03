@@ -9,6 +9,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -1668,4 +1669,160 @@ func TestMessageList_ItemHeights_InvalidatedOnEdit(t *testing.T) {
 	ml.SetMessagesKeepScroll(edited)
 
 	assert.Greater(t, ml.ScrollInfo().Total, before, "edited longer message must increase total height")
+}
+
+func TestMessageList_RendersOutboxEntriesAfterTheLastMessage(t *testing.T) {
+	ml := components.NewMessageList(20, 60)
+	ml.SetMessages([]domain.Message{{ID: 10, ChatID: 1, Text: "sent already", IsOut: true}})
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxQueued,
+		Message: &domain.OutboxMessage{Text: "still queued"},
+	}})
+
+	out := ml.View()
+
+	require.Contains(t, out, "still queued")
+	assert.Less(t, strings.Index(out, "sent already"), strings.Index(out, "still queued"),
+		"a pending send is newer than the window by definition")
+}
+
+// The state lives in the bottom border, in the slot the delivery ticks take
+// once the message exists — not on a line of its own, which mixed service text
+// into the message and made the bubble's height move (#193).
+func TestMessageList_ShowsTheQueueStateInTheBorder(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry domain.OutboxEntry
+		want  string
+	}{
+		{"queued", domain.OutboxEntry{State: domain.OutboxQueued}, "⋯"},
+		{"sending", domain.OutboxEntry{State: domain.OutboxSending}, "↑"},
+		{"failed", domain.OutboxEntry{State: domain.OutboxFailed, ErrKind: telerr.Forbidden}, "✕"},
+		{
+			"waiting out a backoff",
+			domain.OutboxEntry{State: domain.OutboxQueued, NextAttemptAt: time.Now().Add(4 * time.Second)},
+			"↻ 4s",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ml := components.NewMessageList(20, 60)
+			e := tc.entry
+			e.Ref, e.ChatID = "r1", 1
+			e.Message = &domain.OutboxMessage{Text: "body"}
+			ml.SetOutbox([]domain.OutboxEntry{e})
+
+			out := ml.View()
+
+			assert.Contains(t, out, "body")
+			assert.Contains(t, out, tc.want)
+			assert.NotContains(t, out, "not allowed", "the reason belongs in the status bar, not the bubble")
+		})
+	}
+}
+
+// The bubble's height must not move as the send progresses: that was the other
+// half of what the status line got wrong.
+func TestMessageList_TheQueueStateDoesNotChangeTheBubbleHeight(t *testing.T) {
+	height := func(state domain.OutboxState) int {
+		ml := components.NewMessageList(20, 60)
+		ml.SetOutbox([]domain.OutboxEntry{{
+			Ref: "r1", ChatID: 1, State: state,
+			Message: &domain.OutboxMessage{Text: "body"},
+		}})
+		return strings.Count(ml.View(), "\n")
+	}
+
+	assert.Equal(t, height(domain.OutboxQueued), height(domain.OutboxSending))
+	assert.Equal(t, height(domain.OutboxQueued), height(domain.OutboxFailed))
+}
+
+func TestOutboxReason_NamesTheFailureInPlainWords(t *testing.T) {
+	assert.Equal(t, "not allowed in this chat", components.OutboxReason(telerr.Forbidden))
+	assert.Equal(t, "chat is unreachable", components.OutboxReason(telerr.PeerNotFound))
+	assert.Equal(t, "unexpected error", components.OutboxReason(telerr.Internal))
+}
+
+func TestMessageList_ShowsAQueuedEntryInAChatWithNoHistory(t *testing.T) {
+	// The first message ever sent to a chat has nothing to sit below.
+	ml := components.NewMessageList(20, 60)
+
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxQueued,
+		Message: &domain.OutboxMessage{Text: "first ever"},
+	}})
+
+	assert.Contains(t, ml.View(), "first ever")
+}
+
+func TestSetOutbox_ReplacesTheTailWithoutDisturbingTheMessages(t *testing.T) {
+	ml := components.NewMessageList(20, 60)
+	ml.SetMessages([]domain.Message{{ID: 10, ChatID: 1, Text: "sent already", IsOut: true}})
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxQueued,
+		Message: &domain.OutboxMessage{Text: "pending"},
+	}})
+
+	// The entry goes: its message arrived through the update path.
+	ml.SetOutbox(nil)
+
+	out := ml.View()
+	assert.Contains(t, out, "sent already")
+	assert.NotContains(t, out, "pending")
+	assert.Empty(t, ml.Outbox())
+}
+
+func TestSetOutbox_AStateChangeLeavesTheCursorWhereItWas(t *testing.T) {
+	// An entry changing state must not move the selection out from under a
+	// reader scrolled up in history. A newly submitted one does take it — see
+	// TestSetOutbox_ScrollsToANewlySubmittedSend.
+	ml := components.NewMessageList(20, 60)
+	ml.SetMessages(makeMessages(5))
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxQueued,
+		Message: &domain.OutboxMessage{Text: "pending"},
+	}})
+	ml.CursorUp()
+	before := ml.SelectedMessageID()
+	require.NotZero(t, before)
+
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxSending,
+		Message: &domain.OutboxMessage{Text: "pending"},
+	}})
+
+	assert.Equal(t, before, ml.SelectedMessageID())
+}
+
+func TestSetOutbox_ScrollsToANewlySubmittedSend(t *testing.T) {
+	// A bubble added below the fold, with nothing but the scrollbar moving, is
+	// how a message you just typed reads as lost (#193).
+	ml := components.NewMessageList(6, 60)
+	ml.SetMessages(makeMessages(40))
+
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxQueued,
+		Message: &domain.OutboxMessage{Text: "just typed"},
+	}})
+
+	assert.Contains(t, ml.View(), "just typed")
+}
+
+func TestSetOutbox_AStateChangeDoesNotYankTheViewport(t *testing.T) {
+	ml := components.NewMessageList(6, 60)
+	ml.SetMessages(makeMessages(40))
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxQueued,
+		Message: &domain.OutboxMessage{Text: "pending"},
+	}})
+	ml.ScrollUpBy(20)
+	before := ml.View()
+
+	// The same entry, now in flight.
+	ml.SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxSending,
+		Message: &domain.OutboxMessage{Text: "pending"},
+	}})
+
+	assert.Equal(t, before, ml.View(), "a reader scrolled up must stay where they are")
 }

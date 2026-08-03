@@ -47,9 +47,9 @@ func (m *mockClient) RefreshMessages(_ context.Context, _ domain.Peer, _ []int) 
 	return nil, nil
 }
 
-func (m *mockClient) SendMessage(_ context.Context, _ domain.Peer, text string, _ int, _ []domain.MessageEntity, _ int64) (int, error) {
+func (m *mockClient) SendMessage(_ context.Context, _ domain.Peer, text string, _ int, _ []domain.MessageEntity, _ int64) (domain.Message, error) {
 	m.sent = append(m.sent, text)
-	return 0, nil
+	return domain.Message{}, nil
 }
 
 func (m *mockClient) SendMedia(_ context.Context, _ internaltg.SendMediaParams) (int, error) {

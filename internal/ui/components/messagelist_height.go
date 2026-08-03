@@ -161,6 +161,13 @@ func (ml *MessageList) computeItemHeight(i int) int {
 	if ml.items[i].kind == itemDateSeparator || ml.items[i].kind == itemUnreadSeparator {
 		return 3
 	}
+	if ml.items[i].kind == itemOutbox {
+		// Measured from the render rather than predicted. The status glyph can
+		// widen the bubble, and msgHeight carries its own copy of the wrap
+		// arithmetic — a second place to keep in step is exactly the drift
+		// groupHeight needs a dedicated test to catch (#193).
+		return len(ml.renderItem(i, false))
+	}
 	if len(ml.items[i].parts) > 1 {
 		return ml.groupHeight(ml.items[i].parts)
 	}

@@ -68,11 +68,16 @@ func (m RootModel) handleIncoming(in core.Incoming) (RootModel, tea.Cmd) {
 // handleFailure renders work the owner could not finish. The owner reports what
 // failed in domain terms (#191); saying it is the client's job.
 func (m RootModel) handleFailure(f core.Failure) (RootModel, tea.Cmd) {
-	text, _, ok := errText(f.Op, f.Err)
+	text, sev, ok := errText(f.Op, f.Err)
 	if !ok {
 		// A cancelled operation is not a failure and must not blank out the
 		// pane with an empty error banner.
 		return m, nil
+	}
+	if f.Op == core.OpSend {
+		// A refused send has nothing to blank out: the message is still on
+		// screen, marked, and can be retried. Say it once and move on (#193).
+		return m, func() tea.Msg { return StatusErrMsg{Text: text, Sev: sev} }
 	}
 	return m.handleChatLoadErr(chatLoadErrMsg{chatID: f.ChatID, text: text})
 }

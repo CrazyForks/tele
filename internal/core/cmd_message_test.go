@@ -214,24 +214,37 @@ func (s *stubClient) ForwardMessages(_ context.Context, _ domain.Peer, to domain
 	return s.err
 }
 
-func (s *stubClient) SendMessage(_ context.Context, _ domain.Peer, text string, _ int, _ []domain.MessageEntity, randomID int64) (int, error) {
+func (s *stubClient) SendMessage(_ context.Context, peer domain.Peer, text string, replyTo int, ents []domain.MessageEntity, randomID int64) (domain.Message, error) {
 	s.sendMu.Lock()
 	s.sendCount++
 	s.sentText = text
 	s.sentRandomID = randomID
 	block := s.sendBlock
 	sentID := s.sentID
+	// Every send creates a distinct message, as Telegram does. Reusing one id
+	// would let a bug that mixes entries up pass unnoticed.
+	nth := s.sendCount - 1
 	s.sendMu.Unlock()
 	if block != nil {
 		<-block
 	}
 	if s.err != nil {
-		return 0, s.err
+		return domain.Message{}, s.err
 	}
-	if sentID != 0 {
-		return sentID, nil
+	switch sentID {
+	case 0:
+		sentID = 777 + nth
+	case -1:
+		sentID = 0 // stands in for a reply that named no message
+	default:
+		sentID += nth
 	}
-	return 777, nil
+	// Telegram answers a send with the message it created; the stub does the
+	// same, since that is what the caller records (#193).
+	return domain.Message{
+		ID: sentID, ChatID: peer.ID, Text: text, Entities: ents,
+		ReplyToMsgID: replyTo, IsOut: true, Date: time.Unix(1700000000, 0),
+	}, nil
 }
 
 func (s *stubClient) sendCalls() int {

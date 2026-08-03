@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"time"
 
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
@@ -117,31 +118,36 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer domain.Peer, offsetID 
 	return msgs, err
 }
 
-func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (int, error) {
+func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
-		return 0, err
+		return domain.Message{}, err
 	}
 
 	c.traceLog.Debug("SendMessage", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
 	inputPeer := peerToInput(peer)
-	var realID int
+	var sent domain.Message
 	err = WithRetry(ctx, func() error {
 		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID, entities))
 		if err != nil {
 			c.log.Error("MessagesSendMessage failed", zap.Error(err))
 			return err
 		}
-		// The echo is deliberately not suppressed. Suppression existed only so an
-		// optimistic client-side bubble would not double up, and the durable
-		// outbox has no optimistic bubble: the message arrives the ordinary way,
-		// through the updates the reply carries, and the queue entry goes when it
-		// does (#193). Media keeps suppressing until #195.
-		realID = extractSentMessageID(updates, randomID)
-		c.traceLog.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID), zap.Int("real_id", realID))
+		// The created message is returned rather than left to the update stream:
+		// Telegram sends no echo for your own message, and the reply to a send
+		// into a user chat is an updateShortSentMessage with no body at all. The
+		// caller records it, exactly as it always had to (#193).
+		//
+		// Nothing is suppressed here any more. Suppression existed so a client's
+		// optimistic bubble would not double up; the durable outbox has none, and
+		// a reply that does carry the message (groups, channels) is applied by id,
+		// so the pipeline delivering it a second time is a no-op. Media keeps
+		// suppressing until #195.
+		sent = sentMessage(updates, randomID, peer, text, replyToMsgID, entities)
+		c.traceLog.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID), zap.Int("real_id", sent.ID))
 		return nil
 	})
-	return realID, err
+	return sent, err
 }
 
 // SendMediaParams carries everything SendMedia needs. Media is a ready-made
@@ -588,6 +594,61 @@ func extractSentMessageIDs(updates tg.UpdatesClass, randomIDs []int64) []int {
 
 func extractSentMessageID(updates tg.UpdatesClass, randomID int64) int {
 	return extractSentMessageIDs(updates, []int64{randomID})[0]
+}
+
+// sentMessage is the message a send created.
+//
+// It has to be assembled here because Telegram does not echo your own message
+// back through the update stream. messages.sendMessage to a user answers with
+// updateShortSentMessage, which carries an id, a date and nothing else — no
+// text, no peer, and no UpdateNewMessage for the dispatcher to convert. Nothing
+// downstream would ever see the message otherwise (#193).
+//
+// A group or channel does answer with the whole message; that one is preferred,
+// since it carries what the server decided rather than what was asked for.
+func sentMessage(updates tg.UpdatesClass, randomID int64, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity) domain.Message {
+	msg := domain.Message{
+		ChatID:       peer.ID,
+		Text:         text,
+		Entities:     entities,
+		ReplyToMsgID: replyToMsgID,
+		IsOut:        true,
+		Date:         time.Now(),
+	}
+	switch u := updates.(type) {
+	case *tg.UpdateShortSentMessage:
+		msg.ID = u.ID
+		msg.Date = time.Unix(int64(u.Date), 0)
+	case *tg.Updates:
+		msg.ID = extractSentMessageID(updates, randomID)
+		if full, ok := findSentMessage(u.Updates, msg.ID, peer.ID); ok {
+			return full
+		}
+	}
+	return msg
+}
+
+// findSentMessage picks the created message out of a reply that carries one.
+func findSentMessage(updates []tg.UpdateClass, msgID int, chatID int64) (domain.Message, bool) {
+	if msgID == 0 {
+		return domain.Message{}, false
+	}
+	for _, u := range updates {
+		var raw tg.MessageClass
+		switch v := u.(type) {
+		case *tg.UpdateNewMessage:
+			raw = v.Message
+		case *tg.UpdateNewChannelMessage:
+			raw = v.Message
+		default:
+			continue
+		}
+		msg, ok := convertMessage(raw, chatID)
+		if ok && msg.ID == msgID {
+			return msg, true
+		}
+	}
+	return domain.Message{}, false
 }
 
 func typingActionToTG(a domain.TypingAction) tg.SendMessageActionClass {

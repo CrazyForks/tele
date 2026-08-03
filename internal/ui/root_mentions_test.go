@@ -86,21 +86,26 @@ func TestMentionPopupOpensAndInserts(t *testing.T) {
 	}
 }
 
-func TestOutgoingMentionSentinelCarriesEntities(t *testing.T) {
-	mc := &mockTGClient{}
-	m, st := newRootOnGroupChat(t, mc)
+// The mention entity has to survive the trip to the queue: it names a user by
+// ID and access hash, which cannot be recovered from the text afterwards.
+func TestOutgoingMentionSubmissionCarriesEntities(t *testing.T) {
+	m, _ := newRootOnGroupChat(t, &mockTGClient{})
+	owner := m.Owner().(*testOwner)
 	peer := domain.Peer{ID: 5, Type: domain.PeerSuperGroup}
 	ents := []domain.MessageEntity{{Type: "mention_name", Offset: 0, Length: 5, UserID: 7, AccessHash: 8}}
-	nm, _ := m.Update(screens.SendMsgRequest{Peer: peer, Text: "@Ivan hi", Entities: ents})
-	_ = nm.(ui.RootModel)
 
-	msgs := st.Messages(5)
-	if len(msgs) == 0 {
-		t.Fatal("no message stored after send")
+	_, cmd := m.Update(screens.SendMsgRequest{Peer: peer, Text: "@Ivan hi", Entities: ents})
+	if cmd == nil {
+		t.Fatal("send produced no command")
 	}
-	last := msgs[len(msgs)-1]
-	if len(last.Entities) != 1 || last.Entities[0].Type != "mention_name" || last.Entities[0].UserID != 7 {
-		t.Fatalf("optimistic outgoing bubble must carry the mention entity, got %+v", last.Entities)
+	cmd()
+
+	if len(owner.sent) != 1 {
+		t.Fatalf("expected one submission, got %d", len(owner.sent))
+	}
+	got := owner.sent[0].Entities
+	if len(got) != 1 || got[0].Type != "mention_name" || got[0].UserID != 7 {
+		t.Fatalf("the submission must carry the mention entity, got %+v", got)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 type itemKind int
@@ -12,6 +13,7 @@ const (
 	itemMessage         itemKind = iota
 	itemDateSeparator            // date separator, 3 lines: blank + label + blank
 	itemUnreadSeparator          // "New Messages" divider
+	itemOutbox                   // a queued send: no message id, its own status line
 )
 
 type listItem struct {
@@ -19,6 +21,7 @@ type listItem struct {
 	msg   domain.Message   // valid when kind == itemMessage; the album anchor (parts[0])
 	parts []domain.Message // album parts when kind == itemMessage; len 1 for a lone message
 	label string           // valid when kind == itemDateSeparator, e.g. "May 18"
+	entry domain.OutboxEntry
 }
 
 func sameDay(a, b time.Time) bool {
@@ -72,9 +75,6 @@ func groupParts(msgs []domain.Message) [][]domain.Message {
 }
 
 func (ml *MessageList) buildItems(msgs []domain.Message) []listItem {
-	if len(msgs) == 0 {
-		return nil
-	}
 	groups := groupParts(msgs)
 	items := make([]listItem, 0, len(groups)+4)
 	var prev time.Time
@@ -93,8 +93,132 @@ func (ml *MessageList) buildItems(msgs []domain.Message) []listItem {
 		}
 		items = append(items, listItem{kind: itemMessage, msg: anchor, parts: g})
 	}
-	return items
+	return append(items, ml.outboxItems()...)
 }
+
+// outboxItems renders the send queue as list items. They always sit at the end:
+// a pending send is newer than everything in the window by definition, so there
+// is nothing to merge.
+func (ml *MessageList) outboxItems() []listItem {
+	if len(ml.outbox) == 0 {
+		return nil
+	}
+	out := make([]listItem, 0, len(ml.outbox))
+	for _, e := range ml.outbox {
+		out = append(out, listItem{kind: itemOutbox, entry: e, msg: outboxBubble(e)})
+	}
+	return out
+}
+
+// outboxBubble is how a queued send is drawn: an ordinary outgoing bubble.
+// Where the send has got to is a glyph in the bottom border, in the same slot
+// the delivery ticks take once the message exists — so the whole lifecycle
+// reads left to right in one place and the bubble's height never moves.
+//
+// Drawn as a message rather than as a widget of its own so the bubble and its
+// measured height stay in lock-step by construction — the drift groupHeight
+// needs a dedicated test to guard against.
+func outboxBubble(e domain.OutboxEntry) domain.Message {
+	msg := domain.Message{
+		ChatID: e.ChatID,
+		Date:   e.CreatedAt,
+		IsOut:  true,
+	}
+	if e.Message != nil {
+		msg.Text = e.Message.Text
+		msg.Entities = e.Message.Entities
+		msg.ReplyToMsgID = e.Message.ReplyToMsgID
+	}
+	return msg
+}
+
+// outboxStatusGlyph is what a queued send shows in the bottom border, in the
+// slot the delivery ticks occupy once the message exists:
+//
+//	⋯     waiting its turn        ✓   delivered
+//	↻ 4s  waiting out a backoff   ✓✓  read
+//	↑     in flight
+//	✕     not sent
+//
+// The backoff is the one state carrying a number: "retry in 2s" and "retry in
+// 12m" are different news. It does not tick — it is redrawn when the queue
+// changes state, not on a timer, because a per-second repaint of every pending
+// bubble is not worth a countdown nobody is watching.
+func outboxStatusGlyph(e domain.OutboxEntry) string {
+	switch e.State {
+	case domain.OutboxSending:
+		return " " + outboxStyle.Render("↑")
+	case domain.OutboxFailed:
+		return " " + failedStyle.Render("✕")
+	default:
+		if d := time.Until(e.NextAttemptAt); d > 0 {
+			return " " + outboxStyle.Render("↻ "+d.Round(time.Second).String())
+		}
+		return " " + outboxStyle.Render("⋯")
+	}
+}
+
+// OutboxReason names a terminal failure in the taxonomy's terms rather than
+// Telegram's: the reader is deciding whether to retry, not debugging a
+// protocol. The bubble shows only a glyph; this is what the status bar says
+// when the cursor rests on the entry (#193).
+func OutboxReason(k telerr.Kind) string {
+	switch k {
+	case telerr.Forbidden:
+		return "not allowed in this chat"
+	case telerr.PeerNotFound:
+		return "chat is unreachable"
+	case telerr.NotFound:
+		return "chat no longer exists"
+	default:
+		return "unexpected error"
+	}
+}
+
+// SetOutbox replaces the pending sends drawn below the window. Only the tail is
+// rebuilt, so an entry merely changing state does not re-seat the message list.
+//
+// A newly submitted send does scroll into view: you just typed it, and a bubble
+// added below the fold with nothing but the scrollbar moving is how it reads as
+// lost. A state change on an entry already drawn leaves the viewport alone.
+func (ml *MessageList) SetOutbox(entries []domain.OutboxEntry) {
+	added := hasNewRef(ml.outbox, entries)
+	ml.outbox = entries
+	kept := ml.items
+	for len(kept) > 0 && kept[len(kept)-1].kind == itemOutbox {
+		kept = kept[:len(kept)-1]
+	}
+	ml.items = append(kept, ml.outboxItems()...)
+	ml.invalidateHeights()
+	if added {
+		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+		ml.setCursorNewest()
+		return
+	}
+	// A cursor with nothing to sit on is placed; one that already rests
+	// somewhere is left alone. Otherwise the first message ever sent to a chat
+	// would be unselectable — there is no history to have parked a cursor on.
+	if ml.cursorIndex() < 0 {
+		ml.setCursorNewest()
+	}
+}
+
+// hasNewRef reports whether next holds an entry prev did not.
+func hasNewRef(prev, next []domain.OutboxEntry) bool {
+	known := make(map[string]struct{}, len(prev))
+	for _, e := range prev {
+		known[e.Ref] = struct{}{}
+	}
+	for _, e := range next {
+		if _, ok := known[e.Ref]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// Outbox returns the pending sends currently drawn.
+func (ml *MessageList) Outbox() []domain.OutboxEntry { return ml.outbox }
 
 func (ml *MessageList) SetMessages(msgs []domain.Message) {
 	ml.items = ml.buildItems(msgs)
