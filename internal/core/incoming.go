@@ -65,6 +65,38 @@ func (o *Owner) publishTyping(t Typing) {
 	}
 }
 
+// Progress is how far a queued media send has uploaded.
+//
+// It is an event rather than part of the chat projection, for the reason typing
+// is: there is nothing persisted behind it, a dropped frame is corrected by the
+// next one, and the uploader emits one per chunk. Routed through the projection,
+// that stream would rebuild and diff every subscription per chunk, and would
+// compete for the delta buffer with changes whose loss costs a stale window.
+type Progress struct {
+	ChatID int64
+	Ref    string
+	// Part is the 1-based file being uploaded now, Parts the total in the entry.
+	Part  int
+	Parts int
+	// Done and Total are bytes over the whole entry, so a client renders the
+	// aggregate without having to know what each part weighs.
+	Done  int64
+	Total int64
+}
+
+// Progress reports upload advance for the queued sends a client may be showing.
+func (o *Owner) Progress() <-chan Progress { return o.progress }
+
+// publishProgress drops rather than blocks. Unlike typing it does not log the
+// drop: under a large upload that would be thousands of lines about a repaint
+// nobody missed.
+func (o *Owner) publishProgress(p Progress) {
+	select {
+	case o.progress <- p:
+	default:
+	}
+}
+
 // Failures reports operations the owner could not complete.
 func (o *Owner) Failures() <-chan Failure { return o.failures }
 

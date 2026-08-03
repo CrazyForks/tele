@@ -266,6 +266,8 @@ func (a *App) Run() error {
 				prog.Send(f)
 			case tp := <-a.owner.Typing():
 				prog.Send(tp)
+			case pr := <-a.owner.Progress():
+				prog.Send(pr)
 			}
 		}
 	}()

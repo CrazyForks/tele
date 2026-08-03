@@ -95,11 +95,22 @@ func (o *Owner) RetryOutbox(ref string) error {
 	return nil
 }
 
-// DiscardOutbox drops an entry. The text is gone; that is the point of the
-// action, and it is the only way an entry leaves the queue unsent.
+// DiscardOutbox drops an entry. What was queued is gone; that is the point of
+// the action, and it is the only way an entry leaves the queue unsent.
+//
+// An upload in flight is stopped rather than waited out: discarding a
+// half-uploaded video should not hold the queue for the rest of the file. The
+// worker finds the entry missing when it returns and ends quietly, so a
+// discarded send never comes back as a failure (#195).
 func (o *Owner) DiscardOutbox(ref string) error {
 	if o.outbox == nil {
 		return &telerr.Error{Kind: telerr.Internal, Op: "outbox.discard", Detail: "no outbox configured"}
+	}
+	o.uploadMu.Lock()
+	cancel, uploading := o.uploadCancels[ref]
+	o.uploadMu.Unlock()
+	if uploading {
+		cancel()
 	}
 	if err := o.outbox.Delete(ref); err != nil {
 		return &telerr.Error{Kind: telerr.Internal, Op: "outbox.discard", Detail: err.Error(), Cause: err}

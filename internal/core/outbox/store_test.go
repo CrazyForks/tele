@@ -155,6 +155,64 @@ func TestUpdate_PersistsTheRetryTime(t *testing.T) {
 	assert.True(t, got.NextAttemptAt.Equal(due))
 }
 
+func mediaEntry(ref string, chatID int64, parts []domain.OutboxMediaPart) domain.OutboxEntry {
+	return domain.OutboxEntry{
+		Ref:       ref,
+		ChatID:    chatID,
+		RandomID:  RandomIDFor(ref),
+		Kind:      domain.OutboxMedia,
+		State:     domain.OutboxQueued,
+		Media:     &domain.OutboxMediaSend{Parts: parts},
+		CreatedAt: time.Unix(1700000000, 0),
+	}
+}
+
+func TestAdd_RoundTripsAMediaEntry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	s, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+
+	e := mediaEntry("a", 10, []domain.OutboxMediaPart{
+		{Path: "/tmp/a.jpg", Name: "a.jpg", Size: 12, SendAs: domain.MediaPhoto},
+		{Path: "/tmp/b.mp4", Name: "b.mp4", Size: 34, SendAs: domain.MediaVideo},
+	})
+	e.Media.Caption = "hi"
+	e.Media.ReplyToMsgID = 9
+	_, _, err = s.Add(e)
+	require.NoError(t, err)
+
+	// A second store over the same file is what a restart looks like.
+	reopened, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	got, ok := reopened.Get("a")
+	require.True(t, ok)
+	assert.Equal(t, domain.OutboxMedia, got.Kind)
+	require.NotNil(t, got.Media)
+	require.Len(t, got.Media.Parts, 2)
+	assert.Equal(t, "/tmp/b.mp4", got.Media.Parts[1].Path)
+	assert.Equal(t, domain.MediaVideo, got.Media.Parts[1].SendAs)
+	assert.Equal(t, "hi", got.Media.Caption)
+	assert.Equal(t, 9, got.Media.ReplyToMsgID)
+	assert.Nil(t, got.Message, "a media entry carries no text payload")
+}
+
+func TestNewStore_ResetsAnUploadingEntry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	s, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	e := mediaEntry("a", 10, []domain.OutboxMediaPart{{Path: "/tmp/a.jpg", Name: "a.jpg"}})
+	e.State = domain.OutboxUploading
+	_, _, err = s.Add(e)
+	require.NoError(t, err)
+
+	reopened, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	got, ok := reopened.Get("a")
+	require.True(t, ok)
+	assert.Equal(t, domain.OutboxQueued, got.State,
+		"bytes that were going up when the process died must be sent again")
+}
+
 func TestRandomIDFor_IsDeterministicAndNonZero(t *testing.T) {
 	assert.Equal(t, RandomIDFor("abc"), RandomIDFor("abc"))
 	assert.NotEqual(t, RandomIDFor("abc"), RandomIDFor("abd"))

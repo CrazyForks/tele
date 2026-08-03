@@ -15,26 +15,56 @@ type OutboxState string
 const (
 	// OutboxQueued is waiting for its turn, or for NextAttemptAt to arrive.
 	OutboxQueued OutboxState = "queued"
-	// OutboxSending has a request in flight. It is reset to OutboxQueued on
-	// startup: a process that died mid-send left it behind.
+	// OutboxUploading has bytes going up. Distinct from OutboxSending because a
+	// media send spends most of its life here and reads differently on screen:
+	// a file being uploaded is not a request waiting for an answer.
+	OutboxUploading OutboxState = "uploading"
+	// OutboxSending has a request in flight. It, and OutboxUploading, are reset
+	// to OutboxQueued on startup: a process that died mid-send left them behind.
 	OutboxSending OutboxState = "sending"
 	// OutboxFailed is terminal until the user retries or discards it. Reached
 	// only through a non-retryable error kind, never through an attempt count.
 	OutboxFailed OutboxState = "failed"
 )
 
-// OutboxKind tags the payload variant. #195 adds media here.
+// OutboxKind tags the payload variant.
 type OutboxKind string
 
-// OutboxText is a plain text message, the only variant this release sends
-// through the queue.
-const OutboxText OutboxKind = "text"
+const (
+	// OutboxText is a plain text message.
+	OutboxText OutboxKind = "text"
+	// OutboxMedia is one album group of local files, with an optional caption.
+	OutboxMedia OutboxKind = "media"
+)
 
 // OutboxMessage is the payload of an OutboxText entry.
 type OutboxMessage struct {
 	Text         string          `json:"text"`
 	Entities     []MessageEntity `json:"entities,omitempty"`
 	ReplyToMsgID int             `json:"reply_to,omitempty"`
+}
+
+// OutboxMediaSend is the payload of an OutboxMedia entry: one album group, which
+// is one sendMultiMedia request and one album in the chat. A submission of more
+// files than one group takes becomes several entries, because the group is what
+// Telegram sends atomically (#195).
+type OutboxMediaSend struct {
+	Parts        []OutboxMediaPart `json:"parts"`
+	Caption      string            `json:"caption,omitempty"`
+	Entities     []MessageEntity   `json:"entities,omitempty"`
+	ReplyToMsgID int               `json:"reply_to,omitempty"`
+}
+
+// OutboxMediaPart is one local file of a group. Name and Size are recorded at
+// submission so the entry describes itself to a client that was not running when
+// it was queued.
+type OutboxMediaPart struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+	// SendAs is the user's explicit choice, as in "send this photo as a file".
+	// Zero means the owner decides from the file's MIME type.
+	SendAs MediaKind `json:"send_as,omitempty"`
 }
 
 // OutboxEntry is one durable send. It crosses the owner boundary inside the
@@ -56,16 +86,19 @@ type OutboxEntry struct {
 	State    OutboxState
 	// Message is set when Kind is OutboxText.
 	Message *OutboxMessage
+	// Media is set when Kind is OutboxMedia.
+	Media *OutboxMediaSend
 	// Attempts counts failures that led to a backoff. It drives the backoff
 	// curve and the display, and never decides terminality.
 	Attempts      int
 	CreatedAt     time.Time
 	NextAttemptAt time.Time
-	// SentMsgID is the ID Telegram confirmed. Set between a successful request
-	// and the moment the message lands in state, which is when the entry goes.
-	// It is deliberately not persisted: a crash in that window must re-send
-	// rather than assume, and the persisted RandomID makes that safe.
-	SentMsgID int
+	// SentMsgIDs are the IDs Telegram confirmed: one for a text message, several
+	// for an album group. Set between a successful request and the moment the
+	// messages land in state, which is when the entry goes. Deliberately not
+	// persisted: a crash in that window must re-send rather than assume, and the
+	// persisted RandomID makes that safe.
+	SentMsgIDs []int
 	// ErrKind and ErrDetail are empty unless State is OutboxFailed.
 	ErrKind   telerr.Kind
 	ErrDetail string

@@ -100,36 +100,54 @@ func (s *Store) load() error {
 			e.NextAttemptAt = time.UnixMilli(nextAttempt)
 		}
 		e.CreatedAt = time.UnixMilli(created)
-		if e.Kind == domain.OutboxText {
+		switch e.Kind {
+		case domain.OutboxText:
 			var m domain.OutboxMessage
 			if err := json.Unmarshal([]byte(payload), &m); err != nil {
 				return err
 			}
 			e.Message = &m
+		case domain.OutboxMedia:
+			var m domain.OutboxMediaSend
+			if err := json.Unmarshal([]byte(payload), &m); err != nil {
+				return err
+			}
+			e.Media = &m
 		}
 		s.entries[e.Ref] = e
 	}
 	return rows.Err()
 }
 
-// resetSending turns every in-flight entry back into a queued one. The request
-// either never reached Telegram or its confirmation never reached us; the
-// persisted random_id makes repeating it safe either way.
+// marshalPayload renders the entry's payload column. One column, two shapes,
+// chosen by kind: the queue does not care what is in it.
+func marshalPayload(e domain.OutboxEntry) ([]byte, error) {
+	if e.Kind == domain.OutboxMedia {
+		return json.Marshal(e.Media)
+	}
+	return json.Marshal(e.Message)
+}
+
+// resetSending turns every entry a dead process left in flight — uploading its
+// bytes or waiting on a request — back into a queued one. The request either
+// never reached Telegram or its confirmation never reached us; the persisted
+// random_id makes repeating it safe either way, and an upload with nothing
+// checkpointed starts again from the top.
 func (s *Store) resetSending() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for ref, e := range s.entries {
-		if e.State != domain.OutboxSending {
+		if e.State != domain.OutboxSending && e.State != domain.OutboxUploading {
 			continue
 		}
 		e.State = domain.OutboxQueued
 		e.NextAttemptAt = time.Time{}
-		e.SentMsgID = 0
+		e.SentMsgIDs = nil
 		s.entries[ref] = e
 	}
 	_, err := s.db.Exec(
-		`UPDATE outbox SET state = ?, next_attempt_at = 0 WHERE state = ?`,
-		string(domain.OutboxQueued), string(domain.OutboxSending))
+		`UPDATE outbox SET state = ?, next_attempt_at = 0 WHERE state IN (?, ?)`,
+		string(domain.OutboxQueued), string(domain.OutboxSending), string(domain.OutboxUploading))
 	return err
 }
 
@@ -141,7 +159,7 @@ func (s *Store) Add(e domain.OutboxEntry) (domain.OutboxEntry, bool, error) {
 	if existing, ok := s.entries[e.Ref]; ok {
 		return existing, false, nil
 	}
-	payload, err := json.Marshal(e.Message)
+	payload, err := marshalPayload(e)
 	if err != nil {
 		return domain.OutboxEntry{}, false, err
 	}

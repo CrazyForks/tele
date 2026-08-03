@@ -43,6 +43,7 @@ type Owner struct {
 	incoming chan Incoming
 	failures chan Failure
 	typing   chan Typing
+	progress chan Progress
 	registry *project.Registry
 	readyCh  chan struct{}
 	onAuthFn func(userID int64, username string)
@@ -75,25 +76,33 @@ type Owner struct {
 	// outboxWake tells the worker to look again without waiting for its timer.
 	// Buffered and dropped when full: one pending wake is as good as ten.
 	outboxWake chan struct{}
+
+	// uploadCancels stops the bytes of an entry being uploaded right now, so a
+	// discard does not have to wait out a large file (#195). Written by the
+	// worker goroutine, read by whichever goroutine serves the discard.
+	uploadMu      sync.Mutex
+	uploadCancels map[string]context.CancelFunc
 }
 
 func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection, n Notifier) *Owner {
 	o := &Owner{
-		cfg:          cfg,
-		log:          log,
-		state:        st,
-		client:       client,
-		notifier:     n,
-		authFlow:     internaltg.NewAuthFlow(),
-		deltas:       make(chan project.Delta, 256),
-		incoming:     make(chan Incoming, 32),
-		failures:     make(chan Failure, 32),
-		typing:       make(chan Typing, 32),
-		readyCh:      make(chan struct{}),
-		historyLimit: cfg.UI.HistoryLimit,
-		ctx:          context.Background(),
-		fetching:     make(map[project.SubID]bool),
-		outboxWake:   make(chan struct{}, 1),
+		cfg:           cfg,
+		log:           log,
+		state:         st,
+		client:        client,
+		notifier:      n,
+		authFlow:      internaltg.NewAuthFlow(),
+		deltas:        make(chan project.Delta, 256),
+		incoming:      make(chan Incoming, 32),
+		failures:      make(chan Failure, 32),
+		typing:        make(chan Typing, 32),
+		progress:      make(chan Progress, 32),
+		readyCh:       make(chan struct{}),
+		historyLimit:  cfg.UI.HistoryLimit,
+		ctx:           context.Background(),
+		fetching:      make(map[project.SubID]bool),
+		outboxWake:    make(chan struct{}, 1),
+		uploadCancels: make(map[string]context.CancelFunc),
 	}
 	// Built from the owner, not from the store alone: the projection reads the
 	// send queue too, and the queue arrives later through SetOutbox (#193).

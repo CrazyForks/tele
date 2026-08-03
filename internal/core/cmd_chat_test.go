@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -49,6 +50,19 @@ type stubClient struct {
 	// sendBlock, when set, holds SendMessage open so a test can catch an entry
 	// mid-flight and drop the owner under it.
 	sendBlock chan struct{}
+
+	// Media send bookkeeping (#195), under the same lock and for the same
+	// reason: the outbox worker calls these from its own goroutine.
+	uploadedPaths  []string
+	uploadMediaN   int
+	albumItems     int
+	albumRandomIDs []int64
+	sentMediaN     int
+	refreshedIDs   []int
+	uploadErr      error
+	sendMediaErr   error
+	// uploadBlock, when set, holds UploadFile open so a test can cancel under it.
+	uploadBlock chan struct{}
 }
 
 func (s *stubClient) Connect(context.Context, *config.Config, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
@@ -84,6 +98,107 @@ func (s *stubClient) MarkRead(_ context.Context, _ domain.Peer, maxID int) error
 func (s *stubClient) ReadReactions(_ context.Context, _ domain.Peer) error { return s.err }
 
 func (s *stubClient) ReadMentions(_ context.Context, _ domain.Peer) error { return s.err }
+
+// The media send path (#195). UploadFile reports two progress frames so the
+// aggregation across an entry's parts is observable.
+func (s *stubClient) UploadFile(ctx context.Context, p internaltg.UploadParams) (tg.InputFileClass, error) {
+	s.sendMu.Lock()
+	s.uploadedPaths = append(s.uploadedPaths, p.Path)
+	block, err := s.uploadBlock, s.uploadErr
+	s.sendMu.Unlock()
+	if p.OnProgress != nil {
+		p.OnProgress(50, 100)
+		p.OnProgress(100, 100)
+	}
+	if block != nil {
+		select {
+		case <-block:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &tg.InputFile{ID: 1}, nil
+}
+
+func (s *stubClient) UploadMedia(_ context.Context, _ domain.Peer, m tg.InputMediaClass) (tg.InputMediaClass, error) {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	s.uploadMediaN++
+	return m, nil
+}
+
+func (s *stubClient) SendMedia(_ context.Context, p internaltg.SendMediaParams) (int, error) {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	s.sentMediaN++
+	s.sentRandomID = p.RandomID
+	if s.sendMediaErr != nil {
+		return 0, s.sendMediaErr
+	}
+	return 101, nil
+}
+
+func (s *stubClient) SendAlbum(_ context.Context, p internaltg.SendAlbumParams) ([]int, error) {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	s.albumItems = len(p.Items)
+	s.albumRandomIDs = append([]int64(nil), p.RandomIDs...)
+	if s.sendMediaErr != nil {
+		return nil, s.sendMediaErr
+	}
+	ids := make([]int, len(p.Items))
+	for i := range ids {
+		ids[i] = 200 + i
+	}
+	return ids, nil
+}
+
+func (s *stubClient) RefreshMessages(_ context.Context, _ domain.Peer, ids []int) ([]domain.Message, error) {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	s.refreshedIDs = append([]int(nil), ids...)
+	out := make([]domain.Message, 0, len(ids))
+	for _, id := range ids {
+		// GroupedID is what the refresh exists for: without it the parts never
+		// collapse into one album.
+		out = append(out, domain.Message{ID: id, ChatID: 1, IsOut: true, GroupedID: 42})
+	}
+	return out, nil
+}
+
+// Accessors, because the worker writes these from its own goroutine.
+func (s *stubClient) uploads() []string {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return append([]string(nil), s.uploadedPaths...)
+}
+
+func (s *stubClient) uploadMediaCalls() int {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return s.uploadMediaN
+}
+
+func (s *stubClient) sendMediaCalls() int {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return s.sentMediaN
+}
+
+func (s *stubClient) albumItemCount() int {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return s.albumItems
+}
+
+func (s *stubClient) randomIDs() []int64 {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return append([]int64(nil), s.albumRandomIDs...)
+}
 
 // newCmdOwner builds an owner over the stub, with one chat already known.
 func newCmdOwner(t *testing.T, c *stubClient) (*Owner, store.Store) {

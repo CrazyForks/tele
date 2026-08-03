@@ -70,6 +70,10 @@ func (o *Owner) waitForOutboxWork(ctx context.Context) bool {
 
 // attempt sends one entry and records what came back.
 func (o *Owner) attempt(ctx context.Context, e domain.OutboxEntry) {
+	if e.Kind == domain.OutboxMedia {
+		o.attemptMedia(ctx, e)
+		return
+	}
 	peer, err := o.peer(e.ChatID)
 	if err != nil {
 		o.recordFailure(e, err)
@@ -152,7 +156,7 @@ func (o *Owner) recordSent(e domain.OutboxEntry, sent domain.Message) {
 		o.dropEntry(e.Ref)
 		return
 	}
-	e.SentMsgID = sent.ID
+	e.SentMsgIDs = []int{sent.ID}
 	if err := o.outbox.Update(e); err != nil {
 		o.log.Error("outbox: could not record a send", zap.Error(err))
 	}
@@ -173,11 +177,11 @@ func (o *Owner) recordSent(e domain.OutboxEntry, sent domain.Message) {
 func (o *Owner) dropIfUndelivered(ref string) {
 	time.Sleep(sentGracePeriod)
 	cur, ok := o.outbox.Get(ref)
-	if !ok || cur.SentMsgID == 0 {
+	if !ok || len(cur.SentMsgIDs) == 0 {
 		return
 	}
 	o.log.Warn("outbox: no update for a sent message, dropping the entry",
-		zap.String("ref", ref), zap.Int("msg_id", cur.SentMsgID))
+		zap.String("ref", ref), zap.Ints("msg_ids", cur.SentMsgIDs))
 	o.dropEntry(ref)
 	o.Refresh()
 }
@@ -202,10 +206,19 @@ func (o *Owner) clearSentOutbox(chatID int64) {
 		return
 	}
 	for _, e := range o.outbox.ForChat(chatID) {
-		if e.SentMsgID == 0 {
+		if len(e.SentMsgIDs) == 0 {
 			continue
 		}
-		if _, err := o.messageByID(chatID, e.SentMsgID); err != nil {
+		// An album group goes when all of its parts have arrived: dropping it on
+		// the first would leave the rest of the bubble unaccounted for.
+		landed := true
+		for _, id := range e.SentMsgIDs {
+			if _, err := o.messageByID(chatID, id); err != nil {
+				landed = false
+				break
+			}
+		}
+		if !landed {
 			continue
 		}
 		o.dropEntry(e.Ref)
