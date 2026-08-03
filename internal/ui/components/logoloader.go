@@ -33,6 +33,15 @@ var logoArt = [5]string{
 	"  \\__|  \\___| |_|  \\___|",
 }
 
+// LogoLines returns the plain "tele" logo art, one string per row. It exists so
+// output outside bubbletea (the farewell banner printed after the TUI exits)
+// draws the same letters as the splash instead of keeping its own copy.
+func LogoLines() []string {
+	out := make([]string, len(logoArt))
+	copy(out, logoArt[:])
+	return out
+}
+
 type cellKind int8
 
 const (

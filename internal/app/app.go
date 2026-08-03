@@ -6,11 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -42,10 +44,33 @@ type App struct {
 	// stateMoved reports that startup migration relocated the account state, so
 	// the user can be told where it went.
 	stateMoved bool
+	// logPath is this run's log file, known only to the caller that opened it.
+	logPath string
+	// selfMu guards the account identity: it arrives on the Telegram goroutine
+	// and is read on exit, after the TUI is gone.
+	selfMu       sync.Mutex
+	selfID       int64
+	selfUsername string
 }
 
 // SetStateMoved records whether startup migration relocated the account state.
 func (a *App) SetStateMoved(moved bool) { a.stateMoved = moved }
+
+// SetLogPath records where this run's log is written, so the farewell banner
+// can point at it.
+func (a *App) SetLogPath(path string) { a.logPath = path }
+
+func (a *App) setSelf(userID int64, username string) {
+	a.selfMu.Lock()
+	defer a.selfMu.Unlock()
+	a.selfID, a.selfUsername = userID, username
+}
+
+func (a *App) self() (int64, string) {
+	a.selfMu.Lock()
+	defer a.selfMu.Unlock()
+	return a.selfID, a.selfUsername
+}
 
 // pendingNotices lists the one-time startup messages this build can show.
 // Conditional entries are omitted when they do not apply, so a user only ever
@@ -97,9 +122,6 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 	stateStorage := internaltg.NewSQLiteStateStorage(sqliteStore.DB())
 	client := internaltg.NewGotdClient(log, stateStorage, trace)
 	owner := core.New(cfg, log, state.New(sqliteStore), client, newNotifier(log))
-	owner.SetOnAuth(func(userID int64, username string) {
-		components.SetSelfIdentity(userID, username)
-	})
 
 	// The send queue shares the account database: the file DB runs on a single
 	// connection (#119), and a second one to the same file is how SQLITE_BUSY
@@ -124,7 +146,7 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 		owner.SetMediaCache(cache)
 	}
 
-	return &App{
+	a := &App{
 		cfg:     cfg,
 		log:     log,
 		st:      sqliteStore,
@@ -132,7 +154,14 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 		owner:   owner,
 		tmpDir:  tmpDir,
 		verbose: verbose,
-	}, nil
+	}
+	// Registered after the App exists: the account identity is needed both by
+	// the message list (own messages) and by the farewell banner on exit.
+	owner.SetOnAuth(func(userID int64, username string) {
+		components.SetSelfIdentity(userID, username)
+		a.setSelf(userID, username)
+	})
+	return a, nil
 }
 
 func (a *App) Run() error {
@@ -249,6 +278,14 @@ func (a *App) Run() error {
 	// (issue #148). The program has restored the normal screen by now, so write
 	// the reset directly.
 	_, _ = fmt.Fprint(os.Stdout, ansi.ResetModeLightDark)
+
+	// Leave something in the scrollback: which build ran, as whom, and where to
+	// look afterwards. Skipped when the run failed (the error is the message) or
+	// when stdout is not a terminal, so piping tele stays clean.
+	if err == nil && term.IsTerminal(os.Stdout.Fd()) {
+		home, _ := os.UserHomeDir()
+		_, _ = fmt.Fprint(os.Stdout, a.farewell(home))
+	}
 
 	// Wait for tg client goroutine
 	tgClientErr := <-tgErr

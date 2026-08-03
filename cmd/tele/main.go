@@ -82,8 +82,9 @@ func main() {
 	if *verbose {
 		level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	}
+	logPath := filepath.Join(defaultState, "tele.log")
 	w := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   filepath.Join(defaultState, "tele.log"),
+		Filename:   logPath,
 		MaxSize:    10,
 		MaxBackups: 3,
 		Compress:   false,
@@ -135,6 +136,7 @@ func main() {
 		os.Exit(1)
 	}
 	a.SetStateMoved(stateMoved)
+	a.SetLogPath(logPath)
 	if err := a.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
