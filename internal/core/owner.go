@@ -175,4 +175,3 @@ func (o *Owner) SaveMedia(ctx context.Context, chatID int64, msgID int, slot dom
 func (o *Owner) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
 	o.media.Invalidate(chatID, msgID, slot)
 }
-

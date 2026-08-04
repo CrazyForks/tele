@@ -28,8 +28,22 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   long as it takes, because nobody lost the message and giving up on it is your
   decision rather than a timer's. Messages to one chat keep their order — a
   stuck one holds up that conversation and no other. This covers text messages;
-  photos, files and albums still send the old way and follow in the next release
-  (#193).
+  photos, files and albums are the entry below (#193).
+- Photos, files and albums now go through that same queue. An unfinished upload
+  used to live in the window that started it, so quitting mid-upload lost it
+  with no record that it had been attempted. A media send is now queued on disk
+  like any other, and one interrupted by a restart is picked up again — from the
+  start of the file, because an upload cannot be resumed part-way. An album is
+  one item in the queue rather than one per file: it appears as a single pending
+  bubble naming what it holds and which file is going up — `3 photos 2/3` — and
+  that is also how it looks once it lands, so nothing re-flows when it does.
+  `x` on a pending send discards it and stops the upload there and then instead
+  of waiting out the rest of the file. Two things follow from the album being
+  one item. A file that will not upload now fails the whole album instead of
+  sending the rest without it: an album arriving in an unknown composition is
+  worse than one that waits for you. And a failed album holds up later messages
+  to that chat until you retry or discard it, which is the rule text already
+  follows (#195).
 - One-time startup notices for changes that are easy to mistake for a bug. A
   notice appears once, before anything else including the login screen, and
   cannot be dismissed for seven seconds so it is actually read. Each is shown
@@ -91,6 +105,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   twelve minutes with nothing on screen to explain it, and because each pause
   also consumed a retry, a single action could sit through five of them in a row
   (#201).
+- Sending media moved out of the window and behind the owner, and with it the
+  last direct call the interface made to Telegram. Detecting what a file is,
+  extracting a video's thumbnail, assembling an album and running the upload all
+  happen in one place now, which is what lets a command-line send or a second
+  window inherit them rather than reimplement them. Nothing looks different
+  (#195, #198).
 - Cached media is now stored per account and written straight to disk. Every
   account used to share one cache directory with no arbiter, so two accounts
   running at once evicted each other's files; each account now has its own

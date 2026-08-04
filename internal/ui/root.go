@@ -113,17 +113,17 @@ type RootModel struct {
 	kittyCap          int // max live placements; from config, 0 → default
 	searchModel       *screens.SearchModel
 	onChatOpen        func(int64)
-	contextMenu      *components.ContextMenu
-	chatMenu         *components.ChatContextMenu
-	reactionPicker   *components.ReactionPicker
-	help             *components.HelpModal
-	openPicker       *components.OpenPicker
-	reactionTargetID int
-	mentionPopup     *components.MentionPopup
-	mentionMembers   map[int64][]domain.ChatMember
-	folderBar        *screens.FoldersModel
-	logo             components.LogoLoader
-	typingSerial     int
+	contextMenu       *components.ContextMenu
+	chatMenu          *components.ChatContextMenu
+	reactionPicker    *components.ReactionPicker
+	help              *components.HelpModal
+	openPicker        *components.OpenPicker
+	reactionTargetID  int
+	mentionPopup      *components.MentionPopup
+	mentionMembers    map[int64][]domain.ChatMember
+	folderBar         *screens.FoldersModel
+	logo              components.LogoLoader
+	typingSerial      int
 	// msgHighlightSerial guards the jump-to message-highlight fade loop so a
 	// newer highlight or a stale tick is ignored.
 	msgHighlightSerial int
