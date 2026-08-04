@@ -32,6 +32,16 @@ func newTestOwner(t *testing.T) (*Owner, chan store.Event, store.Store) {
 	return o, events, st
 }
 
+// newTestOwnerNotified is newTestOwner with a notifier the test can inspect and
+// message previews on, so a body is a body rather than "New message".
+func newTestOwnerNotified(t *testing.T, n Notifier) (*Owner, store.Store) {
+	t.Helper()
+	st := store.NewMemory()
+	cfg := &config.Config{}
+	cfg.UI.NotificationPreview = true
+	return New(cfg, zap.NewNop(), state.New(st), nil, n), st
+}
+
 func recvDelta(t *testing.T, ch <-chan project.Delta) (project.Delta, bool) {
 	t.Helper()
 	select {
@@ -132,5 +142,72 @@ func TestUpdateLoop_StopsOnContextCancel(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("update loop did not stop on context cancellation")
+	}
+}
+
+// The whole point of #192: the banner and the toast are one value, so they
+// cannot disagree about the same event.
+func TestNotify_OneEventFeedsBothSinks(t *testing.T) {
+	n := &mockNotifier{}
+	o, st := newTestOwnerNotified(t, n)
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
+
+	o.handleEvent(store.Event{Kind: store.EventNewMessage,
+		Message: domain.Message{ChatID: 2, Text: "hello there", Date: time.Now()}})
+
+	require.Len(t, n.calls, 1, "exactly one OS notification")
+	select {
+	case got := <-o.Notifications():
+		assert.Equal(t, n.calls[0].title, got.Title, "same value, two sinks")
+		assert.Equal(t, n.calls[0].body, got.Body)
+		assert.Equal(t, int64(2), got.ChatID)
+	default:
+		t.Fatal("expected a Notification on the stream")
+	}
+}
+
+// The two gates are different on purpose: mute silences the interruption but
+// must not suppress the row flash that follows the reorder (#39).
+func TestNotify_MutedChatStillFlashesTheRow(t *testing.T) {
+	n := &mockNotifier{}
+	o, st := newTestOwnerNotified(t, n)
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", IsMuted: true})
+
+	o.handleEvent(store.Event{Kind: store.EventNewMessage,
+		Message: domain.Message{ChatID: 2, Text: "hey", Date: time.Now()}})
+
+	assert.Empty(t, n.calls, "a muted chat raises no banner")
+	select {
+	case got := <-o.Notifications():
+		t.Fatalf("a muted chat must raise no toast either, got %+v", got)
+	default:
+	}
+	select {
+	case in := <-o.Incoming():
+		assert.Equal(t, int64(2), in.ChatID, "the row still flashes")
+	default:
+		t.Fatal("expected an Incoming for the row flash")
+	}
+}
+
+func TestNotify_FocusedChatDoesNeither(t *testing.T) {
+	n := &mockNotifier{}
+	o, st := newTestOwnerNotified(t, n)
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
+	o.Attach().SetFocus(2)
+
+	o.handleEvent(store.Event{Kind: store.EventNewMessage,
+		Message: domain.Message{ChatID: 2, Text: "hey", Date: time.Now()}})
+
+	assert.Empty(t, n.calls)
+	select {
+	case <-o.Notifications():
+		t.Fatal("the chat on screen must not toast")
+	default:
+	}
+	select {
+	case <-o.Incoming():
+		t.Fatal("the chat on screen must not flash")
+	default:
 	}
 }

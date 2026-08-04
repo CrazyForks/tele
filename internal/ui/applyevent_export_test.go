@@ -31,6 +31,9 @@ type testOwner struct {
 	// deltas: a message arriving in a chat the client is not showing.
 	incoming []core.Incoming
 	typing   []core.Typing
+	// focus records what the client told the owner it is showing, so a test can
+	// assert that leaving a chat is reported as well as entering one (#192).
+	focus []int64
 	// moves records the windows the client asked for, so a test can assert that
 	// scrolling repositions a window rather than fetching anything itself.
 	moves []project.Window
@@ -119,6 +122,8 @@ func (o *testOwner) lastChatListWindow() (project.ChatListWindow, bool) {
 }
 
 func (o *testOwner) Unsubscribe(id project.SubID) { o.reg.Unsubscribe(id) }
+
+func (o *testOwner) SetFocus(chatID int64) { o.focus = append(o.focus, chatID) }
 
 func (o *testOwner) Refresh() { o.queued = append(o.queued, o.reg.Refresh()...) }
 
@@ -422,7 +427,10 @@ func applyEvent(t *testing.T, m ui.RootModel, st store.Store, evt store.Event) (
 	chg, applied := state.Apply(o.state, evt)
 	if applied && chg.Kind == state.ChangeNewMessage && !chg.Message.IsOut &&
 		chg.ChatID != m.CurrentChatID() {
-		o.incoming = append(o.incoming, incomingFor(st, m, chg))
+		// The flash, and only the flash. Whether the event also deserves a toast
+		// is a core.Notification the owner decides; no shim here reproduces that
+		// judgement any more (#192).
+		o.incoming = append(o.incoming, core.Incoming{ChatID: chg.ChatID})
 	}
 	return o.drain(m)
 }
@@ -475,16 +483,4 @@ func applyHistory(t *testing.T, m ui.RootModel, st store.Store, chatID int64) (t
 	}
 	o.state.ApplyHistory(chatID, st.Messages(chatID))
 	return o.drain(m)
-}
-
-// incomingFor reproduces core.Owner.publishIncoming: the same freshness and mute
-// gate the owner applies before telling a client anything arrived.
-func incomingFor(st store.Store, m ui.RootModel, chg state.Change) core.Incoming {
-	chat, _ := st.GetChat(chg.ChatID)
-	return core.Incoming{
-		ChatID:  chg.ChatID,
-		Title:   chat.Title,
-		Preview: chg.Message.Text,
-		Notify:  store.Notifiable(st, chg.ChatID, m.CurrentChatID(), chg.Message.Date, time.Now()),
-	}
 }

@@ -188,12 +188,14 @@ func (a *App) Run() error {
 	for _, w := range warns {
 		a.log.Warn("keybindings: " + w)
 	}
+	// The client attaches: the focus it reports and the detach that ends it
+	// belong to it, everything else is the owner's (#192).
+	att := a.owner.Attach()
+	defer att.Detach()
+
 	root := ui.NewRootModel(a.st, a.cfg.UI.HistoryLimit, a.verbose)
-	root = root.WithContext(ctx).WithConfig(a.cfg).WithKeyMap(km).WithOwner(a.owner).WithLogger(a.log)
+	root = root.WithContext(ctx).WithConfig(a.cfg).WithKeyMap(km).WithOwner(att).WithLogger(a.log)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
-	root.SetOnChatOpen(func(id int64) {
-		a.owner.SetCurrentChat(id)
-	})
 	root.SetTmpDir(a.tmpDir)
 
 	// One-time startup notices (#197). Seen-state is written on dismissal, so
@@ -262,6 +264,8 @@ func (a *App) Run() error {
 				prog.Send(d)
 			case in := <-a.owner.Incoming():
 				prog.Send(in)
+			case n := <-a.owner.Notifications():
+				prog.Send(n)
 			case f := <-a.owner.Failures():
 				prog.Send(f)
 			case tp := <-a.owner.Typing():

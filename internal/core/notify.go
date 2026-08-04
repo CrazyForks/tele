@@ -11,6 +11,91 @@ type Notifier interface {
 	Notify(title, body string) error
 }
 
+// NotifyFreshnessWindow bounds how old an event may be and still raise a
+// notification. Catch-up messages recovered by getDifference after an idle
+// period carry their original (old) send time, so anything older than this
+// window is treated as backlog and stays silent (#123). Live delivery latency is
+// typically well under it.
+//
+// It lives here rather than in store because freshness is policy, not storage.
+const NotifyFreshnessWindow = 10 * time.Second
+
+// Notification is the one decision: this event deserves the user's attention.
+// It is rendered once, here, and handed unchanged to every sink — the OS
+// notifier and the attached clients. Nothing downstream re-judges or re-renders
+// it, which is what makes it structurally impossible for a toast and an OS
+// banner to disagree about the same event (#192).
+type Notification struct {
+	ChatID int64
+	Title  string
+	Body   string
+}
+
+// decideNotification is the whole notification policy. It is pure: the store,
+// the clients' focus and the clock all arrive as arguments, so every rule is a
+// table test with no owner in sight.
+//
+// focused reports that some attached client is showing that chat. With nobody
+// attached nothing is focused, which is what lets a daemon notify with no client
+// running at all (#182).
+func decideNotification(
+	st store.Store,
+	evt store.Event,
+	focused func(int64) bool,
+	preview bool,
+	now time.Time,
+) (Notification, bool) {
+	chatID, at, body, ok := trigger(evt, preview)
+	if !ok {
+		return Notification{}, false
+	}
+	if focused(chatID) {
+		// You are looking at it; a banner would tell you nothing.
+		return Notification{}, false
+	}
+	chat, ok := st.GetChat(chatID)
+	if !ok || chat.IsMuted || chat.IsArchived {
+		return Notification{}, false
+	}
+	if at.IsZero() || now.Sub(at) > NotifyFreshnessWindow {
+		return Notification{}, false
+	}
+	return Notification{ChatID: chatID, Title: chat.Title, Body: body}, true
+}
+
+// trigger reduces an event to what a notification would be made of, or reports
+// that this kind of event never notifies. It is the only place a body is
+// rendered, so the privacy rule (#80) is written exactly once.
+func trigger(evt store.Event, preview bool) (chatID int64, at time.Time, body string, ok bool) {
+	switch evt.Kind {
+	case store.EventNewMessage:
+		if evt.Message.IsOut {
+			return 0, time.Time{}, "", false
+		}
+		body := truncate(evt.Message.Text, 100)
+		if !preview {
+			// Some platforms persist notification bodies (macOS Notification
+			// Center, the systemd journal), so omit the text (#80).
+			body = "New message"
+		}
+		return evt.Message.ChatID, evt.Message.Date, body, true
+	case store.EventReactionsUpdate:
+		// A peer reacted to one of our messages in a group or channel.
+		if !evt.ReactionsUnread {
+			return 0, time.Time{}, "", false
+		}
+		return evt.ChatID, evt.ReactionDate, reactionBody(evt.ReactionEmoji), true
+	case store.EventEditMessage:
+		// A 1:1 peer's reaction arrives as a hidden edit; a real text edit
+		// carries no unread reactions and must not notify.
+		if !evt.Message.HasUnreadReactions {
+			return 0, time.Time{}, "", false
+		}
+		return evt.Message.ChatID, evt.ReactionDate, reactionBody(evt.ReactionEmoji), true
+	}
+	return 0, time.Time{}, "", false
+}
+
 func truncate(s string, n int) string {
 	runes := []rune(s)
 	if len(runes) <= n {
@@ -19,58 +104,8 @@ func truncate(s string, n int) string {
 	return string(runes[:n]) + "…"
 }
 
-// shouldNotify decides whether evt warrants a desktop notification. Pure and
-// clock-injected so the freshness rule is unit-testable. now is the reference
-// time the event age is measured against (time.Now() in production).
-func shouldNotify(st store.Store, evt store.Event, currentChatID int64, now time.Time) bool {
-	switch evt.Kind {
-	case store.EventNewMessage:
-		if evt.Message.IsOut {
-			return false
-		}
-		return store.Notifiable(st, evt.Message.ChatID, currentChatID, evt.Message.Date, now)
-	case store.EventReactionsUpdate:
-		// A peer reacted to one of our messages in a group/channel.
-		if !evt.ReactionsUnread {
-			return false
-		}
-		return store.Notifiable(st, evt.ChatID, currentChatID, evt.ReactionDate, now)
-	case store.EventEditMessage:
-		// 1:1 peer reactions arrive as a hidden edit; a real text edit carries no
-		// unread reactions and must not notify.
-		if !evt.Message.HasUnreadReactions {
-			return false
-		}
-		return store.Notifiable(st, evt.Message.ChatID, currentChatID, evt.ReactionDate, now)
-	}
-	return false
-}
-
-func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChatID int64, preview bool) {
-	if !shouldNotify(st, evt, currentChatID, time.Now()) {
-		return
-	}
-	switch evt.Kind {
-	case store.EventNewMessage:
-		chat, _ := st.GetChat(evt.Message.ChatID) // shouldNotify guarantees the chat exists.
-		body := truncate(evt.Message.Text, 100)
-		if !preview {
-			// Privacy: some platforms persist notification bodies (macOS
-			// Notification Center, systemd journal), so omit the text (#80).
-			body = "New message"
-		}
-		_ = notifier.Notify(chat.Title, body)
-	case store.EventReactionsUpdate:
-		chat, _ := st.GetChat(evt.ChatID)
-		_ = notifier.Notify(chat.Title, reactionBody(evt.ReactionEmoji))
-	case store.EventEditMessage:
-		chat, _ := st.GetChat(evt.Message.ChatID)
-		_ = notifier.Notify(chat.Title, reactionBody(evt.ReactionEmoji))
-	}
-}
-
-// reactionBody renders the notification body for a reaction, including the emoji
-// when one is available (custom-emoji reactions carry none).
+// reactionBody renders the body for a reaction, including the emoji when there
+// is one — custom-emoji reactions carry none.
 func reactionBody(emoji string) string {
 	if emoji == "" {
 		return "reacted to your message"

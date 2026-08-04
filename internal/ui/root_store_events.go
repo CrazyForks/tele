@@ -51,18 +51,20 @@ func (m RootModel) handleChatListDelta(d *project.ChatListDelta) (RootModel, tea
 	return m, nil
 }
 
-// handleIncoming reacts to a message that arrived in a chat the user is not
-// looking at: the row flashes so the eye can follow the reorder (#39), and an
-// unmuted one also pops a toast (#59). Whether it deserves a toast is the
-// owner's decision, not this model's.
+// handleIncoming follows the reorder: the row flashes so the eye can track a
+// chat moving to the top (#39). It says nothing about whether the user should be
+// interrupted — that arrives separately, as a Notification.
 func (m RootModel) handleIncoming(in core.Incoming) (RootModel, tea.Cmd) {
 	m.chatList.HighlightChat(in.ChatID)
 	m.chatHighlightSerial++
-	cmds := []tea.Cmd{chatHighlightFadeCmd(m.chatHighlightSerial)}
-	if in.Notify {
-		cmds = append(cmds, m.showInAppNotify(in))
-	}
-	return m, tea.Batch(cmds...)
+	return m, chatHighlightFadeCmd(m.chatHighlightSerial)
+}
+
+// handleNotification renders a decision the owner has already made. There is no
+// condition here on purpose: judging it a second time is the defect this
+// replaced (#192).
+func (m RootModel) handleNotification(n core.Notification) (RootModel, tea.Cmd) {
+	return m, m.showInAppNotify(n)
 }
 
 // handleFailure renders work the owner could not finish. The owner reports what
@@ -90,16 +92,16 @@ type notifyOpenMsg struct {
 	serial int
 }
 
-// showInAppNotify adds a top-right notify toast for an incoming message in an
-// inactive chat and returns its auto-dismiss command. The whole toast is a click
-// target that opens the chat.
-func (m RootModel) showInAppNotify(in core.Incoming) tea.Cmd {
-	title := in.Title
+// showInAppNotify adds a top-right notify toast for a decision the owner made
+// and returns its auto-dismiss command. The whole toast is a click target that
+// opens the chat.
+func (m RootModel) showInAppNotify(n core.Notification) tea.Cmd {
+	title := n.Title
 	if title == "" {
 		title = "New message"
 	}
-	serial := m.toasts.Add(components.ToastNotify, title+"\n"+in.Preview)
-	m.toasts.SetClick(serial, notifyOpenMsg{chatID: in.ChatID, title: in.Title, serial: serial})
+	serial := m.toasts.Add(components.ToastNotify, title+"\n"+n.Body)
+	m.toasts.SetClick(serial, notifyOpenMsg{chatID: n.ChatID, title: n.Title, serial: serial})
 	return tea.Tick(durationFor(components.SeverityInfo), func(time.Time) tea.Msg {
 		return ClearStatusErrMsg{Serial: serial}
 	})

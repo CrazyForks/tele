@@ -1,25 +1,18 @@
 package core
 
 import (
-	"time"
-
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-// Incoming reports that a message arrived in a chat the client does not have
-// open. It is an event, not state, which is why it does not ride on a
-// projection: a chat-list row says what the unread count is now, never that
-// something just happened — and a row flash and a toast are reactions to the
-// happening.
+// Incoming reports that something arrived in a chat the client is not showing:
+// enough for the row to flash and follow the reorder (#39). It is an event, not
+// state, which is why it does not ride on a projection — a chat-list row says
+// what the unread count is now, never that something just happened.
 //
-// The owner decides whether it warrants a notification, so a client renders
-// rather than judges. #192 folds the OS notification and the in-app toast into
-// that one decision; this is where it already lives.
+// Whether it also deserves the user's attention is a Notification, decided
+// separately. The gates differ: a muted chat still flashes.
 type Incoming struct {
-	ChatID  int64
-	Title   string
-	Preview string
-	Notify  bool
+	ChatID int64
 }
 
 // Failure reports work the owner could not finish on a client's behalf. A client
@@ -108,33 +101,37 @@ func (o *Owner) publishFailure(f Failure) {
 	}
 }
 
-// publishIncoming reports an inbound message in a chat the client is not
-// showing. Outgoing messages and the open chat are excluded: neither should
-// flash a row or raise a toast.
-func (o *Owner) publishIncoming(evt store.Event, currentChatID int64, now time.Time) {
+// Notifications is the stream of decisions the owner has already made. A client
+// renders them; it never re-judges (#192).
+func (o *Owner) Notifications() <-chan Notification { return o.notifications }
+
+// publishNotification drops rather than blocks: a client that stopped draining
+// must never stall the update loop. A dropped toast is not a lost notification —
+// the OS banner has already been raised from the same value.
+func (o *Owner) publishNotification(n Notification) {
+	select {
+	case o.notifications <- n:
+	default:
+		o.log.Warn("notification dropped: client is not draining")
+	}
+}
+
+// publishIncoming reports an inbound message in a chat no client is showing.
+// Outgoing messages and the focused chat are excluded: neither should flash a
+// row. Mute is deliberately not consulted — that gates the interruption, not the
+// reorder cue.
+func (o *Owner) publishIncoming(evt store.Event, focused func(int64) bool) {
 	if evt.Kind != store.EventNewMessage || evt.Message.IsOut {
 		return
 	}
-	if evt.Message.ChatID == currentChatID {
+	if focused(evt.Message.ChatID) {
 		return
 	}
-	chat, ok := o.state.Store().GetChat(evt.Message.ChatID)
-	if !ok {
+	if _, ok := o.state.Store().GetChat(evt.Message.ChatID); !ok {
 		return
-	}
-	preview := truncate(evt.Message.Text, 100)
-	if !o.cfg.UI.NotificationPreview {
-		// Privacy: the same rule the OS notification follows (#80).
-		preview = "New message"
-	}
-	in := Incoming{
-		ChatID:  evt.Message.ChatID,
-		Title:   chat.Title,
-		Preview: preview,
-		Notify:  shouldNotify(o.state.Store(), evt, currentChatID, now),
 	}
 	select {
-	case o.incoming <- in:
+	case o.incoming <- Incoming{ChatID: evt.Message.ChatID}:
 	default:
 		o.log.Warn("incoming event dropped: client is not draining")
 	}

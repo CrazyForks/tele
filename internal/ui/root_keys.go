@@ -215,6 +215,11 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.chat.SetMessages(nil)
 		m.chatMsgs = nil
 		m.currentChatID = 0
+		if m.owner != nil {
+			// The owner cannot see the screen: leaving a chat has to be reported
+			// as explicitly as entering one, or it stays silenced (#192).
+			m.owner.SetFocus(0)
+		}
 		m.chatList.SetActiveByID(0)
 		if m.owner != nil && m.chatSub != 0 {
 			m.owner.Unsubscribe(m.chatSub)

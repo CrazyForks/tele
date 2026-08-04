@@ -25,6 +25,11 @@ type Owner interface {
 	AddToFolder(ctx context.Context, filterID int, chatID int64, add bool) error
 	// MarkRead with maxID 0 reads the whole chat.
 	MarkRead(ctx context.Context, chatID int64, maxID int) error
+	// SetFocus reports which chat this client is showing, 0 for none. The owner
+	// needs it because a chat you are looking at must not interrupt you; the
+	// client must report leaving a chat as well as entering one, or the owner
+	// goes on believing an abandoned chat is still on screen (#192).
+	SetFocus(chatID int64)
 	ReadReactions(ctx context.Context, chatID int64) error
 	ReadMentions(ctx context.Context, chatID int64) error
 	EditMessage(ctx context.Context, chatID int64, msgID int, text string, entities []domain.MessageEntity) error

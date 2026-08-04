@@ -3,11 +3,10 @@ package ui
 import (
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -127,19 +126,11 @@ func notifyModel(t *testing.T, chat domain.Chat) RootModel {
 	return model.(RootModel)
 }
 
-func newMessageEvent(chatID int64, text string, out bool) store.Event {
-	return store.Event{
-		Kind: store.EventNewMessage,
-		Message: domain.Message{
-			ID: 1000, ChatID: chatID, Text: text, IsOut: out, Date: time.Now(),
-		},
-	}
-}
-
-func TestInAppNotify_InactiveChat_ShowsToast(t *testing.T) {
+// A toast renders a decision the owner already made: the model is handed a
+// Notification and does not judge it (#192).
+func TestNotification_ShowsToast(t *testing.T) {
 	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
-	m.currentChatID = 0 // no active chat
-	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey there", false))
+	model, _ := m.Update(core.Notification{ChatID: 7, Title: "Alice", Body: "hey there"})
 	rm := model.(RootModel)
 	if rm.toasts.Empty() {
 		t.Fatal("expected an in-app notify toast")
@@ -147,14 +138,25 @@ func TestInAppNotify_InactiveChat_ShowsToast(t *testing.T) {
 	rm.SettleToastsForTest()
 	view := rm.View().Content
 	if !strings.Contains(view, "Alice") || !strings.Contains(view, "hey there") {
-		t.Fatalf("toast missing title/preview:\n%s", view)
+		t.Fatalf("toast missing title/body:\n%s", view)
 	}
 }
 
-func TestInAppNotify_ClickOpensChat(t *testing.T) {
+// The row flash and the toast are separate decisions: an Incoming says only that
+// a chat moved, and must not interrupt anybody on its own.
+func TestIncoming_FlashesRowWithoutToast(t *testing.T) {
 	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
-	m.currentChatID = 0
-	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hi", false))
+	model, _ := m.Update(core.Incoming{ChatID: 7})
+	rm := model.(RootModel)
+	rm.SettleToastsForTest()
+	if !rm.toasts.Empty() {
+		t.Fatal("an Incoming alone must not raise a toast")
+	}
+}
+
+func TestNotification_ClickOpensChat(t *testing.T) {
+	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
+	model, _ := m.Update(core.Notification{ChatID: 7, Title: "Alice", Body: "hi"})
 	rm := model.(RootModel)
 	rm.SettleToastsForTest()
 
@@ -188,65 +190,10 @@ func TestInAppNotify_ClickOpensChat(t *testing.T) {
 	}
 }
 
-func TestInAppNotify_ActiveChat_NoToast(t *testing.T) {
-	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
-	m.currentChatID = 7 // this chat is open
-	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey", false))
-	if !model.(RootModel).toasts.Empty() {
-		t.Fatal("active chat must not notify")
-	}
-}
-
-func TestInAppNotify_Outgoing_NoToast(t *testing.T) {
-	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
-	m.currentChatID = 0
-	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "sent by me", true))
-	if !model.(RootModel).toasts.Empty() {
-		t.Fatal("outgoing message must not notify")
-	}
-}
-
-func TestInAppNotify_MutedChat_NoToast(t *testing.T) {
-	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice", IsMuted: true})
-	m.currentChatID = 0
-	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "hey", false))
-	if !model.(RootModel).toasts.Empty() {
-		t.Fatal("muted chat must not notify")
-	}
-}
-
-func TestInAppNotify_StaleMessage_NoToast(t *testing.T) {
-	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
-	m.currentChatID = 0
-	evt := store.Event{
-		Kind: store.EventNewMessage,
-		Message: domain.Message{
-			ID: 1001, ChatID: 7, Text: "old", IsOut: false,
-			Date: time.Now().Add(-store.NotifyFreshnessWindow - time.Second),
-		},
-	}
-	model, _ := applyEventInternal(t, m, m.st, evt)
-	if !model.(RootModel).toasts.Empty() {
-		t.Fatal("stale catch-up message must not notify")
-	}
-}
-
-func TestInAppNotify_PreviewOff_HidesText(t *testing.T) {
-	m := notifyModel(t, domain.Chat{ID: 7, Title: "Alice"})
-	m.currentChatID = 0
-	m.cfg = &config.Config{}
-	m.cfg.UI.NotificationPreview = false
-	model, _ := applyEventInternal(t, m, m.st, newMessageEvent(7, "secret text", false))
-	rm := model.(RootModel)
-	rm.SettleToastsForTest()
-	view := rm.View().Content
-	if strings.Contains(view, "secret text") {
-		t.Fatalf("preview-off must hide message text:\n%s", view)
-	}
-	if !strings.Contains(view, "Alice") {
-		t.Fatalf("title should still show:\n%s", view)
-	}
-}
+// The cases this file used to own — muted, stale, preview-off, the open chat,
+// an outgoing message — are decisions, not rendering. They live in
+// internal/core/notify_test.go, against the real policy rather than a copy of
+// it (#192).
 
 func TestParseToastZone(t *testing.T) {
 	if parseToastZone("top-right") != components.ZoneTopRight {

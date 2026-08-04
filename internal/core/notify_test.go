@@ -4,10 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sorokin-vladimir/tele/internal/domain"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 type mockNotifier struct {
@@ -19,224 +20,223 @@ func (m *mockNotifier) Notify(title, body string) error {
 	return nil
 }
 
-func TestMaybeNotify_SendsForOtherChat(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: "hello there", Date: time.Now()},
+// focusOn builds the focus input the policy takes: the chats some client has
+// open. Passing none means nobody is looking at anything.
+func focusOn(ids ...int64) func(int64) bool {
+	return func(id int64) bool {
+		for _, want := range ids {
+			if id == want && id != 0 {
+				return true
+			}
+		}
+		return false
 	}
-	maybeNotify(n, st, evt, 1, true)
-	require.Len(t, n.calls, 1)
-	assert.Equal(t, "Bob", n.calls[0].title)
-	assert.Equal(t, "hello there", n.calls[0].body)
 }
 
-func TestMaybeNotify_SilentForOpenChat(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 1, Text: "hey"},
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
-}
-
-func TestMaybeNotify_PreviewDisabled_HidesText(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: "secret text", Date: time.Now()},
-	}
-	maybeNotify(n, st, evt, 1, false)
-	require.Len(t, n.calls, 1)
-	assert.Equal(t, "Bob", n.calls[0].title)
-	assert.Equal(t, "New message", n.calls[0].body)
-}
-
-func TestMaybeNotify_TruncatesLongText(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "C"})
-	b := make([]byte, 200)
+func longText(n int) string {
+	b := make([]byte, n)
 	for i := range b {
 		b[i] = 'x'
 	}
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: string(b), Date: time.Now()},
-	}
-	maybeNotify(n, st, evt, 0, true)
-	require.Len(t, n.calls, 1)
-	body := n.calls[0].body
-	runes := []rune(body)
-	assert.Equal(t, 101, len(runes))          // 100 chars + U+2026 ellipsis
-	assert.Equal(t, "…", string(runes[100:])) // last rune is ellipsis
+	return string(b)
 }
 
-func TestMaybeNotify_IgnoresNonMessageEvents(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	evt := store.Event{Kind: store.EventKind(99)}
-	maybeNotify(n, st, evt, 0, true)
-	assert.Empty(t, n.calls)
-}
+func TestDecideNotification(t *testing.T) {
+	now := time.Now()
+	fresh := now.Add(-time.Second)
+	stale := now.Add(-time.Minute)
 
-func TestMaybeNotify_SilentForOutgoingMessage(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: "sent from phone", IsOut: true},
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
-}
-
-func TestMaybeNotify_SilentForMutedChat(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob", IsMuted: true})
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: "hello there"},
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
-}
-
-func TestMaybeNotify_SilentForStaleCatchUp(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	// A backlog message recovered via getDifference carries its original
-	// (old) send time. It must not raise a notification (#123).
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: "missed while idle", Date: time.Now().Add(-time.Minute)},
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
-}
-
-func TestMaybeNotify_SendsForFreshMessage(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: "live now", Date: time.Now()},
-	}
-	maybeNotify(n, st, evt, 1, true)
-	require.Len(t, n.calls, 1)
-	assert.Equal(t, "Bob", n.calls[0].title)
-}
-
-func TestMaybeNotify_SendsForFreshReaction_Group(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	evt := store.Event{
-		Kind:            store.EventReactionsUpdate,
-		ChatID:          2,
-		MsgID:           10,
-		ReactionsUnread: true,
-		ReactionEmoji:   "❤",
-		ReactionDate:    time.Now(),
-	}
-	maybeNotify(n, st, evt, 1, true)
-	require.Len(t, n.calls, 1)
-	assert.Equal(t, "Bob", n.calls[0].title)
-	assert.Contains(t, n.calls[0].body, "❤")
-	assert.Contains(t, n.calls[0].body, "reacted")
-}
-
-func TestMaybeNotify_SendsForFreshReaction_DM(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	// 1:1 reactions arrive as a hidden edit carrying the reacted (outgoing) message.
-	evt := store.Event{
-		Kind: store.EventEditMessage,
-		Message: domain.Message{
-			ChatID: 2, ID: 10, IsOut: true, HasUnreadReactions: true,
+	tests := []struct {
+		name      string
+		chats     []domain.Chat
+		evt       store.Event
+		focused   func(int64) bool
+		preview   bool
+		wantOK    bool
+		wantTitle string
+		wantBody  string
+	}{
+		{
+			name:  "fresh message in an unfocused chat notifies",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "hello there", Date: fresh}},
+			focused: focusOn(1), preview: true,
+			wantOK: true, wantTitle: "Bob", wantBody: "hello there",
 		},
-		ReactionEmoji: "👍",
-		ReactionDate:  time.Now(),
-	}
-	maybeNotify(n, st, evt, 1, true)
-	require.Len(t, n.calls, 1)
-	assert.Equal(t, "Bob", n.calls[0].title)
-	assert.Contains(t, n.calls[0].body, "👍")
-}
-
-func TestMaybeNotify_SilentForReactionInOpenChat(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
-	evt := store.Event{
-		Kind: store.EventReactionsUpdate, ChatID: 1, ReactionsUnread: true,
-		ReactionEmoji: "❤", ReactionDate: time.Now(),
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
-}
-
-func TestMaybeNotify_SilentForReactionInMutedChat(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob", IsMuted: true})
-	evt := store.Event{
-		Kind: store.EventReactionsUpdate, ChatID: 2, ReactionsUnread: true,
-		ReactionEmoji: "❤", ReactionDate: time.Now(),
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
-}
-
-func TestMaybeNotify_SilentForStaleReaction(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	// A reaction recovered via getDifference carries its original (old) date.
-	evt := store.Event{
-		Kind: store.EventReactionsUpdate, ChatID: 2, ReactionsUnread: true,
-		ReactionEmoji: "❤", ReactionDate: time.Now().Add(-time.Minute),
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
-}
-
-func TestMaybeNotify_SilentForRealEdit(t *testing.T) {
-	n := &mockNotifier{}
-	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
-	edited := time.Now()
-	// A genuine text edit (no unread reactions) must not notify.
-	evt := store.Event{
-		Kind: store.EventEditMessage,
-		Message: domain.Message{
-			ChatID: 2, ID: 10, Text: "edited text", EditDate: &edited,
+		{
+			name:  "preview off hides the text",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "secret text", Date: fresh}},
+			focused: focusOn(), preview: false,
+			wantOK: true, wantTitle: "Bob", wantBody: "New message",
+		},
+		{
+			name:  "long text is truncated to 100 runes",
+			chats: []domain.Chat{{ID: 2, Title: "C"}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: longText(200), Date: fresh}},
+			focused: focusOn(), preview: true,
+			wantOK: true, wantTitle: "C", wantBody: longText(100) + "…",
+		},
+		{
+			name:  "the focused chat stays silent",
+			chats: []domain.Chat{{ID: 1, Title: "Alice"}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 1, Text: "hey", Date: fresh}},
+			focused: focusOn(1), preview: true,
+		},
+		{
+			name:  "outgoing messages never notify",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "sent by me", IsOut: true, Date: fresh}},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "muted chats stay silent",
+			chats: []domain.Chat{{ID: 2, Title: "Bob", IsMuted: true}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "hey", Date: fresh}},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "archived chats stay silent",
+			chats: []domain.Chat{{ID: 2, Title: "Bob", IsArchived: true}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "hey", Date: fresh}},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "catch-up backlog is stale and stays silent",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "old", Date: stale}},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "a zero event time stays silent",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "no date"}},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "a chat the store does not know stays silent",
+			chats: nil,
+			evt: store.Event{Kind: store.EventNewMessage,
+				Message: domain.Message{ChatID: 2, Text: "hey", Date: fresh}},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "a group reaction to our message notifies",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventReactionsUpdate, ChatID: 2, MsgID: 10,
+				ReactionsUnread: true, ReactionEmoji: "❤", ReactionDate: fresh},
+			focused: focusOn(), preview: true,
+			wantOK: true, wantTitle: "Bob", wantBody: "reacted ❤ to your message",
+		},
+		{
+			name:  "a custom-emoji reaction degrades to a bare body",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventReactionsUpdate, ChatID: 2, MsgID: 10,
+				ReactionsUnread: true, ReactionDate: fresh},
+			focused: focusOn(), preview: true,
+			wantOK: true, wantTitle: "Bob", wantBody: "reacted to your message",
+		},
+		{
+			name:  "a reactions update with nothing unread stays silent",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventReactionsUpdate, ChatID: 2, MsgID: 10,
+				ReactionEmoji: "❤", ReactionDate: fresh},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "a 1:1 reaction arrives as a hidden edit and notifies",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventEditMessage,
+				Message:       domain.Message{ChatID: 2, ID: 10, IsOut: true, HasUnreadReactions: true},
+				ReactionEmoji: "👍", ReactionDate: fresh},
+			focused: focusOn(), preview: true,
+			wantOK: true, wantTitle: "Bob", wantBody: "reacted 👍 to your message",
+		},
+		{
+			name:  "a genuine text edit never notifies",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventEditMessage,
+				Message: domain.Message{ChatID: 2, ID: 10, Text: "edited text"}},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "a reaction in the focused chat stays silent",
+			chats: []domain.Chat{{ID: 1, Title: "Alice"}},
+			evt: store.Event{Kind: store.EventReactionsUpdate, ChatID: 1,
+				ReactionsUnread: true, ReactionEmoji: "❤", ReactionDate: fresh},
+			focused: focusOn(1), preview: true,
+		},
+		{
+			name:  "a reaction in a muted chat stays silent",
+			chats: []domain.Chat{{ID: 2, Title: "Bob", IsMuted: true}},
+			evt: store.Event{Kind: store.EventReactionsUpdate, ChatID: 2,
+				ReactionsUnread: true, ReactionEmoji: "❤", ReactionDate: fresh},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:  "a stale reaction stays silent",
+			chats: []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt: store.Event{Kind: store.EventReactionsUpdate, ChatID: 2,
+				ReactionsUnread: true, ReactionEmoji: "❤", ReactionDate: stale},
+			focused: focusOn(), preview: true,
+		},
+		{
+			name:    "an unrelated event kind never notifies",
+			chats:   []domain.Chat{{ID: 2, Title: "Bob"}},
+			evt:     store.Event{Kind: store.EventDeleteMessages, ChatID: 2},
+			focused: focusOn(), preview: true,
 		},
 	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			st := store.NewMemory()
+			for _, c := range tc.chats {
+				st.SetChat(c)
+			}
+			n, ok := decideNotification(st, tc.evt, tc.focused, tc.preview, now)
+			if !tc.wantOK {
+				assert.False(t, ok)
+				assert.Equal(t, Notification{}, n, "a refused decision carries nothing")
+				return
+			}
+			require.True(t, ok)
+			assert.Equal(t, tc.wantTitle, n.Title)
+			assert.Equal(t, tc.wantBody, n.Body)
+		})
+	}
 }
 
-func TestMaybeNotify_SilentForArchivedChat(t *testing.T) {
-	n := &mockNotifier{}
+func TestDecideNotification_CarriesTheChatItIsAbout(t *testing.T) {
+	// The client opens this chat when the toast is clicked, so the id has to
+	// survive the decision.
 	st := store.NewMemory()
-	st.SetChat(domain.Chat{ID: 2, Title: "Bob", IsArchived: true})
-	evt := store.Event{
-		Kind:    store.EventNewMessage,
-		Message: domain.Message{ChatID: 2, Text: "hello there"},
-	}
-	maybeNotify(n, st, evt, 1, true)
-	assert.Empty(t, n.calls)
+	st.SetChat(domain.Chat{ID: 42, Title: "Bob"})
+	evt := store.Event{Kind: store.EventNewMessage,
+		Message: domain.Message{ChatID: 42, Text: "hey", Date: time.Now()}}
+	n, ok := decideNotification(st, evt, focusOn(), true, time.Now())
+	require.True(t, ok)
+	assert.Equal(t, int64(42), n.ChatID)
+}
+
+func TestDecideNotification_OneFocusedClientOfTwoIsEnough(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(domain.Chat{ID: 7, Title: "Bob"})
+	evt := store.Event{Kind: store.EventNewMessage,
+		Message: domain.Message{ChatID: 7, Text: "hey", Date: time.Now()}}
+
+	_, ok := decideNotification(st, evt, focusOn(9, 7), true, time.Now())
+	assert.False(t, ok, "somebody is looking at the chat, so nobody needs interrupting")
+
+	_, ok = decideNotification(st, evt, focusOn(9), true, time.Now())
+	assert.True(t, ok, "no client is showing it any more")
 }

@@ -112,7 +112,6 @@ type RootModel struct {
 	kittyResetPending bool
 	kittyCap          int // max live placements; from config, 0 → default
 	searchModel       *screens.SearchModel
-	onChatOpen        func(int64)
 	contextMenu       *components.ContextMenu
 	chatMenu          *components.ChatContextMenu
 	reactionPicker    *components.ReactionPicker
@@ -297,11 +296,6 @@ func (m *RootModel) SetLoginModel(lm screens.LoginModel) {
 	m.login = lm
 }
 
-// SetOnChatOpen registers a callback invoked whenever the user opens a chat.
-func (m *RootModel) SetOnChatOpen(fn func(int64)) {
-	m.onChatOpen = fn
-}
-
 func (m *RootModel) SetTmpDir(dir string) {
 	m.tmpDir = dir
 }
@@ -363,6 +357,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleDelta(msg)
 	case core.Incoming:
 		return m.handleIncoming(msg)
+	case core.Notification:
+		return m.handleNotification(msg)
 	case core.Failure:
 		return m.handleFailure(msg)
 	case core.Typing:

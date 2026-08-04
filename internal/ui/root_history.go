@@ -26,8 +26,8 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// session. They re-decode on demand if a GIF is selected again.
 		clear(m.gifFrames)
 		m.chatList.SetActiveByID(msg.ChatID)
-		if m.onChatOpen != nil {
-			m.onChatOpen(msg.ChatID)
+		if m.owner != nil {
+			m.owner.SetFocus(msg.ChatID)
 		}
 		m.chat.ClearPendingAction()
 		// Paint the title immediately; everything else arrives on the

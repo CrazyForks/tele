@@ -121,6 +121,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- Closing a chat no longer silences it. Leaving a chat with `Esc` used to leave
+  the app believing you were still reading it, so new messages there arrived
+  with no desktop notification and no in-app toast — silence that lasted until
+  you happened to open some other chat. Notifications and toasts are also one
+  decision now rather than two that happened to agree, so a banner and a toast
+  can no longer disagree about the same message (#192).
 - Messages arriving in a chat that is open but not being read are no longer
   swallowed. Unread is now counted for every incoming message and cleared when
   the server confirms the read, rather than being skipped for whichever chat

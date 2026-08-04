@@ -29,6 +29,10 @@ type ownerStub struct {
 	incoming []core.Incoming
 	typing   []core.Typing
 
+	// focus records what the client told the owner it is showing, so a test can
+	// assert that leaving a chat is reported as well as entering one (#192).
+	focus []int64
+
 	// calls records the commands the UI issued, so a test can assert on what
 	// was asked for rather than on how the result was rendered. err is what
 	// every command answers with, standing in for a Telegram refusal.
@@ -52,6 +56,8 @@ type ownerStub struct {
 	retried   []string
 	discarded []string
 }
+
+func (o *ownerStub) SetFocus(chatID int64) { o.focus = append(o.focus, chatID) }
 
 // mediaKey identifies one piece of media the way a client names it.
 type mediaKey struct {
@@ -365,26 +371,12 @@ func applyEventInternal(t *testing.T, m RootModel, st store.Store, evt store.Eve
 	chg, applied := state.Apply(o.state, evt)
 	if applied && chg.Kind == state.ChangeNewMessage && !chg.Message.IsOut &&
 		chg.ChatID != m.currentChatID {
-		o.incoming = append(o.incoming, incomingLike(m, st, chg))
+		// The flash, and only the flash. Whether the event also deserves a toast
+		// is a core.Notification the owner decides; no shim here reproduces that
+		// judgement any more (#192).
+		o.incoming = append(o.incoming, core.Incoming{ChatID: chg.ChatID})
 	}
 	return o.drain(m)
-}
-
-// incomingLike reproduces core.Owner.publishIncoming: the same freshness and
-// mute gate, and the same privacy rule on the preview. Keeping the two in step
-// is what makes a UI test about notifications mean anything.
-func incomingLike(m RootModel, st store.Store, chg state.Change) core.Incoming {
-	chat, _ := st.GetChat(chg.ChatID)
-	preview := chg.Message.Text
-	if m.cfg != nil && !m.cfg.UI.NotificationPreview {
-		preview = "New message"
-	}
-	return core.Incoming{
-		ChatID:  chg.ChatID,
-		Title:   chat.Title,
-		Preview: preview,
-		Notify:  store.Notifiable(st, chg.ChatID, m.currentChatID, chg.Message.Date, time.Now()),
-	}
 }
 
 // A WEBP sticker only decodes if the decoder is registered, and it is

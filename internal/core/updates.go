@@ -2,13 +2,13 @@ package core
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // Start connects to Telegram and runs until ctx is cancelled. The caller runs it
@@ -21,7 +21,8 @@ func (o *Owner) Start(ctx context.Context) error {
 }
 
 // RunUpdates applies incoming Telegram events to domain state and makes the
-// notification decision. Publishing is the commit listener's job, not this loop's.
+// notification decision. Publishing deltas is the commit listener's job, not
+// this loop's.
 func (o *Owner) RunUpdates(ctx context.Context) {
 	for {
 		select {
@@ -29,14 +30,29 @@ func (o *Owner) RunUpdates(ctx context.Context) {
 			return
 		case evt := <-o.events:
 			o.log.Debug("incoming update", zap.Int("kind", int(evt.Kind)))
-			// Applying commits, and the owner's commit listener publishes the
-			// resulting deltas. Nothing is forwarded from here.
-			state.Apply(o.state, evt)
-			current := atomic.LoadInt64(&o.currentChatID)
-			maybeNotify(o.notifier, o.state.Store(), evt, current, o.cfg.UI.NotificationPreview)
-			o.publishIncoming(evt, current, time.Now())
+			o.handleEvent(evt)
 		}
 	}
+}
+
+// handleEvent applies one event and decides what the user hears about it. One
+// decision, one clock, two sinks: splitting it in two is how the OS banner and
+// the in-app toast used to drift apart (#192).
+func (o *Owner) handleEvent(evt store.Event) {
+	// Applying commits, and the owner's commit listener publishes the resulting
+	// deltas. Nothing is forwarded from here.
+	state.Apply(o.state, evt)
+
+	focused := o.focus.focused
+	now := time.Now()
+	if n, ok := decideNotification(o.state.Store(), evt, focused,
+		o.cfg.UI.NotificationPreview, now); ok {
+		if err := o.notifier.Notify(n.Title, n.Body); err != nil {
+			o.log.Warn("OS notification failed", zap.Error(err))
+		}
+		o.publishNotification(n)
+	}
+	o.publishIncoming(evt, focused)
 }
 
 // Bootstrap loads the authoritative dialog list and folder filters once the

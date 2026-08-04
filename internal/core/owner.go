@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 
 	"go.uber.org/zap"
 
@@ -44,9 +43,12 @@ type Owner struct {
 	failures chan Failure
 	typing   chan Typing
 	progress chan Progress
-	registry *project.Registry
-	readyCh  chan struct{}
-	onAuthFn func(userID int64, username string)
+	// notifications carries decisions the owner has already made, so a client
+	// renders rather than judges (#192).
+	notifications chan Notification
+	registry      *project.Registry
+	readyCh       chan struct{}
+	onAuthFn      func(userID int64, username string)
 
 	// historyLimit is how many messages one backfill fetches, from config.
 	historyLimit int
@@ -62,9 +64,9 @@ type Owner struct {
 	fetchMu  sync.Mutex
 	fetching map[project.SubID]bool
 
-	// currentChatID is the chat a client currently has open, consulted only by
-	// the notification decision. #192 replaces this with a reported focus.
-	currentChatID int64
+	// focus is what each attached client is showing. The notification policy's
+	// only view of clients (#192).
+	focus *focusRegistry
 
 	// media downloads on behalf of clients and owns the disk cache. It is the
 	// only holder of file references (#196).
@@ -97,10 +99,12 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		failures:      make(chan Failure, 32),
 		typing:        make(chan Typing, 32),
 		progress:      make(chan Progress, 32),
+		notifications: make(chan Notification, 32),
 		readyCh:       make(chan struct{}),
 		historyLimit:  cfg.UI.HistoryLimit,
 		ctx:           context.Background(),
 		fetching:      make(map[project.SubID]bool),
+		focus:         newFocusRegistry(),
 		outboxWake:    make(chan struct{}, 1),
 		uploadCancels: make(map[string]context.CancelFunc),
 	}
@@ -125,10 +129,6 @@ func (o *Owner) AuthFlow() *internaltg.AuthFlow { return o.authFlow }
 
 // Ready is closed once the connection is up and authenticated.
 func (o *Owner) Ready() <-chan struct{} { return o.readyCh }
-
-// SetCurrentChat records which chat a client has open, for the notification
-// decision only. It is never consulted by domain state (#189).
-func (o *Owner) SetCurrentChat(id int64) { atomic.StoreInt64(&o.currentChatID, id) }
 
 // SetOnAuth registers a callback fired once the account is known, so a client
 // can record the self identity. Set before Start.
