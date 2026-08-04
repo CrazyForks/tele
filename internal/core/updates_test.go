@@ -211,3 +211,68 @@ func TestNotify_FocusedChatDoesNeither(t *testing.T) {
 	default:
 	}
 }
+
+// A group reaction reaches the client as a decision like any other. The client
+// renders a Notification without knowing what kind of event produced it, which
+// is what #192 bought and what #203's toast requirement amounts to.
+func TestNotify_GroupReactionFeedsBothSinks(t *testing.T) {
+	n := &mockNotifier{}
+	o, st := newTestOwnerNotified(t, n)
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
+
+	o.handleEvent(store.Event{
+		Kind: store.EventReactionsUpdate, ChatID: 2, MsgID: 10,
+		ReactionsUnread: true, ReactionEmoji: "❤", ReactionDate: time.Now(),
+	})
+
+	require.Len(t, n.calls, 1, "exactly one OS notification")
+	assert.Equal(t, "reacted ❤ to your message", n.calls[0].body)
+	select {
+	case got := <-o.Notifications():
+		assert.Equal(t, n.calls[0].title, got.Title, "same value, two sinks")
+		assert.Equal(t, n.calls[0].body, got.Body)
+		assert.Equal(t, int64(2), got.ChatID, "the toast opens this chat when clicked")
+	default:
+		t.Fatal("expected a Notification on the stream")
+	}
+	// A reaction does not reorder the chat list, so there is nothing for the eye
+	// to follow and no row flash to publish (#203). The unread-reactions badge is
+	// the standing cue; the toast is the interruption.
+	select {
+	case in := <-o.Incoming():
+		t.Fatalf("a reaction must not flash the row, got %+v", in)
+	default:
+	}
+}
+
+// The 1:1 form: Telegram delivers a peer's reaction as a hidden edit carrying
+// unread reactions, not as a reactions update.
+func TestNotify_DMReactionFeedsBothSinks(t *testing.T) {
+	n := &mockNotifier{}
+	o, st := newTestOwnerNotified(t, n)
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
+
+	o.handleEvent(store.Event{
+		Kind: store.EventEditMessage,
+		Message: domain.Message{
+			ChatID: 2, ID: 10, IsOut: true, HasUnreadReactions: true,
+		},
+		ReactionEmoji: "👍", ReactionDate: time.Now(),
+	})
+
+	require.Len(t, n.calls, 1, "exactly one OS notification")
+	assert.Equal(t, "reacted 👍 to your message", n.calls[0].body)
+	select {
+	case got := <-o.Notifications():
+		assert.Equal(t, n.calls[0].title, got.Title, "same value, two sinks")
+		assert.Equal(t, n.calls[0].body, got.Body)
+		assert.Equal(t, int64(2), got.ChatID)
+	default:
+		t.Fatal("expected a Notification on the stream")
+	}
+	select {
+	case in := <-o.Incoming():
+		t.Fatalf("a reaction must not flash the row, got %+v", in)
+	default:
+	}
+}

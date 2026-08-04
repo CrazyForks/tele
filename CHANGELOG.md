@@ -127,6 +127,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   you happened to open some other chat. Notifications and toasts are also one
   decision now rather than two that happened to agree, so a banner and a toast
   can no longer disagree about the same message (#192).
+- A reaction to one of your messages now reaches you where you are actually
+  looking. It used to raise a desktop banner and nothing else, so with the
+  terminal in front of you — the normal case — a reaction was silent, and you
+  found out by scrolling back to the message. It now also pops a toast naming
+  the reaction, which opens the chat when clicked. Nothing pops for a chat you
+  already have open: the reaction is visible under the message (#203).
 - Messages arriving in a chat that is open but not being read are no longer
   swallowed. Unread is now counted for every incoming message and cleared when
   the server confirms the read, rather than being skipped for whichever chat
