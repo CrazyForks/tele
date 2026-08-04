@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-08-04
+
 ### Added
 
 - A message you send now survives the app. Sending used to live entirely in the
