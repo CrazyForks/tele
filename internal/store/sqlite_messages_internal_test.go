@@ -23,10 +23,10 @@ func TestMarkMsgDirty_SkipsOptimisticNegativeID(t *testing.T) {
 	defer func() { _ = s.Close() }()
 	s.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 
-	// An optimistic outgoing message with a negative sentinel id, plus a progress
-	// tick — neither should be queued for persistence.
+	// A negative id is not a message Telegram ever assigned, so it must never
+	// reach the database. Nothing produces one since #195 retired the optimistic
+	// sentinels, but the guard is what keeps that true.
 	s.AppendMessage(domain.Message{ID: -100, ChatID: 1, Text: "sending", Date: time.Unix(1, 0)})
-	s.UpdateLocalMediaProgress(-100, 0.5)
 
 	s.mu.Lock()
 	dirty := len(s.dirtyMsgs[1])

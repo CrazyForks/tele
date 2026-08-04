@@ -213,6 +213,11 @@ func (m *ChatModel) SetMessages(msgs []domain.Message) { m.msgList.SetMessages(m
 // SetOutbox replaces the queued sends drawn below the window (#193).
 func (m *ChatModel) SetOutbox(entries []domain.OutboxEntry) { m.msgList.SetOutbox(entries) }
 
+// SetUploadProgress forwards a queued media send's upload advance to the pane.
+func (m *ChatModel) SetUploadProgress(ref string, part, parts int, frac float64) {
+	m.msgList.SetUploadProgress(ref, part, parts, frac)
+}
+
 // Outbox returns the queued sends currently drawn.
 func (m *ChatModel) Outbox() []domain.OutboxEntry { return m.msgList.Outbox() }
 

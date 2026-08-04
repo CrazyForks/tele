@@ -14,7 +14,7 @@ import (
 func rootWithToastStack(t *testing.T) RootModel {
 	t.Helper()
 	st := store.NewMemory()
-	m := NewRootModel(nil, st, 50, false).WithScreen(ScreenMain)
+	m := NewRootModel(st, 50, false).WithScreen(ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return newM.(RootModel)
 }

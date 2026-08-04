@@ -109,26 +109,6 @@ func TestSQLite_MessageEdit_PersistsSurvivesReopen(t *testing.T) {
 	require.NotNil(t, got[0].EditDate)
 }
 
-func TestSQLite_UpdateMessageID_MovesRowOnDisk(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.db")
-
-	s := openStore(t, path)
-	s.SetChat(domain.Chat{ID: 6, Peer: domain.Peer{ID: 6, Type: domain.PeerUser}})
-	// Positive ids only: negative sentinels are never persisted, so exercise the
-	// id-change path with two real ids.
-	s.SetMessages(6, []domain.Message{{ID: 100, ChatID: 6, Text: "m", Date: time.Unix(1, 0)}})
-	s.UpdateMessageID(6, 100, 200)
-	require.NoError(t, s.Close())
-
-	s2 := openStore(t, path)
-	defer func() { _ = s2.Close() }()
-	s2.LoadMessages(6)
-	got := s2.Messages(6)
-
-	require.Len(t, got, 1)
-	assert.Equal(t, 200, got[0].ID, "old id row should be deleted, new id upserted")
-}
-
 func TestSQLite_RemoveMessage_DeletesOnDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 
@@ -285,8 +265,7 @@ func TestSQLite_RemoveOfARenumberedMessage_SurvivesReopen(t *testing.T) {
 
 	s := openStore(t, path)
 	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
-	s.AppendMessage(domain.Message{ID: -1, ChatID: 9, Text: "mine", IsOut: true, Date: time.Unix(3000, 0)})
-	s.UpdateMessageID(9, -1, 42)
+	s.AppendMessage(domain.Message{ID: 42, ChatID: 9, Text: "mine", IsOut: true, Date: time.Unix(3000, 0)})
 	require.Equal(t, []int64{9}, s.RemoveMessagesByID([]int{42}))
 	require.NoError(t, s.Close())
 
@@ -328,21 +307,7 @@ func TestSQLite_AppendMessage_SameIDAdoptsTheNewerCopy(t *testing.T) {
 	assert.Equal(t, "Ada", got[0].SenderName)
 }
 
-// The server's copy can arrive before the client renames its optimistic
-// sentinel: the echo now comes back inside the send RPC. Renaming onto an id the
-// chat already holds must drop the sentinel rather than produce two rows with
-// the same id.
-func TestSQLite_UpdateMessageID_OntoAnExistingIDDropsTheSentinel(t *testing.T) {
-	s := openStore(t, filepath.Join(t.TempDir(), "state.db"))
-	defer func() { _ = s.Close() }()
-	s.SetChat(domain.Chat{ID: 9, Peer: domain.Peer{ID: 9, Type: domain.PeerUser}})
-
-	s.AppendMessage(domain.Message{ID: -1, ChatID: 9, Text: "mine", IsOut: true, Date: time.Unix(1, 0)})
-	s.AppendMessage(domain.Message{ID: 42, ChatID: 9, Text: "mine", IsOut: true, Date: time.Unix(1, 0)})
-
-	s.UpdateMessageID(9, -1, 42)
-
-	got := s.Messages(9)
-	require.Len(t, got, 1, "the sentinel must be dropped, not renamed onto a duplicate")
-	assert.Equal(t, 42, got[0].ID)
-}
+// Renaming an optimistic sentinel onto the id the server assigned was how a sent
+// message stopped being a guess. Nothing renames anything since #195: the owner
+// records the message under its real id, and the duplicate this guarded against
+// is now covered by AppendMessage being idempotent (see the test above).

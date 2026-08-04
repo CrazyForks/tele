@@ -204,33 +204,30 @@ type Message struct {
 	// unread-mention indicator when the message is incoming and unread (#155).
 	Mentioned bool
 	Forward   *ForwardInfo // nil if not forwarded
-	// LocalMedia describes media being uploaded for an optimistic outgoing bubble,
-	// rendered from a local file before the server confirms. nil for normal messages.
+	// LocalMedia describes the files of a queued media send. Set only on the
+	// bubble a client draws for an outbox entry; nil for real messages.
 	LocalMedia *LocalMedia
 }
 
-// LocalMedia is the local-file description of media on an optimistic outgoing
-// message, so the bubble can render (via the inbound media pipeline, keyed on Kind)
-// before messages.sendMedia is confirmed.
+// LocalMedia describes the files of a queued media send so the pending bubble
+// can name them and show upload progress.
+//
+// It is built from the outbox entry when the bubble is drawn and never stored:
+// what is in flight lives in the queue, not in a client's memory, so every
+// attached client sees the same send rather than only the one that started it
+// (#195).
 type LocalMedia struct {
-	Path     string
-	Kind     MediaKind
+	Kind MediaKind
+	// FileName names a lone file. Empty for a group, which is named by its count.
 	FileName string
 	Size     int64
-	// UploadProgress is the fraction uploaded (0..1) for the optimistic bubble.
+	// Part is the 1-based file being uploaded now, Parts the total in the send.
+	// Part is zero until the upload starts.
+	Part  int
+	Parts int
+	// UploadProgress is the fraction uploaded (0..1) across the whole send.
 	UploadProgress float64
-	// UploadState tracks the optimistic upload; the zero value is UploadUploading.
-	// Success clears LocalMedia entirely, so there is no "done" state.
-	UploadState UploadState
 }
-
-// UploadState is the state of an in-flight optimistic media upload.
-type UploadState int
-
-const (
-	UploadUploading UploadState = iota
-	UploadFailed
-)
 
 // ForwardInfo describes the origin of a forwarded message.
 type ForwardInfo struct {

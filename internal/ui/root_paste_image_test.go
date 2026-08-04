@@ -27,7 +27,7 @@ var pngBytes = []byte{
 // the composer paste path.
 func enterInsertOnChat(t *testing.T) (ui.RootModel, store.Store) {
 	t.Helper()
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	m.SetTmpDir(t.TempDir())
 	nm, _ := m.Update(tea.KeyPressMsg{Code: 'i', Text: "i"})
 	m = nm.(ui.RootModel)

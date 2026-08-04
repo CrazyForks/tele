@@ -176,9 +176,3 @@ func (o *Owner) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) 
 	o.media.Invalidate(chatID, msgID, slot)
 }
 
-// Telegram exposes the raw client.
-//
-// TRANSITIONAL (#190): the UI still calls tg.Client directly for commands,
-// queries and media. #193, #194, #195 and #196 absorb most of those calls and
-// #198 absorbs the rest and deletes this method. Do not build on it.
-func (o *Owner) Telegram() internaltg.Client { return o.client }

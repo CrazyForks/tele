@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
 // attemptMedia sends one album group: upload every part, convert them into

@@ -3,6 +3,7 @@ package components
 import (
 	"fmt"
 	"image"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -28,38 +29,76 @@ func renderUploadBar(frac float64, width int) string {
 	return fmt.Sprintf("%s %3.0f%%", bar, frac*100)
 }
 
-// localMediaLabel is the first line of an optimistic media bubble: a kind glyph
-// plus the local file name. Photos use 🖼; documents (and any other kind) use 📎.
+// localMediaLabel is the first line of a queued media bubble: a kind glyph plus
+// the file name, or the count for an album group, which is one bubble because it
+// will be one album. Photos use 🖼, videos 🎥, everything else 📎.
+//
+// Which file of the group is uploading belongs here rather than on the progress
+// line: the bubble is measured by this label, so the counter widens the bubble
+// instead of overflowing a line that was already exactly as wide as it is
+// allowed to be.
 func localMediaLabel(lm *domain.LocalMedia) string {
-	if lm.Kind == domain.MediaPhoto {
-		name := lm.FileName
-		if name == "" {
-			name = "photo"
+	glyph := mediaKindGlyph(lm.Kind)
+	if lm.Parts > 1 {
+		part := lm.Part
+		if part < 1 {
+			// Nothing is uploading yet. The first file is still the one this
+			// send is about to be on, and showing it keeps the label — and with
+			// it the bubble — from widening the moment the first frame lands.
+			part = 1
 		}
-		return "🖼 " + name
-	}
-	if lm.Kind == domain.MediaVideo {
-		name := lm.FileName
-		if name == "" {
-			name = "video"
-		}
-		return "🎥 " + name
+		// The number is padded to the total's digits for the same reason: 9/10
+		// and 10/10 must occupy the same width.
+		digits := len(strconv.Itoa(lm.Parts))
+		return fmt.Sprintf("%s %d %s %*d/%d",
+			glyph, lm.Parts, mediaKindNoun(lm.Kind, lm.Parts), digits, part, lm.Parts)
 	}
 	name := lm.FileName
 	if name == "" {
-		name = "file"
+		name = mediaKindNoun(lm.Kind, 1)
 	}
-	return "📎 " + name
+	return glyph + " " + name
 }
 
-// uploadStatusLine returns the status line under an optimistic media bubble:
-// a progress bar while uploading, or an error indicator if failed.
+func mediaKindGlyph(k domain.MediaKind) string {
+	switch k {
+	case domain.MediaPhoto:
+		return "🖼"
+	case domain.MediaVideo:
+		return "🎥"
+	default:
+		return "📎"
+	}
+}
+
+// mediaKindNoun names what is being sent: "3 photos", "2 videos", "5 files".
+func mediaKindNoun(k domain.MediaKind, n int) string {
+	var one, many string
+	switch k {
+	case domain.MediaPhoto:
+		one, many = "photo", "photos"
+	case domain.MediaVideo:
+		one, many = "video", "videos"
+	default:
+		one, many = "file", "files"
+	}
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// uploadStatusLine returns the status line under a queued media bubble: the
+// progress bar, and nothing else. It fills exactly the width it is given, which
+// is what the bubble was sized to — labelLine pads a short line but does not
+// truncate a long one, so anything extra here tears the right border.
+//
+// A failed send is not shown here either: that is the entry's state, and it
+// already reads as ✕ in the bottom border where every other queue state lives
+// (#193).
 func uploadStatusLine(lm *domain.LocalMedia, width int) string {
 	if lm == nil {
 		return ""
-	}
-	if lm.UploadState == domain.UploadFailed {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("✗ upload failed")
 	}
 	return renderUploadBar(lm.UploadProgress, width)
 }

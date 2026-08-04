@@ -16,7 +16,7 @@ func TestCopyKey_OnTextMessage_WritesTextToClipboard(t *testing.T) {
 	var got string
 	defer ui.SetClipboardWriterForTest(func(s string) error { got = s; return nil })()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	st.AppendMessage(domain.Message{ID: 7, ChatID: 1, Text: "hello world", Date: time.Now()})
 	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
@@ -32,7 +32,7 @@ func TestCopyMsgRequest_FromContextMenu_WritesTextToClipboard(t *testing.T) {
 	var got string
 	defer ui.SetClipboardWriterForTest(func(s string) error { got = s; return nil })()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	st.AppendMessage(domain.Message{ID: 9, ChatID: 1, Text: "from menu", Date: time.Now()})
 	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)
@@ -48,7 +48,7 @@ func TestCopyKey_OnMediaOnlyMessage_DoesNotCopy(t *testing.T) {
 	var called bool
 	defer ui.SetClipboardWriterForTest(func(string) error { called = true; return nil })()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	st.AppendMessage(domain.Message{ID: 8, ChatID: 1, Date: time.Now(),
 		Media: &domain.MediaRef{Kind: domain.MediaPhoto}, Photo: &domain.PhotoRef{ID: 1}})
 	nm, _ := applyHistory(t, m, st, 1)

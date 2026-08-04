@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
@@ -14,17 +16,46 @@ func TestRenderUploadBar(t *testing.T) {
 	}
 }
 
-func TestUploadStatusLineFailed(t *testing.T) {
-	s := uploadStatusLine(&domain.LocalMedia{UploadState: domain.UploadFailed}, 20)
-	if !strings.Contains(strings.ToLower(s), "failed") {
-		t.Fatalf("failed status missing: %q", s)
+func TestUploadStatusLineUploading(t *testing.T) {
+	s := uploadStatusLine(&domain.LocalMedia{UploadProgress: 0.4, Parts: 1}, 20)
+	if !strings.Contains(s, "40%") {
+		t.Fatalf("uploading status missing percent: %q", s)
 	}
 }
 
-func TestUploadStatusLineUploading(t *testing.T) {
-	s := uploadStatusLine(&domain.LocalMedia{UploadProgress: 0.4}, 20)
-	if !strings.Contains(s, "40%") {
-		t.Fatalf("uploading status missing percent: %q", s)
+// A group counts its files; a lone one has nothing to count. The counter rides
+// on the label, which is what the bubble is measured by.
+func TestLocalMediaLabelCountsTheFilesOfAGroup(t *testing.T) {
+	s := localMediaLabel(&domain.LocalMedia{Kind: domain.MediaPhoto, Part: 2, Parts: 3})
+	if !strings.Contains(s, "2/3") {
+		t.Fatalf("group label missing the file counter: %q", s)
+	}
+	lone := localMediaLabel(&domain.LocalMedia{Kind: domain.MediaPhoto, FileName: "a.jpg", Part: 1, Parts: 1})
+	if strings.Contains(lone, "1/1") {
+		t.Fatalf("a single file should not be counted: %q", lone)
+	}
+}
+
+// The label sizes the bubble, so it must not change width as the upload runs:
+// every step of a ten-part send has to render the same number of cells.
+func TestLocalMediaLabelKeepsAConstantWidthThroughTheSend(t *testing.T) {
+	want := lipgloss.Width(localMediaLabel(&domain.LocalMedia{Kind: domain.MediaPhoto, Parts: 10}))
+	for part := 1; part <= 10; part++ {
+		lm := &domain.LocalMedia{Kind: domain.MediaPhoto, Part: part, Parts: 10}
+		if got := lipgloss.Width(localMediaLabel(lm)); got != want {
+			t.Fatalf("label at %d/10 is %d cells, want %d: %q", part, got, want, localMediaLabel(lm))
+		}
+	}
+}
+
+// The status line is drawn into a bubble sized by the label, and labelLine pads
+// but never truncates: a line wider than it was given tears the right border.
+func TestUploadStatusLineNeverExceedsTheWidthItIsGiven(t *testing.T) {
+	for _, width := range []int{8, 12, 20, 40} {
+		lm := &domain.LocalMedia{Kind: domain.MediaPhoto, UploadProgress: 0.42, Part: 3, Parts: 5}
+		if got := lipgloss.Width(uploadStatusLine(lm, width)); got > width {
+			t.Fatalf("status line is %d cells wide, was given %d", got, width)
+		}
 	}
 }
 

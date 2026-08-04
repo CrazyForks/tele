@@ -105,7 +105,7 @@ func (ml *MessageList) outboxItems() []listItem {
 	}
 	out := make([]listItem, 0, len(ml.outbox))
 	for _, e := range ml.outbox {
-		out = append(out, listItem{kind: itemOutbox, entry: e, msg: outboxBubble(e)})
+		out = append(out, listItem{kind: itemOutbox, entry: e, msg: ml.outboxBubble(e)})
 	}
 	return out
 }
@@ -118,7 +118,7 @@ func (ml *MessageList) outboxItems() []listItem {
 // Drawn as a message rather than as a widget of its own so the bubble and its
 // measured height stay in lock-step by construction — the drift groupHeight
 // needs a dedicated test to guard against.
-func outboxBubble(e domain.OutboxEntry) domain.Message {
+func (ml *MessageList) outboxBubble(e domain.OutboxEntry) domain.Message {
 	msg := domain.Message{
 		ChatID: e.ChatID,
 		Date:   e.CreatedAt,
@@ -129,7 +129,30 @@ func outboxBubble(e domain.OutboxEntry) domain.Message {
 		msg.Entities = e.Message.Entities
 		msg.ReplyToMsgID = e.Message.ReplyToMsgID
 	}
+	if e.Media != nil && len(e.Media.Parts) > 0 {
+		msg.Text = e.Media.Caption
+		msg.Entities = e.Media.Entities
+		msg.ReplyToMsgID = e.Media.ReplyToMsgID
+		msg.LocalMedia = localMediaFor(e, ml.uploadProgress[e.Ref])
+	}
 	return msg
+}
+
+// localMediaFor renders a queued media send as the bubble's view model: a group
+// is named by its count, a lone file by its name. The upload fraction is an
+// event the list was told about, not something the entry carries (#195).
+func localMediaFor(e domain.OutboxEntry, p uploadProgress) *domain.LocalMedia {
+	lm := &domain.LocalMedia{
+		Kind:           e.Media.Parts[0].SendAs,
+		Parts:          len(e.Media.Parts),
+		Part:           p.part,
+		UploadProgress: p.frac,
+	}
+	if len(e.Media.Parts) == 1 {
+		lm.FileName = e.Media.Parts[0].Name
+		lm.Size = e.Media.Parts[0].Size
+	}
+	return lm
 }
 
 // outboxStatusGlyph is what a queued send shows in the bottom border, in the
@@ -184,12 +207,8 @@ func OutboxReason(k telerr.Kind) string {
 func (ml *MessageList) SetOutbox(entries []domain.OutboxEntry) {
 	added := hasNewRef(ml.outbox, entries)
 	ml.outbox = entries
-	kept := ml.items
-	for len(kept) > 0 && kept[len(kept)-1].kind == itemOutbox {
-		kept = kept[:len(kept)-1]
-	}
-	ml.items = append(kept, ml.outboxItems()...)
-	ml.invalidateHeights()
+	ml.forgetGoneProgress()
+	ml.redrawOutbox()
 	if added {
 		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 		ml.setCursorNewest()
@@ -200,6 +219,48 @@ func (ml *MessageList) SetOutbox(entries []domain.OutboxEntry) {
 	// would be unselectable — there is no history to have parked a cursor on.
 	if ml.cursorIndex() < 0 {
 		ml.setCursorNewest()
+	}
+}
+
+// SetUploadProgress records how far a queued media send has uploaded and
+// redraws it. Nothing else moves: the entries are unchanged, only their bubbles.
+//
+// parts is accepted and ignored — the count comes from the entry, which is the
+// authority — so that a caller is never tempted to invent one.
+func (ml *MessageList) SetUploadProgress(ref string, part, _ int, frac float64) {
+	if ml.uploadProgress == nil {
+		ml.uploadProgress = make(map[string]uploadProgress)
+	}
+	ml.uploadProgress[ref] = uploadProgress{part: part, frac: frac}
+	ml.redrawOutbox()
+}
+
+// redrawOutbox rebuilds the queue's items in place, leaving the window and the
+// cursor where they are.
+func (ml *MessageList) redrawOutbox() {
+	kept := ml.items
+	for len(kept) > 0 && kept[len(kept)-1].kind == itemOutbox {
+		kept = kept[:len(kept)-1]
+	}
+	ml.items = append(kept, ml.outboxItems()...)
+	ml.invalidateHeights()
+}
+
+// forgetGoneProgress drops the fractions of sends that have left the queue, so
+// the map cannot grow for the life of the process and a later entry cannot
+// inherit a stale bar.
+func (ml *MessageList) forgetGoneProgress() {
+	if len(ml.uploadProgress) == 0 {
+		return
+	}
+	live := make(map[string]struct{}, len(ml.outbox))
+	for _, e := range ml.outbox {
+		live[e.Ref] = struct{}{}
+	}
+	for ref := range ml.uploadProgress {
+		if _, ok := live[ref]; !ok {
+			delete(ml.uploadProgress, ref)
+		}
 	}
 }
 

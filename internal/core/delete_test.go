@@ -39,13 +39,13 @@ func TestOwner_DeleteFromAnotherDevice_LeavesTheWindow(t *testing.T) {
 	assert.Len(t, st.Messages(1), 1, "and the store must no longer hold it")
 }
 
-// The same, for a message this client sent: it enters as an optimistic sentinel
-// and is renumbered when the server confirms it.
+// The same, for a message this client sent. It reaches the store the way the
+// outbox worker puts it there: under the ID Telegram confirmed, since #195 left
+// no client-side renumbering behind.
 func TestOwner_DeleteOfAMessageWeSent_LeavesTheWindow(t *testing.T) {
 	o, events, st := newTestOwner(t)
 	st.SetChat(domain.Chat{ID: 1, Title: "Ada", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	st.AppendMessage(domain.Message{ID: -1, ChatID: 1, Text: "mine", IsOut: true, Date: time.Unix(1, 0)})
-	st.UpdateMessageID(1, -1, 42)
+	st.AppendMessage(domain.Message{ID: 42, ChatID: 1, Text: "mine", IsOut: true, Date: time.Unix(1, 0)})
 	o.Subscribe(project.ChatWindow{
 		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorNewest}, Before: 5,
 	})

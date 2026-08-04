@@ -41,7 +41,7 @@ func TestDownloadKey_OnPhoto_SavesFullQualityJpg(t *testing.T) {
 	dir := t.TempDir()
 	defer ui.SetDownloadsDirForTest(dir)()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	o := m.Owner().(*testOwner)
 	stageSavableMedia(t, o, 1, 10, domain.PhotoFull, "photo_321.jpg")
 
@@ -63,7 +63,7 @@ func TestDownloadKey_OnVideo_SavesSynthesizedName(t *testing.T) {
 	dir := t.TempDir()
 	defer ui.SetDownloadsDirForTest(dir)()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	o := m.Owner().(*testOwner)
 	stageSavableMedia(t, o, 1, 11, domain.DocFull, "video_654.mp4")
 
@@ -87,7 +87,7 @@ func TestDownloadFileRequest_RoutedForPhoto(t *testing.T) {
 	dir := t.TempDir()
 	defer ui.SetDownloadsDirForTest(dir)()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	o := m.Owner().(*testOwner)
 	stageSavableMedia(t, o, 1, 12, domain.PhotoFull, "photo_999.jpg")
 

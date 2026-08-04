@@ -21,7 +21,7 @@ func solidImage(w, h int) image.Image {
 
 func newSizedModel(t *testing.T) RootModel {
 	t.Helper()
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return m2.(RootModel)
 }

@@ -10,16 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLocalMediaUploadDefaults(t *testing.T) {
-	lm := domain.LocalMedia{Path: "/tmp/a.jpg", Kind: domain.MediaPhoto}
-	if lm.UploadState != domain.UploadUploading {
-		t.Fatalf("zero-value domain.UploadState = %v, want domain.UploadUploading", lm.UploadState)
-	}
-	if lm.UploadProgress != 0 {
-		t.Fatalf("zero-value UploadProgress = %v, want 0", lm.UploadProgress)
-	}
-}
-
 func TestIsStaticSticker(t *testing.T) {
 	webp := &domain.DocumentRef{MimeType: "image/webp"}
 	tgs := &domain.DocumentRef{MimeType: "application/x-tgsticker"}

@@ -48,6 +48,7 @@ type ownerStub struct {
 
 	// The durable send queue (#193): what the UI submitted, retried, discarded.
 	sent      []core.SendRequest
+	sentMedia []core.MediaSendRequest
 	retried   []string
 	discarded []string
 }
@@ -196,6 +197,16 @@ func (o *ownerStub) Send(_ context.Context, req core.SendRequest) error {
 	return nil
 }
 
+// Media is submitted the same way: the client names paths and hands them over,
+// and everything protocol-shaped happens on the other side (#195).
+func (o *ownerStub) SendMedia(_ context.Context, req core.MediaSendRequest) error {
+	if o.err != nil {
+		return o.err
+	}
+	o.sentMedia = append(o.sentMedia, req)
+	return nil
+}
+
 func (o *ownerStub) RetryOutbox(ref string) error {
 	o.retried = append(o.retried, ref)
 	return o.err
@@ -333,7 +344,7 @@ func (o *ownerStub) drain(m RootModel) (tea.Model, tea.Cmd) {
 // newRootInternal builds a model wired to the stub owner, as app.Run wires the
 // real one.
 func newRootInternal(st store.Store, historyLimit int) RootModel {
-	m := NewRootModel(nil, st, historyLimit, false)
+	m := NewRootModel(st, historyLimit, false)
 	if st != nil {
 		m = m.WithOwner(newOwnerStub(st))
 	}

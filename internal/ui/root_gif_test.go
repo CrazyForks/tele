@@ -18,7 +18,7 @@ import (
 func solidFrame(w, h int) image.Image { return image.NewNRGBA(image.Rect(0, 0, w, h)) }
 
 func TestHandleGifFramesReady_CachesAndStarts(t *testing.T) {
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m.imageMode = media.ModeKitty
 	m.gifActiveID = 77 // doc 77 is the pending selection
 	frames := []image.Image{solidFrame(4, 4), solidFrame(4, 4)}
@@ -28,7 +28,7 @@ func TestHandleGifFramesReady_CachesAndStarts(t *testing.T) {
 }
 
 func TestHandleGifTick_AdvancesAndWraps(t *testing.T) {
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m.imageMode = media.ModeKitty
 	m.gifFrames[77] = []image.Image{solidFrame(4, 4), solidFrame(4, 4)}
 	m.gifActiveID = 77
@@ -44,7 +44,7 @@ func TestHandleGifTick_AdvancesAndWraps(t *testing.T) {
 }
 
 func TestEnsureGifAnimForSelection_NoopWhenAlreadyActive(t *testing.T) {
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m.imageMode = media.ModeKitty
 	m.chat.SetMessages([]domain.Message{{
 		ID:       1,
@@ -59,7 +59,7 @@ func TestEnsureGifAnimForSelection_NoopWhenAlreadyActive(t *testing.T) {
 }
 
 func TestEnsureGifAnimForSelection_NoopForNonGif(t *testing.T) {
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m.imageMode = media.ModeKitty
 	m.chat.SetMessages([]domain.Message{{
 		ID:    1,
@@ -73,7 +73,7 @@ func TestEnsureGifAnimForSelection_NoopForNonGif(t *testing.T) {
 }
 
 func TestOpenChat_ClearsGifFrames(t *testing.T) {
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m.gifFrames[77] = []image.Image{solidFrame(4, 4), solidFrame(4, 4)}
 
 	// Switching chats must drop decoded frames so the memory is released and
@@ -97,7 +97,7 @@ func TestDecodeGifCmd_RemovesTempFile(t *testing.T) {
 }
 
 func TestStopGifAnim_ResetsAndBumpsGen(t *testing.T) {
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m.gifFrames[77] = []image.Image{solidFrame(4, 4), solidFrame(4, 4)}
 	m.gifActiveID = 77
 	m.gifIdx = 3
@@ -110,7 +110,7 @@ func TestStopGifAnim_ResetsAndBumpsGen(t *testing.T) {
 }
 
 func TestHandleGifTick_StaleGenIgnored(t *testing.T) {
-	m := NewRootModel(nil, store.NewMemory(), 50, false)
+	m := NewRootModel(store.NewMemory(), 50, false)
 	m.imageMode = media.ModeKitty
 	m.gifFrames[77] = []image.Image{solidFrame(4, 4), solidFrame(4, 4)}
 	m.gifActiveID = 77

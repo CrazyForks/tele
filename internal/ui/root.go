@@ -16,7 +16,6 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/store"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -58,7 +57,6 @@ type RootModel struct {
 	vimState          *keys.VimState
 	keyMap            keys.KeyMap
 	matcher           *keys.Matcher
-	tgClient          internaltg.Client
 	st                store.Store
 	owner             Owner
 	// chatListSub is the chatlist subscription; chatSub is the open chat's.
@@ -115,10 +113,6 @@ type RootModel struct {
 	kittyCap          int // max live placements; from config, 0 → default
 	searchModel       *screens.SearchModel
 	onChatOpen        func(int64)
-	// nextSentinel numbers the optimistic media bubbles the client still drives
-	// itself. Text left this path for the durable queue (#193); media follows
-	// with #195, and this goes with it.
-	nextSentinel     int
 	contextMenu      *components.ContextMenu
 	chatMenu         *components.ChatContextMenu
 	reactionPicker   *components.ReactionPicker
@@ -141,14 +135,7 @@ type RootModel struct {
 	videoPlayer         *videoPlayer
 	photoViewer         *photoViewer
 	pendingAttachments  []pendingAttachment
-	// album is the in-flight multi-file send (#130), nil when none is running;
-	// albumCtx cancels its uploads and sends.
-	album          *albumSend
-	albumCtx       context.Context
-	nextAlbumSer   int
-	lastPickerDir  string
-	uploadCancels  map[int]context.CancelFunc
-	uploadProgress map[int]chan uploadProgressMsg
+	lastPickerDir       string
 
 	// logoTicking / spinnerTicking track whether each animation loop is currently
 	// scheduled. The loops self-stop when nothing is visible/active and are
@@ -166,7 +153,10 @@ const (
 	fullCacheCap  = 32
 )
 
-func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
+// NewRootModel builds the TUI. It takes no Telegram client: since #195 every
+// call a client makes goes through the Owner, so nothing here can reach the
+// connection directly (#198).
+func NewRootModel(st store.Store, historyLimit int, verbose bool) RootModel {
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(80)
 	sb.SetKeyMap(km)
@@ -190,7 +180,6 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		vimState:          keys.NewVimState(),
 		keyMap:            km,
 		matcher:           keys.NewMatcher(km),
-		tgClient:          client,
 		st:                st,
 		historyLimit:      historyLimit,
 		verbose:           verbose,
@@ -201,8 +190,6 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		kittyStore:        media.NewKittyStore(),
 		kittyLive:         make(map[int64]bool),
 		logo:              components.NewLogoLoader(80),
-		uploadCancels:     make(map[int]context.CancelFunc),
-		uploadProgress:    make(map[int]chan uploadProgressMsg),
 	}
 }
 
@@ -393,50 +380,9 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.SetPickerOpen(false)
 		return m, nil
 	case screens.SendMediaRequest:
-		if len(m.pendingAttachments) == 0 {
-			return m, nil
-		}
-		if len(m.pendingAttachments) > 1 {
-			nm, cmd := m.startAlbumSend(msg.Peer, msg.Caption, msg.Entities, msg.ReplyToMsgID)
-			nm.clearPendingAttachments()
-			return nm, cmd
-		}
-		// A lone file keeps the single-media path: same behavior as before #130.
-		att := &m.pendingAttachments[0]
-		job := mediaSendJob{
-			peer:         msg.Peer,
-			path:         att.path,
-			name:         att.name,
-			size:         att.size,
-			kind:         att.sendAs,
-			caption:      msg.Caption,
-			entities:     msg.Entities,
-			replyToMsgID: msg.ReplyToMsgID,
-		}
-		if att.sendAs == domain.MediaVideo {
-			job.buildMediaCtx = videoBuildMediaCtx(att.path, att.name, att.mime)
-		} else {
-			build, ok := mediaBuilderFor(att)
-			if !ok {
-				// Unsupported "send as" (voice/round) is #108-109; ignore for now.
-				return m, nil
-			}
-			job.buildMedia = build
-		}
-		m.clearPendingAttachments()
-		return m.handleSendMedia(job)
-	case albumPartUploadedMsg:
-		return m.handleAlbumPartUploaded(msg)
-	case albumGroupSentMsg:
-		return m.handleAlbumGroupSent(msg)
-	case albumRefreshedMsg:
-		return m.handleAlbumRefreshed(msg)
-	case uploadProgressMsg:
+		return m.handleSendMedia(msg)
+	case core.Progress:
 		return m.handleUploadProgress(msg)
-	case sentMediaConfirmedMsg:
-		return m.handleSentMediaConfirmed(msg)
-	case sentMediaRefreshedMsg:
-		return m.handleSentMediaRefreshed(msg)
 	case gifFileReadyMsg:
 		return m.handleGifFileReady(msg)
 	case gifFramesReadyMsg:

@@ -41,6 +41,10 @@ type Owner interface {
 	// queue's business, and its entries reach the client in the projection
 	// rather than being guessed at locally (#193).
 	Send(ctx context.Context, req core.SendRequest) error
+	// SendMedia queues local files. The client names paths and intent; the
+	// upload, the album assembly and the Telegram payloads are the owner's
+	// business, and none of them can cross a process boundary (#195).
+	SendMedia(ctx context.Context, req core.MediaSendRequest) error
 	RetryOutbox(ref string) error
 	DiscardOutbox(ref string) error
 

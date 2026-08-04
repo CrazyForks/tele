@@ -45,6 +45,13 @@ type MessageList struct {
 	// (#193).
 	outbox []domain.OutboxEntry
 
+	// uploadProgress is the last progress frame per queued media send, keyed by
+	// ref. It is held here rather than on the entry because progress is an event
+	// with nothing persisted behind it: a dropped frame costs one repaint, and
+	// routing it through the projection would rebuild every subscription per
+	// uploaded chunk (#195).
+	uploadProgress map[string]uploadProgress
+
 	// cursorMsgID is the explicit "active message" the user steps over with
 	// CursorUp/CursorDown. 0 means unset; selection then falls back to the
 	// newest visible message. It is the target for per-message actions.
@@ -110,6 +117,14 @@ func (ml *MessageList) overlayLabelFor(msg domain.Message) string {
 // defaultImageCacheCap bounds the message list's own image cache before the
 // shared root cache is injected via SetKnownImages (which replaces it).
 const defaultImageCacheCap = 256
+
+// uploadProgress is one queued send's last reported advance.
+type uploadProgress struct {
+	// part is the 1-based file being uploaded now; zero before the start.
+	part int
+	// frac is the fraction uploaded across the whole send (0..1).
+	frac float64
+}
 
 func NewMessageList(height, width int) *MessageList {
 	return &MessageList{

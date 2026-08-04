@@ -15,7 +15,6 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -52,6 +51,7 @@ type testOwner struct {
 	// The durable send queue (#193): what the UI submitted, retried, discarded,
 	// and the context it submitted under.
 	sent        []core.SendRequest
+	sentMedia   []core.MediaSendRequest
 	retried     []string
 	discarded   []string
 	lastSendCtx context.Context
@@ -214,6 +214,18 @@ func (o *testOwner) Send(ctx context.Context, req core.SendRequest) error {
 		return o.cmdErr
 	}
 	o.sent = append(o.sent, req)
+	return nil
+}
+
+// Media is submitted the same way: the client names paths and hands them over.
+// Everything that used to happen in the UI — upload, album assembly, InputMedia
+// — is on the other side of this call now (#195).
+func (o *testOwner) SendMedia(ctx context.Context, req core.MediaSendRequest) error {
+	o.lastSendCtx = ctx
+	if o.cmdErr != nil {
+		return o.cmdErr
+	}
+	o.sentMedia = append(o.sentMedia, req)
 	return nil
 }
 
@@ -384,8 +396,8 @@ func (o *testOwner) drain(m ui.RootModel) (tea.Model, tea.Cmd) {
 // newRoot builds a model wired to a stand-in owner, the way app.Run wires the
 // real one. Tests that pass no store get no owner, matching a model that has not
 // reached the main screen.
-func newRoot(client internaltg.Client, st store.Store, historyLimit int, verbose bool) ui.RootModel {
-	m := ui.NewRootModel(client, st, historyLimit, verbose)
+func newRoot(st store.Store, historyLimit int, verbose bool) ui.RootModel {
+	m := ui.NewRootModel(st, historyLimit, verbose)
 	if st != nil {
 		m = m.WithOwner(newTestOwner(st))
 	}

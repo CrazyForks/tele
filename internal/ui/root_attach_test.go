@@ -45,7 +45,7 @@ func pressToggleSendAs(t *testing.T, m ui.RootModel) ui.RootModel {
 }
 
 func TestStaging_SecondFileAppendsToQueue(t *testing.T) {
-	m, _ := newRootOnChat(t, &mockTGClient{})
+	m, _ := newRootOnChat(t)
 	first := writeTempBytes(t, "a.png", pngBytes)
 	second := writeTempBytes(t, "b.png", pngBytes)
 
@@ -59,7 +59,7 @@ func TestStaging_SecondFileAppendsToQueue(t *testing.T) {
 }
 
 func TestStaging_CancelRemovesLastOnly(t *testing.T) {
-	m, _ := newRootOnChat(t, &mockTGClient{})
+	m, _ := newRootOnChat(t)
 	for _, n := range []string{"a.png", "b.png"} {
 		nm, _ := m.Update(screens.FileSelectedMsg{Path: writeTempBytes(t, n, pngBytes)})
 		m = nm.(ui.RootModel)
@@ -74,7 +74,7 @@ func TestStaging_CancelRemovesLastOnly(t *testing.T) {
 }
 
 func TestStaging_ToggleSendAsAppliesToEveryItem(t *testing.T) {
-	m, _ := newRootOnChat(t, &mockTGClient{})
+	m, _ := newRootOnChat(t)
 	for _, n := range []string{"a.png", "b.png"} {
 		nm, _ := m.Update(screens.FileSelectedMsg{Path: writeTempBytes(t, n, pngBytes)})
 		m = nm.(ui.RootModel)
@@ -90,7 +90,7 @@ func TestStaging_ToggleSendAsAppliesToEveryItem(t *testing.T) {
 }
 
 func TestStaging_QueueCapRejectsExtraFile(t *testing.T) {
-	m, _ := newRootOnChat(t, &mockTGClient{})
+	m, _ := newRootOnChat(t)
 	path := writeTempBytes(t, "a.png", pngBytes)
 	for i := 0; i < 41; i++ {
 		nm, _ := m.Update(screens.FileSelectedMsg{Path: path})

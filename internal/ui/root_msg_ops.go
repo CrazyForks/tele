@@ -74,6 +74,55 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 	}
 }
 
+// handleSendMedia hands the staged files to the durable queue and returns.
+// Nothing is inserted into the store, no upload is driven here, and no bubble is
+// guessed at: the queue's own entries are what appear on screen, so an
+// unfinished send survives this process and is visible to every attached client
+// rather than only to the one that staged it (#195).
+//
+// The whole staged queue goes in one request. How it is cut into albums is
+// Telegram's rule, and therefore the owner's business.
+func (m RootModel) handleSendMedia(msg screens.SendMediaRequest) (RootModel, tea.Cmd) {
+	if m.owner == nil || len(m.pendingAttachments) == 0 {
+		return m, nil
+	}
+	files := make([]core.MediaFile, 0, len(m.pendingAttachments))
+	for _, a := range m.pendingAttachments {
+		files = append(files, core.MediaFile{Path: a.path, SendAs: a.sendAs})
+	}
+	req := core.MediaSendRequest{
+		Ref:          core.NewRef(),
+		ChatID:       m.currentChatID,
+		Files:        files,
+		Caption:      msg.Caption,
+		Entities:     msg.Entities,
+		ReplyToMsgID: msg.ReplyToMsgID,
+	}
+	m.clearPendingAttachments()
+	ctx, owner := m.ctx, m.owner
+	return m, func() tea.Msg {
+		if err := owner.SendMedia(ctx, req); err != nil {
+			return errStatus("send", err)
+		}
+		return nil
+	}
+}
+
+// handleUploadProgress moves a queued send's progress bar. It is an event, not
+// state: a frame for a chat that is not open, or one dropped on the way, costs
+// nothing — the next frame corrects it.
+func (m RootModel) handleUploadProgress(p core.Progress) (RootModel, tea.Cmd) {
+	if m.chat == nil || p.ChatID != m.currentChatID {
+		return m, nil
+	}
+	var frac float64
+	if p.Total > 0 {
+		frac = float64(p.Done) / float64(p.Total)
+	}
+	m.chat.SetUploadProgress(p.Ref, p.Part, p.Parts, frac)
+	return m, nil
+}
+
 // showOutboxReason names why the selected send failed, in the status bar. The
 // bubble carries only a glyph, so this is where the reason lives once the toast
 // that announced it has gone (#193).

@@ -188,7 +188,7 @@ func (a *App) Run() error {
 	for _, w := range warns {
 		a.log.Warn("keybindings: " + w)
 	}
-	root := ui.NewRootModel(a.owner.Telegram(), a.st, a.cfg.UI.HistoryLimit, a.verbose)
+	root := ui.NewRootModel(a.st, a.cfg.UI.HistoryLimit, a.verbose)
 	root = root.WithContext(ctx).WithConfig(a.cfg).WithKeyMap(km).WithOwner(a.owner).WithLogger(a.log)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
 	root.SetOnChatOpen(func(id int64) {

@@ -19,25 +19,9 @@ type Store interface {
 	// BumpChatLastMessage updates a chat's last-message preview and ordering
 	// without appending to its message slice (e.g. a forward target).
 	BumpChatLastMessage(chatID int64, msg domain.Message)
-	UpdateMessageID(chatID int64, oldID, newID int)
 	UpdateMessageText(chatID int64, msgID int, text string, entities []domain.MessageEntity, editDate time.Time)
 	UpdateMessageReactions(chatID int64, msgID int, reactions []domain.Reaction)
 	UpdateMessageMedia(chatID int64, msgID int, photo *domain.PhotoRef, document *domain.DocumentRef)
-	// UpdateLocalMediaProgress sets the upload fraction (0..1) on an optimistic
-	// outgoing message's domain.LocalMedia, located by its (negative) sentinel ID.
-	UpdateLocalMediaProgress(sentinelID int, frac float64)
-	// MarkLocalMediaFailed marks an optimistic message's upload as failed.
-	MarkLocalMediaFailed(sentinelID int)
-	// ClearLocalMedia drops the domain.LocalMedia from a message once the upload is
-	// confirmed (the bubble then renders from the server-confirmed media).
-	ClearLocalMedia(sentinelID int)
-	// AdoptServerMedia replaces a just-sent message's media refs with the ones the
-	// server assigned (fetched via RefreshMessage) and clears domain.LocalMedia, so the
-	// outgoing photo renders inline without waiting for a manual refresh.
-	AdoptServerMedia(chatID int64, msgID int, photo *domain.PhotoRef, doc *domain.DocumentRef, media *domain.MediaRef)
-	// SetGroupedID stamps Telegram's album key onto a message, so the parts of a
-	// just-sent album collapse into one album bubble.
-	SetGroupedID(chatID int64, msgID int, groupedID int64)
 	// ReplaceMessage overwrites a stored message wholesale. It is how a refused
 	// edit is undone: the field-wise updates always stamp an EditDate, and a
 	// message that was never edited must not keep that marker (#118).

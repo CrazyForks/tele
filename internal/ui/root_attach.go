@@ -183,6 +183,38 @@ func (m *RootModel) clearPendingAttachments() {
 	m.statusBar.SetAttachStaged(false)
 }
 
+// handleCancelUpload removes one composer extra at a time, in priority order:
+// the last staged attachment first, then an active reply/edit, then the queued
+// send under the cursor.
+//
+// The last of those is a discard like any other: an unfinished send is a row in
+// the durable queue, not something this client is driving, so cancelling it is
+// telling the owner to drop it — which also stops an upload in flight (#195).
+func (m RootModel) handleCancelUpload() (RootModel, tea.Cmd) {
+	if len(m.pendingAttachments) > 0 {
+		m.popPendingAttachment()
+		return m, nil
+	}
+	if m.chat != nil && (m.chat.ReplyToMsgID() != 0 || m.chat.EditMsgID() != 0) {
+		m.chat.ClearPendingAction()
+		return m, nil
+	}
+	if m.chat == nil || m.owner == nil {
+		return m, nil
+	}
+	ref := m.chat.SelectedOutboxRef()
+	if ref == "" {
+		return m, nil // not a queued send
+	}
+	owner := m.owner
+	return m, func() tea.Msg {
+		if err := owner.DiscardOutbox(ref); err != nil {
+			return errStatus("discard", err)
+		}
+		return nil
+	}
+}
+
 func fileNameSize(path string) (string, int64) {
 	name := filepath.Base(path)
 	var size int64

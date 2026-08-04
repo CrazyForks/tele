@@ -10,47 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMemory_LocalMediaUploadLifecycle(t *testing.T) {
-	s := store.NewMemory()
-	s.AppendMessage(domain.Message{
-		ID: -1, ChatID: 7, IsOut: true,
-		LocalMedia: &domain.LocalMedia{Path: "/tmp/a.jpg", Kind: domain.MediaPhoto},
-	})
-
-	s.UpdateLocalMediaProgress(-1, 0.5)
-	got := s.Messages(7)
-	require.Len(t, got, 1)
-	require.NotNil(t, got[0].LocalMedia)
-	assert.InDelta(t, 0.5, got[0].LocalMedia.UploadProgress, 1e-9)
-
-	s.MarkLocalMediaFailed(-1)
-	got = s.Messages(7)
-	require.NotNil(t, got[0].LocalMedia)
-	assert.Equal(t, domain.UploadFailed, got[0].LocalMedia.UploadState)
-
-	s.ClearLocalMedia(-1)
-	got = s.Messages(7)
-	assert.Nil(t, got[0].LocalMedia)
-}
-
-func TestMemory_AdoptServerMedia(t *testing.T) {
-	s := store.NewMemory()
-	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
-	s.AppendMessage(domain.Message{
-		ID: 4242, ChatID: 7, IsOut: true,
-		LocalMedia: &domain.LocalMedia{Path: "/tmp/a.jpg", Kind: domain.MediaPhoto},
-	})
-
-	s.AdoptServerMedia(7, 4242, &domain.PhotoRef{ID: 9}, nil, &domain.MediaRef{Kind: domain.MediaPhoto})
-	got := s.Messages(7)
-	require.Len(t, got, 1)
-	assert.Nil(t, got[0].LocalMedia, "domain.LocalMedia must be cleared")
-	require.NotNil(t, got[0].Photo)
-	assert.Equal(t, int64(9), got[0].Photo.ID)
-	require.NotNil(t, got[0].Media)
-	assert.Equal(t, domain.MediaPhoto, got[0].Media.Kind)
-}
-
 func TestMemory_UpdateMessageMedia(t *testing.T) {
 	s := store.NewMemory()
 	s.SetMessages(7, []domain.Message{
@@ -130,25 +89,6 @@ func TestMemory_AppendMessage_SkipsLastMessageWhenChatMissing(t *testing.T) {
 	assert.NotPanics(t, func() {
 		s.AppendMessage(domain.Message{ID: 1, ChatID: 99, Text: "orphan"})
 	})
-}
-
-func TestMemory_UpdateMessageID(t *testing.T) {
-	s := store.NewMemory()
-	s.AppendMessage(domain.Message{ID: -1, ChatID: 5, Text: "pending"})
-	s.UpdateMessageID(5, -1, 100)
-	msgs := s.Messages(5)
-	require.Len(t, msgs, 1)
-	assert.Equal(t, 100, msgs[0].ID)
-}
-
-func TestMemory_UpdateMessageID_NoopWhenMissing(t *testing.T) {
-	s := store.NewMemory()
-	s.AppendMessage(domain.Message{ID: 1, ChatID: 5, Text: "msg"})
-	assert.NotPanics(t, func() {
-		s.UpdateMessageID(5, 999, 100)
-	})
-	msgs := s.Messages(5)
-	assert.Equal(t, 1, msgs[0].ID)
 }
 
 func TestMemory_UpdateMessageText(t *testing.T) {
@@ -356,24 +296,6 @@ func TestMemory_FolderFilters_Replace(t *testing.T) {
 	assert.Equal(t, "New", got[0].Title)
 }
 
-func TestMemory_SetGroupedID(t *testing.T) {
-	s := store.NewMemory()
-	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
-	s.AppendMessage(domain.Message{ID: 4242, ChatID: 7, IsOut: true})
-
-	s.SetGroupedID(7, 4242, 999)
-
-	msgs := s.Messages(7)
-	require.Len(t, msgs, 1)
-	assert.Equal(t, int64(999), msgs[0].GroupedID)
-}
-
-func TestMemory_SetGroupedID_UnknownMessageIsNoop(t *testing.T) {
-	s := store.NewMemory()
-	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
-	s.AppendMessage(domain.Message{ID: 1, ChatID: 7})
-
-	s.SetGroupedID(7, 999, 5)
-
-	assert.Equal(t, int64(0), s.Messages(7)[0].GroupedID)
-}
+// An album's grouped_id used to be stamped on afterwards, by the client that
+// sent it. Since #195 the parts arrive from the owner's post-send refresh with
+// it already set, so there is nothing to stamp.

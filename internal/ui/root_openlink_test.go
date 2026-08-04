@@ -15,7 +15,7 @@ func TestOpenKey_OnSingleLinkMessage_OpensURL(t *testing.T) {
 	var got string
 	defer ui.SetURLOpenerForTest(func(u string) { got = u })()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	st.AppendMessage(domain.Message{ID: 3, ChatID: 1, Date: time.Now(),
 		Text:     "see https://example.com now",
 		Entities: []domain.MessageEntity{{Type: "url", Offset: 4, Length: 19}}})
@@ -33,7 +33,7 @@ func TestOpenKey_MultipleTargets_OpensPickerThenTarget(t *testing.T) {
 	var got string
 	defer ui.SetURLOpenerForTest(func(u string) { got = u })()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	// Photo with a caption link -> two open targets (Photo + link).
 	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Date: time.Now(),
 		Text:     "pic https://example.com",
@@ -67,7 +67,7 @@ func TestOpenKey_OnPlainTextMessage_NoURLOpened(t *testing.T) {
 	var called bool
 	defer ui.SetURLOpenerForTest(func(string) { called = true })()
 
-	m, st := newRootOnChat(t, &mockTGClient{})
+	m, st := newRootOnChat(t)
 	st.AppendMessage(domain.Message{ID: 4, ChatID: 1, Date: time.Now(), Text: "just text"})
 	nm, _ := applyHistory(t, m, st, 1)
 	m = nm.(ui.RootModel)

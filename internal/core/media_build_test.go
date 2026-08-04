@@ -42,6 +42,31 @@ func TestUploadPart_SendAsFileOverridesTheDetectedKind(t *testing.T) {
 	require.True(t, ok, "the user asked for a file, not a photo")
 	assert.Equal(t, "image/jpeg", doc.MimeType)
 	assert.Equal(t, "a.jpg", documentFileName(t, doc))
+	assert.True(t, doc.ForceFile,
+		"without ForceFile Telegram reinterprets an image as a photo, undoing the choice")
+}
+
+// Video is a document too, but a streamable one: ForceFile would make Telegram
+// render it as an attachment instead of playing it inline.
+func TestUploadPart_AVideoIsSentAsStreamableVideo(t *testing.T) {
+	c := &stubClient{}
+	o, _ := newCmdOwner(t, c)
+	part := domain.OutboxMediaPart{Path: writeFile(t, "clip.mp4", 4), Name: "clip.mp4"}
+
+	got, err := o.uploadPart(context.Background(), part, nil)
+
+	require.NoError(t, err)
+	doc, ok := got.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok, "got %T", got)
+	assert.False(t, doc.ForceFile)
+	assert.Equal(t, "video/mp4", doc.MimeType)
+	var hasVideoAttr bool
+	for _, a := range doc.Attributes {
+		if _, ok := a.(*tg.DocumentAttributeVideo); ok {
+			hasVideoAttr = true
+		}
+	}
+	assert.True(t, hasVideoAttr, "a video needs its video attribute to play inline")
 }
 
 func TestUploadPart_AnUnknownTypeBecomesADocument(t *testing.T) {

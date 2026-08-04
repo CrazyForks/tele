@@ -16,7 +16,7 @@ import (
 // on it.
 func rootOnFailedSend(t *testing.T) (ui.RootModel, *testOwner) {
 	t.Helper()
-	m, _ := newRootWithOpenChat(t, &mockTGClient{})
+	m, _ := newRootWithOpenChat(t)
 	m = m.WithFocus(ui.FocusChat)
 	m.Chat().SetOutbox([]domain.OutboxEntry{{
 		Ref: "r1", ChatID: 1, State: domain.OutboxFailed, ErrKind: telerr.Forbidden,
@@ -37,7 +37,7 @@ func TestEnter_RetriesTheSelectedFailedSend(t *testing.T) {
 }
 
 func TestEnter_DoesNothingOnAMessage(t *testing.T) {
-	m, _ := newRootWithOpenChat(t, &mockTGClient{})
+	m, _ := newRootWithOpenChat(t)
 	m = m.WithFocus(ui.FocusChat)
 	owner := m.Owner().(*testOwner)
 

@@ -14,15 +14,15 @@ import (
 
 // newRootOnGroupChat builds a main-screen RootModel focused on a supergroup, so
 // the @mention popup (a group-only feature) is applicable.
-func newRootOnGroupChat(t *testing.T, mc *mockTGClient) (ui.RootModel, store.Store) {
+func newRootOnGroupChat(t *testing.T, participants []domain.ChatMember) (ui.RootModel, store.Store) {
 	t.Helper()
 	st := store.NewMemory()
 	chat := domain.Chat{ID: 5, Title: "Group", Peer: domain.Peer{ID: 5, Type: domain.PeerSuperGroup}}
 	st.SetChat(chat)
-	m := newRoot(mc, st, 50, false).WithScreen(ui.ScreenMain)
-	// Mention candidates come from the owner's query now (#198); the mock's list
-	// is what the test set up, so hand it over.
-	ownerOf(t, m).participants = mc.participants
+	m := newRoot(st, 50, false).WithScreen(ui.ScreenMain)
+	// Mention candidates come from the owner's query (#198), so that is where the
+	// test's list goes.
+	ownerOf(t, m).participants = participants
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(ui.RootModel)
 	nm, cmd := m.Update(screens.OpenChatMsg{ChatID: chat.ID, Title: chat.Title})
@@ -56,11 +56,10 @@ func typeKey(t *testing.T, m ui.RootModel, r rune) ui.RootModel {
 }
 
 func TestMentionPopupOpensAndInserts(t *testing.T) {
-	mc := &mockTGClient{participants: []domain.ChatMember{
+	m, _ := newRootOnGroupChat(t, []domain.ChatMember{
 		{UserID: 7, Username: "alice", DisplayName: "Alice A"},
 		{UserID: 8, Username: "bob", DisplayName: "Bob B"},
-	}}
-	m, _ := newRootOnGroupChat(t, mc)
+	})
 
 	// enter insert mode
 	m = typeKey(t, m, 'i')
@@ -89,7 +88,7 @@ func TestMentionPopupOpensAndInserts(t *testing.T) {
 // The mention entity has to survive the trip to the queue: it names a user by
 // ID and access hash, which cannot be recovered from the text afterwards.
 func TestOutgoingMentionSubmissionCarriesEntities(t *testing.T) {
-	m, _ := newRootOnGroupChat(t, &mockTGClient{})
+	m, _ := newRootOnGroupChat(t, nil)
 	owner := m.Owner().(*testOwner)
 	peer := domain.Peer{ID: 5, Type: domain.PeerSuperGroup}
 	ents := []domain.MessageEntity{{Type: "mention_name", Offset: 0, Length: 5, UserID: 7, AccessHash: 8}}
@@ -110,11 +109,8 @@ func TestOutgoingMentionSubmissionCarriesEntities(t *testing.T) {
 }
 
 func TestMentionPopupNotOpenedInPrivateChat(t *testing.T) {
-	mc := &mockTGClient{participants: []domain.ChatMember{
-		{UserID: 7, Username: "alice", DisplayName: "Alice A"},
-	}}
 	// newRootOnChat opens a 1:1 (PeerUser) chat.
-	m, _ := newRootOnChat(t, mc)
+	m, _ := newRootOnChat(t)
 	m = typeKey(t, m, 'i')
 	m = typeKey(t, m, '@')
 	m = typeKey(t, m, 'a')
