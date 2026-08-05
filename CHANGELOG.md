@@ -11,8 +11,36 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Themes can now be written by hand. A theme is a file in
+  `~/.config/tele/themes/`, and `ui.theme` picks one for a dark terminal and one
+  for a light one, as tele already switched between its own two. A theme sets
+  only the colours it cares about and inherits the rest, so changing one colour
+  is two lines and a colour tele adds later cannot break a file written before
+  it. Nothing in a theme can stop tele starting: anything it cannot use is a
+  warning and the rest of the file still applies. `tele --theme-dump` writes out
+  a complete theme to start from, `tele --theme-check` explains what each slot
+  ended up with. Full reference in `docs/themes.md`.
+
 ### Changed
 
+- The light palette has been tuned for a light terminal. It had been carried
+  over from the dark one wherever a colour did not previously depend on the
+  background, which left 36 of its 59 colours chosen for a dark screen: pale
+  greens and yellows at barely 1.5:1 on white — sender names, the online dot,
+  the edited marker — and code blocks drawn dark-on-light. The status bar stays
+  dark on purpose. Three colours in the dark palette were too dim for the same
+  reason and were lifted: the idle composer glyph, its character counter, and the
+  "+N more" line under a full stack of notifications.
+- Problems with your config now appear as a toast when tele opens. They went to
+  the log and to the terminal a moment before the interface covered it over,
+  which came to telling nobody. One describing something still broken returns
+  every launch until it is fixed; one pointing at a line that no longer does
+  anything is said once.
+- `ui.theme: default` no longer names anything and is ignored. It named a
+  dark/light pair, and a theme is now a single palette placed in a slot. You get
+  the built-in pair either way; tele says so once so you can delete the line.
 - Every colour the interface draws with now lives in one place, as groundwork
   for selectable themes. Colours are held as named roles — the accent, the
   selection fill, the read tick, the error tone — rather than being written into
