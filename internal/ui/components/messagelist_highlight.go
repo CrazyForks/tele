@@ -3,8 +3,8 @@ package components
 import (
 	"image/color"
 
-	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // HighlightMessage starts an info (amber) fade highlight on the bubble with the
@@ -51,16 +51,14 @@ func (ml *MessageList) HighlightStep() int { return ml.highlightStep }
 // outgoing/incoming tone, replaced by a faded accent while this message is the
 // active highlight target.
 func (ml *MessageList) bubbleBorderFg(msg domain.Message) color.Color {
-	var borderFg color.Color
+	borderFg := theme.T().BorderBubbleIn
 	if msg.IsOut {
-		borderFg = lipgloss.Color("25")
-	} else {
-		borderFg = lipgloss.Color("238")
+		borderFg = theme.T().BorderBubbleOut
 	}
 	if ml.highlightStep > 0 && msg.ID == ml.highlightedMsgID {
-		accent := HighlightAccentFor(ml.hasDarkBackground)
+		accent := theme.T().HighlightAccent
 		if ml.highlightKind == HighlightError {
-			accent = ErrorAccentFor(ml.hasDarkBackground)
+			accent = theme.T().HighlightError
 		}
 		borderFg = FadeAccentColor(accent, borderFg, ml.highlightStep, HighlightFadeSteps)
 	}

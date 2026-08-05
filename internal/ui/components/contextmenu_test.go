@@ -7,6 +7,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,12 +67,13 @@ func TestNewContextMenu_OutgoingItems(t *testing.T) {
 }
 
 func TestNewContextMenu_AccentsHotkeyLetters(t *testing.T) {
+	theme.Apply(theme.Default, true)
 	cm := components.NewContextMenu(1, false, 0, 0, false, false, nil, defaultKM())
 	raw := cm.View()
 	// Labels render plain text; the hotkey letter is accent-colored in place,
 	// matching the status-bar hint style (btop rules).
 	assert.Contains(t, strip(raw), "reply")
-	assert.Contains(t, raw, "\x1b[38;5;39", "hotkey letters must be accent-colored")
+	assert.Contains(t, raw, fgSeq(theme.T().Accent), "hotkey letters must be accent-colored")
 }
 
 func TestNewContextMenu_ShowsNavHintInBottomBorder(t *testing.T) {

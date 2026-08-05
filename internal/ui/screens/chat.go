@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 type SendMsgRequest struct {
@@ -367,12 +368,6 @@ func (m *ChatModel) TickTypingDots() { m.typingDots.Tick() }
 // TypingLabel returns the animated typing label, or "" if no typing is active.
 func (m *ChatModel) TypingLabel() string { return m.typingDots.View(m.typingBase) }
 
-func (m *ChatModel) SetDarkBackground(isDark bool) {
-	m.composer.SetDarkBackground(isDark)
-	m.logo.SetDarkBackground(isDark)
-	m.msgList.SetDarkBackground(isDark)
-}
-
 // SetKeyMap gives the chat model the active key map so the composer placeholder
 // can show the live "write" binding. Refreshes the placeholder immediately.
 func (m *ChatModel) SetKeyMap(km keys.KeyMap) {
@@ -721,7 +716,7 @@ func (m *ChatModel) View() string {
 		if listH < 1 {
 			listH = 1
 		}
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+		style := lipgloss.NewStyle().Foreground(theme.T().StatusError)
 		return lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center, style.Render(m.loadErr))
 	}
 	if m.header.ChatID == 0 && m.msgList.Count() == 0 {

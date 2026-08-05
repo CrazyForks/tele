@@ -14,6 +14,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 const (
@@ -28,17 +29,16 @@ const (
 )
 
 type Composer struct {
-	ta                textarea.Model
-	width             int
-	replyPreview      string
-	focused           bool
-	hasDarkBackground bool
-	attachments       []AttachmentChip
-	attachToggle      bool
-	pending           []pendingMention
-	flash             bool // border is flashing red after a limit event
-	flashSerial       int  // guards against a stale flash-off tick
-	warned            bool // a limit toast already fired for this over-limit episode
+	ta           textarea.Model
+	width        int
+	replyPreview string
+	focused      bool
+	attachments  []AttachmentChip
+	attachToggle bool
+	pending      []pendingMention
+	flash        bool // border is flashing red after a limit event
+	flashSerial  int  // guards against a stale flash-off tick
+	warned       bool // a limit toast already fired for this over-limit episode
 }
 
 // pendingMention records a mention inserted via the autocomplete popup so its
@@ -98,8 +98,6 @@ func (c *Composer) Blur() {
 	c.focused = false
 	c.ta.Blur()
 }
-
-func (c *Composer) SetDarkBackground(isDark bool) { c.hasDarkBackground = isDark }
 
 func (c *Composer) Value() string { return c.ta.Value() }
 
@@ -512,11 +510,11 @@ func (c *Composer) View() string {
 	if c.focused {
 		// Green = INSERT (the composer is focused iff we are in insert mode),
 		// matching the status bar's insert accent.
-		borderFg = lipgloss.LightDark(c.hasDarkBackground)(lipgloss.Color("28"), lipgloss.Color("40"))
+		borderFg = theme.T().BorderComposerFocused
 	}
 	if c.flash {
 		// Red: input refused, or the draft is over the limit.
-		borderFg = lipgloss.LightDark(c.hasDarkBackground)(lipgloss.Color("160"), lipgloss.Color("203"))
+		borderFg = theme.T().BorderComposerFlash
 	}
 
 	return RenderBox(content, "", "", "", c.sendAffordance(), lipgloss.RoundedBorder(), borderFg, c.width, h)
@@ -531,23 +529,19 @@ func (c *Composer) sendAffordance() string {
 	used := markup.UTF16Len(c.ta.Value())
 	remaining := c.limit() - used
 
-	glyphColor := lipgloss.Color("240") // dim: nothing to send
+	glyphColor := theme.T().ComposerGlyphIdle // dim: nothing to send
 	if used > 0 {
-		glyphColor = lipgloss.LightDark(c.hasDarkBackground)(lipgloss.Color("27"), lipgloss.Color("39")) // blue: ready
+		glyphColor = theme.T().ComposerGlyphReady // blue: ready
 	}
 	glyph := lipgloss.NewStyle().Foreground(glyphColor).Render(sendGlyph)
 
 	if remaining <= counterShowAt {
-		// The warn/over colours are theme-aware: the bright amber and red read
-		// well on a dark background but wash out on a light one, so a light
-		// background gets darker, higher-contrast variants.
-		ld := lipgloss.LightDark(c.hasDarkBackground)
-		counterColor := ld(lipgloss.Color("238"), lipgloss.Color("240"))
+		counterColor := theme.T().ComposerCounterDim
 		switch {
 		case remaining < 0:
-			counterColor = ld(lipgloss.Color("160"), lipgloss.Color("203")) // red: over the limit, send is blocked
+			counterColor = theme.T().StatusError // over the limit, send is blocked
 		case remaining <= counterWarnAt:
-			counterColor = ld(lipgloss.Color("130"), lipgloss.Color("214")) // amber
+			counterColor = theme.T().StatusWarning
 		}
 		counter := lipgloss.NewStyle().Foreground(counterColor).Render(fmt.Sprintf("%d", remaining))
 		return counter + " " + glyph

@@ -4,8 +4,8 @@ import (
 	"image/color"
 	"testing"
 
-	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,8 +16,8 @@ func rgb8(t *testing.T, c color.Color) (uint8, uint8, uint8) {
 }
 
 func TestFadeAccentColor_FullStepIsAccent(t *testing.T) {
-	accent := lipgloss.Color("#ffaf00") // 255,175,0
-	base := lipgloss.Color("#000000")
+	accent := theme.Hex(255, 175, 0) // 255,175,0
+	base := theme.Hex(0, 0, 0)
 	r, g, b := rgb8(t, components.FadeAccentColor(accent, base, 5, 5))
 	assert.Equal(t, uint8(255), r)
 	assert.Equal(t, uint8(175), g)
@@ -25,8 +25,8 @@ func TestFadeAccentColor_FullStepIsAccent(t *testing.T) {
 }
 
 func TestFadeAccentColor_ZeroStepIsBase(t *testing.T) {
-	accent := lipgloss.Color("#ffaf00")
-	base := lipgloss.Color("#102030") // 16,32,48
+	accent := theme.Hex(255, 175, 0)
+	base := theme.Hex(16, 32, 48) // 16,32,48
 	r, g, b := rgb8(t, components.FadeAccentColor(accent, base, 0, 5))
 	assert.Equal(t, uint8(16), r)
 	assert.Equal(t, uint8(32), g)
@@ -34,8 +34,8 @@ func TestFadeAccentColor_ZeroStepIsBase(t *testing.T) {
 }
 
 func TestFadeAccentColor_MidStepInterpolates(t *testing.T) {
-	accent := lipgloss.Color("#ffaf00") // 255,175,0
-	base := lipgloss.Color("#000000")
+	accent := theme.Hex(255, 175, 0) // 255,175,0
+	base := theme.Hex(0, 0, 0)
 	// step 2/5 -> 40% of the way to accent: r≈102, g≈70, b=0
 	r, g, b := rgb8(t, components.FadeAccentColor(accent, base, 2, 5))
 	assert.InDelta(t, 102, int(r), 1)
@@ -44,8 +44,8 @@ func TestFadeAccentColor_MidStepInterpolates(t *testing.T) {
 }
 
 func TestFadeAccentColor_ClampsOutOfRange(t *testing.T) {
-	accent := lipgloss.Color("#ffaf00")
-	base := lipgloss.Color("#000000")
+	accent := theme.Hex(255, 175, 0)
+	base := theme.Hex(0, 0, 0)
 	hi := components.FadeAccentColor(accent, base, 99, 5)
 	r, _, _ := rgb8(t, hi)
 	assert.Equal(t, uint8(255), r) // clamped to full accent
@@ -58,8 +58,9 @@ func TestHighlightConstants(t *testing.T) {
 	assert.Equal(t, 5, components.HighlightFadeSteps)
 }
 
-func TestHighlightAccentFor_PicksThemeTone(t *testing.T) {
-	assert.Equal(t, components.HighlightAccent, components.HighlightAccentFor(true))
-	assert.Equal(t, components.HighlightAccentLight, components.HighlightAccentFor(false))
-	assert.NotEqual(t, components.HighlightAccentFor(true), components.HighlightAccentFor(false))
+func TestHighlightAccent_PicksThemeTone(t *testing.T) {
+	theme.Apply(theme.Default, true)
+	dark := theme.T().HighlightAccent
+	theme.Apply(theme.Default, false)
+	assert.NotEqual(t, dark, theme.T().HighlightAccent, "the highlight accent must adapt to the background")
 }

@@ -6,16 +6,9 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	lipcompat "charm.land/lipgloss/v2/compat"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
-)
-
-// Adaptive entity colors, readable on dark and light backgrounds; resolved via
-// compat.HasDarkBackground, which the app updates on terminal background change.
-var (
-	linkColor = lipcompat.AdaptiveColor{Light: lipgloss.Color("25"), Dark: lipgloss.Color("45")}  // url/email/phone/bank_card, text_url
-	refColor  = lipcompat.AdaptiveColor{Light: lipgloss.Color("90"), Dark: lipgloss.Color("213")} // mention/mention_name/hashtag/cashtag/bot_command
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 var (
@@ -29,10 +22,6 @@ func SetSelfIdentity(userID int64, username string) {
 	selfMentionID = userID
 	selfMentionUser = strings.ToLower(username)
 }
-
-// selfMentionStyle: readable in 256-color terminals (reverse of refColor accent).
-var selfMentionStyle = lipgloss.NewStyle().Bold(true).
-	Foreground(lipgloss.Color("0")).Background(lipgloss.Color("213"))
 
 // isSelfMention reports whether a span refers to the signed-in user. For
 // mention_name it matches by user id; for a plain @username mention it compares
@@ -68,17 +57,17 @@ func applyEntityStyle(s lipgloss.Style, typ string) lipgloss.Style {
 	case "italic":
 		return s.Italic(true)
 	case "code", "pre":
-		return s.Background(lipgloss.Color("236")).Foreground(lipgloss.Color("252"))
+		return s.Background(theme.T().SurfaceCode).Foreground(theme.T().TextCode)
 	case "underline":
 		return s.Underline(true)
 	case "strike":
 		return s.Strikethrough(true)
 	case "text_url":
-		return s.Foreground(linkColor).Underline(true)
+		return s.Foreground(theme.T().MarkupLink).Underline(true)
 	case "url", "email", "phone", "bank_card":
-		return s.Foreground(linkColor)
+		return s.Foreground(theme.T().MarkupLink)
 	case "mention", "mention_name", "hashtag", "cashtag", "bot_command":
-		return s.Foreground(refColor)
+		return s.Foreground(theme.T().MarkupRef)
 	}
 	return s
 }
@@ -162,7 +151,7 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		}
 		segment := string(runes[lo:hi])
 		if self {
-			segment = selfMentionStyle.Render(segment)
+			segment = theme.S().SelfMention.Render(segment)
 		} else if styled {
 			segment = style.Render(segment)
 		}

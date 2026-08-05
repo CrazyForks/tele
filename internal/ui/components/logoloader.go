@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // LogoTickMsg is sent by the root tick chain every 80ms while on the login screen.
@@ -50,38 +52,14 @@ const (
 	cellBorder
 )
 
-type logoColorStop struct {
-	pos     float64
-	r, g, b uint8
-}
-
-// logoPaletteLight: dark blues for light terminal backgrounds.
-var logoPaletteLight = []logoColorStop{
-	{0.00, 14, 18, 40},
-	{0.30, 38, 65, 129},
-	{0.60, 88, 136, 208},
-	{0.85, 148, 192, 242},
-	{1.00, 198, 228, 255},
-}
-
-// logoPaletteDark: bright blues for dark terminal backgrounds.
-var logoPaletteDark = []logoColorStop{
-	{0.00, 60, 90, 160},
-	{0.30, 90, 135, 210},
-	{0.60, 130, 170, 230},
-	{0.85, 175, 210, 248},
-	{1.00, 215, 238, 255},
-}
-
 // LogoLoader renders the animated "tele" ASCII logo with a sweeping wave.
 // Construct with NewLogoLoader. Call Tick() on each LogoTickMsg from root.
 type LogoLoader struct {
-	state             LogoLoaderState
-	elapsed           int // ms since cycle start
-	width             int
-	grid              [5][]cellKind
-	cols              int
-	hasDarkBackground bool
+	state   LogoLoaderState
+	elapsed int // ms since cycle start
+	width   int
+	grid    [5][]cellKind
+	cols    int
 }
 
 func NewLogoLoader(termWidth int) LogoLoader {
@@ -161,8 +139,6 @@ func buildLogoGrid() [5][]cellKind {
 // SetState freezes (LogoStateStatic) or resumes (LogoStateAnimating) the wave.
 func (l *LogoLoader) SetState(s LogoLoaderState) { l.state = s }
 
-func (l *LogoLoader) SetDarkBackground(isDark bool) { l.hasDarkBackground = isDark }
-
 // SetWidth updates the terminal width used to choose art vs narrow fallback.
 func (l *LogoLoader) SetWidth(w int) { l.width = w }
 
@@ -177,18 +153,18 @@ func (l *LogoLoader) Tick() {
 	}
 }
 
-func logoInterpolateColor(intensity float64, pal []logoColorStop) (r, g, b uint8) {
+func logoInterpolateColor(intensity float64, pal []theme.GradientStop) (r, g, b uint8) {
 	for i := 0; i < len(pal)-1; i++ {
 		lo, hi := pal[i], pal[i+1]
-		if intensity >= lo.pos && intensity <= hi.pos {
-			f := (intensity - lo.pos) / (hi.pos - lo.pos)
-			return uint8(float64(lo.r) + f*float64(hi.r-lo.r)),
-				uint8(float64(lo.g) + f*float64(hi.g-lo.g)),
-				uint8(float64(lo.b) + f*float64(hi.b-lo.b))
+		if intensity >= lo.Pos && intensity <= hi.Pos {
+			f := (intensity - lo.Pos) / (hi.Pos - lo.Pos)
+			return uint8(float64(lo.R) + f*float64(hi.R-lo.R)),
+				uint8(float64(lo.G) + f*float64(hi.G-lo.G)),
+				uint8(float64(lo.B) + f*float64(hi.B-lo.B))
 		}
 	}
 	last := pal[len(pal)-1]
-	return last.r, last.g, last.b
+	return last.R, last.G, last.B
 }
 
 func logoBorderWaveChar(orig rune, t float64) rune {
@@ -249,10 +225,8 @@ func (l LogoLoader) View() string {
 		runes[r] = row
 	}
 
-	pal := logoPaletteLight
-	if l.hasDarkBackground {
-		pal = logoPaletteDark
-	}
+	gradient := theme.T().LogoGradient
+	pal := gradient[:]
 
 	var sb strings.Builder
 	for r := range logoArt {

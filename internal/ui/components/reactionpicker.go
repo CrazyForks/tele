@@ -5,9 +5,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	lipcompat "charm.land/lipgloss/v2/compat"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // ReactConfirmedMsg is emitted when the user selects an emoji.
@@ -26,21 +26,6 @@ var pickerEmoji = [4][7]string{
 const (
 	pickerRows = 4
 	pickerCols = 7
-)
-
-var (
-	pickerBgStyle = lipgloss.NewStyle().
-			Background(lipcompat.AdaptiveColor{
-			Light: lipgloss.Color("252"),
-			Dark:  lipgloss.Color("235"),
-		})
-
-	pickerSelectedStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("63")).
-				Foreground(lipgloss.Color("0"))
-
-	pickerChosenStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("10")).Bold(true)
 )
 
 // ReactionPicker is a 5×4 emoji grid overlay. It does not know the target message ID;
@@ -115,22 +100,22 @@ func (p *ReactionPicker) View() string {
 			cell := " " + emoji + " "
 			switch {
 			case r == p.row && c == p.col:
-				cell = pickerSelectedStyle.Render(cell)
+				cell = theme.S().PickerSelected.Render(cell)
 			case emoji == p.chosen:
-				cell = pickerChosenStyle.Render(cell)
+				cell = theme.S().PickerChosen.Render(cell)
 			default:
-				cell = pickerBgStyle.Render(cell)
+				cell = theme.S().PickerBg.Render(cell)
 			}
 			cells = append(cells, cell)
 		}
-		rows[r] = pickerBgStyle.Render(" ") + strings.Join(cells, pickerBgStyle.Render(""))
+		rows[r] = theme.S().PickerBg.Render(" ") + strings.Join(cells, theme.S().PickerBg.Render(""))
 	}
 
 	hint := OverlayHint([][2]string{
 		{"hjkl", DescribeShort(keys.ContextContextMenu, keys.ActionDown)},
 		{"enter", DescribeShort(keys.ContextContextMenu, keys.ActionReact)},
 		{"esc", DescribeShort(keys.ContextContextMenu, keys.ActionCancel)},
-	}, OverlayMenuBg)
+	}, OverlayMenuBg())
 	hintW := lipgloss.Width(" " + hint + " ")
 	if innerW < hintW {
 		innerW = hintW
@@ -142,7 +127,7 @@ func (p *ReactionPicker) View() string {
 
 	lines := strings.Split(box, "\n")
 	for i, l := range lines {
-		lines[i] = pickerBgStyle.Render(l)
+		lines[i] = theme.S().PickerBg.Render(l)
 	}
 	return strings.Join(lines, "\n")
 }

@@ -6,6 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 const indicatorChar = "┃"
@@ -160,7 +161,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 		if orig != nil {
 			minW = measurePreviewBlock(replyName(orig), firstLine(orig.Text), maxContentW)
 		} else {
-			w := lipgloss.Width(quoteGlyph + quoteStyle.Render("Original not available"))
+			w := lipgloss.Width(quoteGlyph + theme.S().Quote.Render("Original not available"))
 			if w > maxContentW {
 				w = maxContentW
 			}
@@ -178,16 +179,16 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	statusStr := statusOverride
 	if statusStr == "" && msg.IsOut {
 		if msg.ID > 0 && msg.ID <= ml.outboxReadMaxID {
-			statusStr = " " + readStyle.Render("✓✓")
+			statusStr = " " + theme.S().TickRead.Render("✓✓")
 		} else if msg.ID > 0 {
-			statusStr = " " + sentStyle.Render("✓")
+			statusStr = " " + theme.S().TickSent.Render("✓")
 		}
 	}
 	editMark := ""
 	if msg.EditDate != nil {
-		editMark = tsStyle.Render("edited") + " · "
+		editMark = theme.S().Timestamp.Render("edited") + " · "
 	}
-	tsStr := " " + editMark + tsStyle.Render(msg.Date.Format("15:04")) + statusStr + " "
+	tsStr := " " + editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr + " "
 	tsW := lipgloss.Width(tsStr)
 	if innerW < tsW {
 		innerW = tsW
@@ -400,7 +401,7 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 		// Draw indicator bar on every content line (all except top and bottom border).
 		// First leftPad bytes are ASCII spaces, so byte-slicing is safe.
 		if selected && ml.showIndicator && len(allLines) > 2 && leftPad >= 2 {
-			bar := " " + indicatorStyle.Render(indicatorChar)
+			bar := " " + theme.S().Indicator.Render(indicatorChar)
 			for i := 1; i < len(allLines)-1; i++ {
 				allLines[i] = allLines[i][:leftPad-2] + bar + allLines[i][leftPad:]
 			}
@@ -411,7 +412,7 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 			bubbleW := lipgloss.Width(allLines[0])
 			available := ml.viewWidth - bubbleW
 			if available >= 2 {
-				bar := " " + indicatorStyle.Render(indicatorChar)
+				bar := " " + theme.S().Indicator.Render(indicatorChar)
 				for i := 1; i < len(allLines)-1; i++ {
 					allLines[i] = allLines[i] + bar
 				}
@@ -438,16 +439,16 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 	var statusStr string
 	if msg.IsOut {
 		if msg.ID > 0 && msg.ID <= ml.outboxReadMaxID {
-			statusStr = " " + readStyle.Render("✓✓")
+			statusStr = " " + theme.S().TickRead.Render("✓✓")
 		} else if msg.ID > 0 {
-			statusStr = " " + sentStyle.Render("✓")
+			statusStr = " " + theme.S().TickSent.Render("✓")
 		}
 	}
 	editMark := ""
 	if msg.EditDate != nil {
-		editMark = tsStyle.Render("edited") + " · "
+		editMark = theme.S().Timestamp.Render("edited") + " · "
 	}
-	tsStr := editMark + tsStyle.Render(msg.Date.Format("15:04")) + statusStr
+	tsStr := editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr
 	reactStr := strings.TrimSpace(buildReactStr(msg.Reactions))
 
 	// Block width: widest of the art, the meta line, and (in groups) the name.
@@ -520,7 +521,7 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 		}
 		// leftPad bytes are ASCII spaces, so byte-slicing is safe.
 		if selected && ml.showIndicator && leftPad >= 2 {
-			bar := " " + indicatorStyle.Render(indicatorChar)
+			bar := " " + theme.S().Indicator.Render(indicatorChar)
 			for i := range lines {
 				lines[i] = lines[i][:leftPad-2] + bar + lines[i][leftPad:]
 			}
@@ -529,7 +530,7 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 	}
 	if selected && ml.showIndicator {
 		if available := ml.viewWidth - blockW; available >= 2 {
-			bar := " " + indicatorStyle.Render(indicatorChar)
+			bar := " " + theme.S().Indicator.Render(indicatorChar)
 			for i := range lines {
 				lines[i] = lines[i] + bar
 			}
@@ -548,7 +549,7 @@ func (ml *MessageList) renderSeparator(label string) []string {
 	if rightFill < 0 {
 		rightFill = 0
 	}
-	line := sepStyle.Render(strings.Repeat("─", fill)) + " " + label + " " + sepStyle.Render(strings.Repeat("─", rightFill))
+	line := theme.S().Separator.Render(strings.Repeat("─", fill)) + " " + label + " " + theme.S().Separator.Render(strings.Repeat("─", rightFill))
 	return []string{"", line, ""}
 }
 
@@ -563,7 +564,7 @@ func (ml *MessageList) renderUnreadSeparator() []string {
 	if rightFill < 0 {
 		rightFill = 0
 	}
-	line := unreadSepStyle.Render(strings.Repeat("─", fill)) + " " + unreadSepStyle.Render(label) + " " + unreadSepStyle.Render(strings.Repeat("─", rightFill))
+	line := theme.S().UnreadSeparator.Render(strings.Repeat("─", fill)) + " " + theme.S().UnreadSeparator.Render(label) + " " + theme.S().UnreadSeparator.Render(strings.Repeat("─", rightFill))
 	return []string{"", line, ""}
 }
 

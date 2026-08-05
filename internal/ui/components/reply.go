@@ -5,6 +5,7 @@ import (
 
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // BuildEditPreview returns a two-line preview string for the edit bar above the composer:
@@ -17,8 +18,8 @@ func BuildEditPreview(msg domain.Message) string {
 		snippet = snippet[:idx]
 	}
 	snippet = runewidth.Truncate(snippet, 39, "…")
-	nameLine := quoteGlyph + editNameStyle.Render("Edit Message")
-	snippetLine := quoteGlyph + quoteStyle.Render(snippet)
+	nameLine := quoteGlyph + theme.S().NameEditing.Render("Edit Message")
+	snippetLine := quoteGlyph + theme.S().Quote.Render(snippet)
 	return nameLine + "\n" + snippetLine
 }
 
@@ -42,7 +43,7 @@ func BuildReplyPreview(msg domain.Message) string {
 	}
 	snippet = runewidth.Truncate(snippet, 39, "…")
 
-	nameLine := quoteGlyph + inNameStyle.Render(name)
-	snippetLine := quoteGlyph + quoteStyle.Render(snippet)
+	nameLine := quoteGlyph + theme.S().NameIncoming.Render(name)
+	snippetLine := quoteGlyph + theme.S().Quote.Render(snippet)
 	return nameLine + "\n" + snippetLine
 }

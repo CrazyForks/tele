@@ -11,6 +11,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // FileSelectedMsg is emitted when the user selects a file (not a directory).
@@ -220,13 +221,13 @@ func (m *FilePickerModel) View() string {
 		}
 		style := lipgloss.NewStyle().Inline(true).Width(inner).MaxWidth(inner)
 		if selected {
-			style = style.Background(lipgloss.Color("63")).Foreground(lipgloss.Color("0"))
+			style = style.Background(theme.T().SurfaceSelected).Foreground(theme.T().TextOnSelected)
 		}
 		return style.Render(label)
 	}
 	lines := m.list.Render(filePickerMaxRows, rowFn)
 	if len(m.entries) == 0 {
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Width(inner).Render("empty"))
+		lines = append(lines, theme.S().PickerEmptyLabel.Width(inner).Render("empty"))
 	}
 
 	hint := components.OverlayHint([][2]string{

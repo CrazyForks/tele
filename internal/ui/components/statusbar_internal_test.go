@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -116,30 +117,30 @@ func TestNavLayout_EmptyPair_Empty(t *testing.T) {
 }
 
 func TestApplyAccent_WrapsOnlySpans(t *testing.T) {
-	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	out := applyAccent("quit", []span{{0, 1}}, barStyle, accent)
+	accent := lipgloss.NewStyle().Foreground(theme.T().Accent)
+	out := applyAccent("quit", []span{{0, 1}}, theme.S().Bar, accent)
 	// The rune "q" is styled, "uit" is left as-is.
 	assert.Contains(t, out, "uit")
 	assert.NotEqual(t, "quit", out) // styling was applied
 }
 
 func TestApplyAccent_NoSpans_UsesBaseStyle(t *testing.T) {
-	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	accent := lipgloss.NewStyle().Foreground(theme.T().Accent)
 	// With no accent, the whole text is rendered with the base style.
-	assert.Equal(t, barStyle.Render("plain"), applyAccent("plain", nil, barStyle, accent))
+	assert.Equal(t, theme.S().Bar.Render("plain"), applyAccent("plain", nil, theme.S().Bar, accent))
 }
 
 func TestApplyAccent_NonAccentRunUsesBaseStyle(t *testing.T) {
-	accent := lipgloss.NewStyle().Background(barBg).Foreground(lipgloss.Color("39"))
-	out := applyAccent("quit", []span{{0, 1}}, barStyle, accent)
+	accent := lipgloss.NewStyle().Background(theme.T().SurfaceStatusBar).Foreground(theme.T().Accent)
+	out := applyAccent("quit", []span{{0, 1}}, theme.S().Bar, accent)
 	// The non-accent remainder must be styled with the base (bar) style, not
 	// left plain (which would lose the background after the accent's reset).
-	assert.Contains(t, out, barStyle.Render("uit"))
+	assert.Contains(t, out, theme.S().Bar.Render("uit"))
 }
 
 func TestJoinHints_SeparatorKeepsBarBackground(t *testing.T) {
 	out := joinHints("a", "b")
-	assert.Contains(t, out, barStyle.Render(" · "))
+	assert.Contains(t, out, theme.S().Bar.Render(" · "))
 }
 
 func TestStatusBar_VersionFillerAndTextKeepBarStyle(t *testing.T) {
@@ -151,10 +152,10 @@ func TestStatusBar_VersionFillerAndTextKeepBarStyle(t *testing.T) {
 	// The filler between the segments and the version must carry the bar
 	// background itself: the preceding run ends with a reset, so plain spaces
 	// would show the terminal background instead.
-	gap := 80 - lipgloss.Width(normalMode.Render("NORMAL")) - lipgloss.Width("v1.2.3")
-	assert.Contains(t, out, barStyle.Render(strings.Repeat(" ", gap)))
+	gap := 80 - lipgloss.Width(theme.S().ModeNormal.Render("NORMAL")) - lipgloss.Width("v1.2.3")
+	assert.Contains(t, out, theme.S().Bar.Render(strings.Repeat(" ", gap)))
 	// The version reads in the bar's normal text color, like a hint's wording.
-	assert.Contains(t, out, barStyle.Render("v1.2.3"))
+	assert.Contains(t, out, theme.S().Bar.Render("v1.2.3"))
 }
 
 func TestAccentStyle_FollowsMode(t *testing.T) {

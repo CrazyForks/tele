@@ -7,16 +7,30 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
+
+// The root is the only place the theme changes. A background report must select
+// the matching flavour, not merely record a flag.
+func TestRoot_BackgroundColorMsg_AppliesThemeFlavour(t *testing.T) {
+	m := idleMainModel()
+
+	m.setDarkBackground(false)
+	assert.False(t, theme.T().Dark, "light background selects the light flavour")
+
+	m.setDarkBackground(true)
+	assert.True(t, theme.T().Dark, "dark background selects the dark flavour")
+}
 
 // The 2s background-color poll is replaced by event-driven theme detection
 // (issue #148): a BackgroundColorMsg must update the theme but must NOT
 // reschedule a timer.
 func TestRoot_BackgroundColorMsg_UpdatesThemeWithoutPolling(t *testing.T) {
 	m := idleMainModel()
-	newM, cmd := m.Update(tea.BackgroundColorMsg{Color: color.Black})
+	_, cmd := m.Update(tea.BackgroundColorMsg{Color: color.Black})
 	assert.Nil(t, cmd, "background color must not reschedule a poll")
-	assert.True(t, newM.(RootModel).hasDarkBackground, "black background is dark")
+	assert.True(t, theme.T().Dark, "black background is dark")
 }
 
 // Unsolicited OS color-scheme reports (DEC mode 2031) arrive as raw ultraviolet
@@ -26,11 +40,11 @@ func TestRoot_ColorSchemeEvents_UpdateTheme(t *testing.T) {
 
 	dark, cmd := m.Update(uv.DarkColorSchemeEvent{})
 	assert.Nil(t, cmd)
-	assert.True(t, dark.(RootModel).hasDarkBackground, "dark color-scheme event sets dark")
+	assert.True(t, theme.T().Dark, "dark color-scheme event sets dark")
 
-	light, cmd := dark.(RootModel).Update(uv.LightColorSchemeEvent{})
+	_, cmd = dark.(RootModel).Update(uv.LightColorSchemeEvent{})
 	assert.Nil(t, cmd)
-	assert.False(t, light.(RootModel).hasDarkBackground, "light color-scheme event clears dark")
+	assert.False(t, theme.T().Dark, "light color-scheme event clears dark")
 }
 
 // Fallback for terminals without mode 2031: regaining focus re-reads the

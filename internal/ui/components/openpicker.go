@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // OpenTargetChosenMsg is emitted when the user picks a target to open.
@@ -82,8 +83,8 @@ func (p *OpenPicker) choose(i int) (*OpenPicker, tea.Cmd) {
 func (p *OpenPicker) View() string {
 	// The leading number is accented like a status-bar hint key; the selected row
 	// stays plain so its highlight background keeps full contrast.
-	base := lipgloss.NewStyle().Background(OverlayMenuBg)
-	accent := lipgloss.NewStyle().Background(OverlayMenuBg).Foreground(lipgloss.Color("39"))
+	base := lipgloss.NewStyle().Background(OverlayMenuBg())
+	accent := lipgloss.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().Accent)
 	rows := make([]string, len(p.targets))
 	for i, t := range p.targets {
 		label := truncateTail(t.Label, p.maxLabel)
@@ -98,7 +99,7 @@ func (p *OpenPicker) View() string {
 		{"j/k", DescribeShort(keys.ContextContextMenu, keys.ActionDown)},
 		{"enter", DescribeShort(keys.ContextContextMenu, keys.ActionOpenInViewer)},
 		{"esc", DescribeShort(keys.ContextContextMenu, keys.ActionCancel)},
-	}, OverlayMenuBg)
+	}, OverlayMenuBg())
 
 	innerW := 0
 	for _, r := range rows {
@@ -113,9 +114,9 @@ func (p *OpenPicker) View() string {
 
 	for i := range rows {
 		if i == p.list.Cursor() {
-			rows[i] = menuSelectedStyle.Width(innerW).Render(rows[i])
+			rows[i] = theme.S().MenuSelected.Width(innerW).Render(rows[i])
 		} else {
-			rows[i] = menuBgStyle.Width(innerW).Render(rows[i])
+			rows[i] = theme.S().MenuBg.Width(innerW).Render(rows[i])
 		}
 	}
 
@@ -124,7 +125,7 @@ func (p *OpenPicker) View() string {
 	box := RenderBox(strings.Join(rows, "\n"), "Open", "", hint, "", lipgloss.RoundedBorder(), nil, outerW, outerH)
 	lines := strings.Split(box, "\n")
 	for i, l := range lines {
-		lines[i] = menuBgStyle.Render(l)
+		lines[i] = theme.S().MenuBg.Render(l)
 	}
 	return strings.Join(lines, "\n")
 }

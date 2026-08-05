@@ -11,6 +11,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // FolderSelectedMsg is emitted when the user confirms a folder selection.
@@ -20,9 +21,8 @@ type FolderSelectedMsg struct {
 }
 
 var (
-	selectedFolderStyle = lipgloss.NewStyle().Background(lipgloss.Color("63")).Foreground(lipgloss.Color("0"))
-	normalFolderStyle   = lipgloss.NewStyle()
-	activeFolderStyle   = lipgloss.NewStyle().Bold(true)
+	normalFolderStyle = lipgloss.NewStyle()
+	activeFolderStyle = lipgloss.NewStyle().Bold(true)
 )
 
 var allChatsFilter = domain.FolderFilter{ID: 0, Title: "All Chats"}
@@ -162,7 +162,7 @@ func (m FoldersModel) View() string {
 		label := m.formatEntry(f, i == m.activeIdx)
 		style := normalFolderStyle
 		if i == m.cursor && m.focused {
-			style = selectedFolderStyle
+			style = theme.S().SelectedFolder
 		} else if i == m.activeIdx {
 			style = activeFolderStyle
 		}

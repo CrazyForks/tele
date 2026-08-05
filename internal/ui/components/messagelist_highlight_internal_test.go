@@ -3,62 +3,65 @@ package components
 import (
 	"testing"
 
-	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 func TestBubbleBorderFg_NormalWhenNoHighlight(t *testing.T) {
+	theme.Apply(theme.Default, true)
 	ml := NewMessageList(20, 80)
 	in := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
-	assert.Equal(t, lipgloss.Color("238"), in)
+	assert.Equal(t, theme.T().BorderBubbleIn, in)
 	out := ml.bubbleBorderFg(domain.Message{ID: 2, IsOut: true})
-	assert.Equal(t, lipgloss.Color("25"), out)
+	assert.Equal(t, theme.T().BorderBubbleOut, out)
 }
 
 func TestBubbleBorderFg_AccentWhenHighlighted_Dark(t *testing.T) {
+	theme.Apply(theme.Default, true)
 	ml := NewMessageList(20, 80)
-	ml.SetDarkBackground(true)
 	ml.HighlightMessage(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
-	want := FadeAccentColor(HighlightAccent, lipgloss.Color("238"), HighlightFadeSteps, HighlightFadeSteps)
+	want := FadeAccentColor(theme.T().HighlightAccent, theme.T().BorderBubbleIn, HighlightFadeSteps, HighlightFadeSteps)
 	assert.Equal(t, want, got)
 }
 
 func TestBubbleBorderFg_AccentWhenHighlighted_Light(t *testing.T) {
+	theme.Apply(theme.Default, false)
 	ml := NewMessageList(20, 80)
-	ml.SetDarkBackground(false)
 	ml.HighlightMessage(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
-	want := FadeAccentColor(HighlightAccentLight, lipgloss.Color("238"), HighlightFadeSteps, HighlightFadeSteps)
+	want := FadeAccentColor(theme.T().HighlightAccent, theme.T().BorderBubbleIn, HighlightFadeSteps, HighlightFadeSteps)
 	assert.Equal(t, want, got)
 	// The light accent must differ from the dark one.
-	assert.NotEqual(t, HighlightAccent, HighlightAccentLight)
+	assert.NotEqual(t, theme.Default.Dark.HighlightAccent, theme.Default.Light.HighlightAccent)
 }
 
 func TestBubbleBorderFg_OtherMessagesUnaffected(t *testing.T) {
+	theme.Apply(theme.Default, true)
 	ml := NewMessageList(20, 80)
 	ml.HighlightMessage(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 99, IsOut: false})
-	assert.Equal(t, lipgloss.Color("238"), got)
+	assert.Equal(t, theme.T().BorderBubbleIn, got)
 }
 
 func TestBubbleBorderFg_ErrorAccentWhenHighlighted_Dark(t *testing.T) {
+	theme.Apply(theme.Default, true)
 	ml := NewMessageList(20, 80)
-	ml.SetDarkBackground(true)
 	ml.HighlightMessageError(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
-	want := FadeAccentColor(ErrorAccent, lipgloss.Color("238"), HighlightFadeSteps, HighlightFadeSteps)
+	want := FadeAccentColor(theme.T().HighlightError, theme.T().BorderBubbleIn, HighlightFadeSteps, HighlightFadeSteps)
 	assert.Equal(t, want, got)
 	assert.Equal(t, HighlightError, ml.HighlightKind())
 }
 
 func TestBubbleBorderFg_ErrorAccentWhenHighlighted_Light(t *testing.T) {
+	theme.Apply(theme.Default, false)
 	ml := NewMessageList(20, 80)
-	ml.SetDarkBackground(false)
 	ml.HighlightMessageError(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
-	want := FadeAccentColor(ErrorAccentLight, lipgloss.Color("238"), HighlightFadeSteps, HighlightFadeSteps)
+	want := FadeAccentColor(theme.T().HighlightError, theme.T().BorderBubbleIn, HighlightFadeSteps, HighlightFadeSteps)
 	assert.Equal(t, want, got)
 }
 

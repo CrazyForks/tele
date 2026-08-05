@@ -2,29 +2,22 @@ package ui
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2/compat"
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // toastAnimTickMsg advances the toast slide animation by one frame.
 type toastAnimTickMsg struct{}
 
-// setDarkBackground records the terminal/OS theme and propagates it to the
-// components whose colors depend on a dark vs light background.
+// setDarkBackground records the terminal/OS theme by selecting the matching
+// theme flavour. Every color in the app comes from the current theme, so the
+// flavour is the whole of the state and this is the only place it changes
+// (issue #148).
 func (m *RootModel) setDarkBackground(isDark bool) {
-	m.hasDarkBackground = isDark
-	m.logo.SetDarkBackground(isDark)
-	m.chat.SetDarkBackground(isDark)
-	m.chatList.SetDarkBackground(isDark)
-	m.toasts.SetDarkBackground(isDark)
-	// compat.AdaptiveColor (context menu / hint / reaction-picker backgrounds)
-	// resolves against this package-level flag, which is otherwise detected once
-	// at init and never updated. Keep it in sync so those explicit light/dark
-	// colors follow a runtime theme change (issue #148).
-	compat.HasDarkBackground = isDark
+	theme.Apply(theme.Default, isDark)
 }
 
 // updateUIMsg handles messages that update layout, navigation, overlays, and animations.

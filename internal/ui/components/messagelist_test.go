@@ -13,6 +13,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1142,30 +1143,22 @@ func TestMessageList_SenderColor_DarkVsLight(t *testing.T) {
 		{ID: 1, ChatID: 1, SenderID: 0, SenderName: "Alice", Text: "hi", Date: now},
 	}
 
-	mlDark := components.NewMessageList(20, 80)
-	mlDark.SetIsGroup(true)
-	mlDark.SetDarkBackground(true)
-	mlDark.SetMessages(msgs)
-
-	mlLight := components.NewMessageList(20, 80)
-	mlLight.SetIsGroup(true)
-	mlLight.SetDarkBackground(false)
-	mlLight.SetMessages(msgs)
-
-	darkLine := ""
-	for _, l := range strings.Split(mlDark.View(), "\n") {
-		if strings.Contains(stripANSI(l), "Alice") {
-			darkLine = l
-			break
+	// The theme is process-global, so each flavour must be rendered under its
+	// own Apply rather than held side by side.
+	render := func(dark bool) string {
+		theme.Apply(theme.Default, dark)
+		ml := components.NewMessageList(20, 80)
+		ml.SetIsGroup(true)
+		ml.SetMessages(msgs)
+		for _, l := range strings.Split(ml.View(), "\n") {
+			if strings.Contains(stripANSI(l), "Alice") {
+				return l
+			}
 		}
+		return ""
 	}
-	lightLine := ""
-	for _, l := range strings.Split(mlLight.View(), "\n") {
-		if strings.Contains(stripANSI(l), "Alice") {
-			lightLine = l
-			break
-		}
-	}
+	darkLine := render(true)
+	lightLine := render(false)
 	require.NotEmpty(t, darkLine)
 	require.NotEmpty(t, lightLine)
 	assert.NotEqual(t,

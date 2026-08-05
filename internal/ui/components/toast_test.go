@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	xansi "github.com/charmbracelet/x/ansi"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 func newTestStack() *ToastStack {
@@ -222,16 +224,16 @@ func TestToastStack_NoClickMsgNoWholeBoxHit(t *testing.T) {
 	}
 }
 
-func TestToastStack_DarkBackgroundChangesRender(t *testing.T) {
+func TestToastStack_ThemeFlavourChangesRender(t *testing.T) {
 	mk := func(dark bool) string {
+		theme.Apply(theme.Default, dark)
 		s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
-		s.SetDarkBackground(dark)
 		s.Add(ToastError, "boom")
 		settle(s)
 		return s.Zones()[0].Block
 	}
 	if mk(true) == mk(false) {
-		t.Fatal("dark and light backgrounds should render differently")
+		t.Fatal("dark and light flavours should render differently")
 	}
 }
 

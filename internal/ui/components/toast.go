@@ -10,6 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // Severity classifies a transient message. It lives here (not statusbar.go)
@@ -90,13 +92,12 @@ type toast struct {
 // ToastStack holds all active toasts in one flat slice (ordered by serial) and
 // renders them grouped by zone.
 type ToastStack struct {
-	width, height     int
-	maxVisible        int
-	toasts            []toast
-	serial            int
-	zoneFor           map[ToastKind]ToastZone
-	bottomInset       int // rows reserved at the bottom (the composer)
-	hasDarkBackground bool
+	width, height int
+	maxVisible    int
+	toasts        []toast
+	serial        int
+	zoneFor       map[ToastKind]ToastZone
+	bottomInset   int // rows reserved at the bottom (the composer)
 }
 
 // NewToastStack builds a stack. errorZone receives info/warning/error toasts;
@@ -121,10 +122,6 @@ func (s *ToastStack) SetSize(w, h int) { s.width, s.height = w, h }
 // must not cover — the composer. A warning about what you are typing is useless
 // if it lands on top of the field you are typing into (#126).
 func (s *ToastStack) SetBottomInset(rows int) { s.bottomInset = rows }
-
-// SetDarkBackground records the terminal theme so toast panel colors adapt to a
-// dark vs light background.
-func (s *ToastStack) SetDarkBackground(isDark bool) { s.hasDarkBackground = isDark }
 
 // SetClick attaches a whole-box click message to the toast with the given
 // serial (no-op if the serial matches nothing). Used to make a notify toast
@@ -253,17 +250,16 @@ func clampInt(v, lo, hi int) int {
 
 func (s *ToastStack) boxWidth() int { return clampInt(s.width/3, 20, 40) }
 
-// toastBorderColor returns the border color for a kind.
+// toastBorderColor returns the border color for a kind. Notify and info share
+// the info tone.
 func toastBorderColor(k ToastKind) color.Color {
 	switch k {
 	case ToastError:
-		return lipgloss.Color("203") // red
+		return theme.T().StatusError
 	case ToastWarning:
-		return lipgloss.Color("214") // amber
-	case ToastNotify:
-		return lipgloss.Color("75") // blue
+		return theme.T().StatusWarning
 	default:
-		return lipgloss.Color("75") // info blue
+		return theme.T().StatusInfo
 	}
 }
 
@@ -288,16 +284,12 @@ func (s *ToastStack) renderToast(t toast) string {
 		Render(body)
 }
 
-// panelBg returns the toast panel background for the current theme: a shade a
-// step off the usual terminal background so the toast reads as a raised panel.
-func (s *ToastStack) panelBg() color.Color {
-	return lipgloss.LightDark(s.hasDarkBackground)(lipgloss.Color("254"), lipgloss.Color("237"))
-}
+// panelBg returns the toast panel background: a shade a step off the usual
+// terminal background so the toast reads as a raised panel.
+func (s *ToastStack) panelBg() color.Color { return theme.T().SurfaceToast }
 
 // panelFg returns readable body text for the panel background.
-func (s *ToastStack) panelFg() color.Color {
-	return lipgloss.LightDark(s.hasDarkBackground)(lipgloss.Color("236"), lipgloss.Color("252"))
-}
+func (s *ToastStack) panelFg() color.Color { return theme.T().TextOnToast }
 
 // footer renders the accented action hints for a toast, or "" if none.
 func (s *ToastStack) footer(t toast, innerW int) string {
@@ -306,7 +298,7 @@ func (s *ToastStack) footer(t toast, innerW int) string {
 	}
 	bg := s.panelBg()
 	base := lipgloss.NewStyle().Background(bg).Foreground(s.panelFg())
-	accent := lipgloss.NewStyle().Background(bg).Foreground(lipgloss.Color("39")).Bold(true)
+	accent := lipgloss.NewStyle().Background(bg).Foreground(theme.T().Accent).Bold(true)
 	parts := make([]string, 0, len(t.actions))
 	for _, a := range t.actions {
 		text, spans := hintLayout(a.Key, a.Label)
@@ -347,7 +339,7 @@ func (s *ToastStack) zoneLayout(zone ToastZone) (entries []zoneEntry, top, left 
 		return nil, 0, 0
 	}
 	more := zoneEntry{lines: []string{
-		lipgloss.NewStyle().Foreground(lipgloss.Color("240")).
+		lipgloss.NewStyle().Foreground(theme.T().TextSubtle).
 			Render(fmt.Sprintf("+%d more", hidden)),
 	}}
 	toEntry := func(t toast) zoneEntry {

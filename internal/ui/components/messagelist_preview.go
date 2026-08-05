@@ -6,6 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 const quoteGlyph = "▌ "
@@ -32,8 +33,8 @@ func firstLine(s string) string {
 // capped at maxContentW. Measuring the snippet keeps a short reply (e.g. "ok")
 // from squeezing the original message down to an unreadable width.
 func measurePreviewBlock(senderName, snippet string, maxContentW int) int {
-	w := lipgloss.Width(quoteGlyph + inNameStyle.Render(senderName))
-	if sw := lipgloss.Width(quoteGlyph + quoteStyle.Render(snippet)); sw > w {
+	w := lipgloss.Width(quoteGlyph + theme.S().NameIncoming.Render(senderName))
+	if sw := lipgloss.Width(quoteGlyph + theme.S().Quote.Render(snippet)); sw > w {
 		w = sw
 	}
 	if w > maxContentW {
@@ -50,7 +51,7 @@ func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet st
 	glyphW := lipgloss.Width(quoteGlyph)
 
 	if senderName == "" {
-		placeholder := quoteGlyph + quoteStyle.Render("Original not available")
+		placeholder := quoteGlyph + theme.S().Quote.Render("Original not available")
 		pw := lipgloss.Width(placeholder)
 		if pw < actualW {
 			placeholder += strings.Repeat(" ", actualW-pw)
@@ -80,7 +81,7 @@ func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet st
 		maxSnippetW = 1
 	}
 	snippet = runewidth.Truncate(snippet, maxSnippetW, "…")
-	textPart := ns.Render(quoteGlyph) + quoteStyle.Render(snippet)
+	textPart := ns.Render(quoteGlyph) + theme.S().Quote.Render(snippet)
 	tw := lipgloss.Width(textPart)
 	if tw < actualW {
 		textPart += strings.Repeat(" ", actualW-tw)
@@ -103,8 +104,8 @@ func measureForwardBlock(from string, maxContentW int) int {
 	if name == "" {
 		name = forwardHiddenName
 	}
-	w := lipgloss.Width(quoteGlyph + inNameStyle.Render(name))
-	if lw := lipgloss.Width(quoteGlyph + quoteStyle.Render(forwardLabelText)); lw > w {
+	w := lipgloss.Width(quoteGlyph + theme.S().NameIncoming.Render(name))
+	if lw := lipgloss.Width(quoteGlyph + theme.S().Quote.Render(forwardLabelText)); lw > w {
 		w = lw
 	}
 	if w > maxContentW {
@@ -132,14 +133,14 @@ func renderForwardLines(from string, actualW int, bs lipgloss.Style) []string {
 	}
 
 	label := runewidth.Truncate(forwardLabelText, maxTextW, "…")
-	labelPart := quoteStyle.Render(quoteGlyph) + quoteStyle.Render(label)
+	labelPart := theme.S().Quote.Render(quoteGlyph) + theme.S().Quote.Render(label)
 	if lw := lipgloss.Width(labelPart); lw < actualW {
 		labelPart += strings.Repeat(" ", actualW-lw)
 	}
 	labelRow := bs.Render(b.Left) + " " + labelPart + " " + bs.Render(b.Right)
 
 	name = runewidth.Truncate(name, maxTextW, "…")
-	namePart := quoteStyle.Render(quoteGlyph) + inNameStyle.Render(name)
+	namePart := theme.S().Quote.Render(quoteGlyph) + theme.S().NameIncoming.Render(name)
 	if nw := lipgloss.Width(namePart); nw < actualW {
 		namePart += strings.Repeat(" ", actualW-nw)
 	}

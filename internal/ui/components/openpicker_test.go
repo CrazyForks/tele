@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,10 +69,11 @@ func TestOpenPicker_Digit_ChoosesThatTarget(t *testing.T) {
 }
 
 func TestOpenPicker_AccentsDigits(t *testing.T) {
+	theme.Apply(theme.Default, true)
 	p := components.NewOpenPicker(openTargets(), 60)
 	// Row 0 is selected (plain); a non-selected row's number is accent-colored.
 	raw := p.View()
-	assert.Regexp(t, `38;5;39[^m]*m2`, raw, "the picker number must be accent-colored")
+	assert.Regexp(t, fgSeq(theme.T().Accent)+`[^m]*m2`, raw, "the picker number must be accent-colored")
 }
 
 func TestOpenPicker_Esc_Closes(t *testing.T) {

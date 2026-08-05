@@ -8,6 +8,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // Chat context-menu request messages. The root model turns each into an
@@ -226,7 +227,7 @@ func (cm *ChatContextMenu) View() string {
 		{down + "/" + up, DescribeShort(ctx, keys.ActionDown)},
 		{confirm, DescribeShort(ctx, keys.ActionConfirm)},
 		{cancel, DescribeShort(ctx, keys.ActionCancel)},
-	}, OverlayMenuBg)
+	}, OverlayMenuBg())
 
 	innerW := 0
 	for _, r := range rows {
@@ -241,9 +242,9 @@ func (cm *ChatContextMenu) View() string {
 
 	for i := range rows {
 		if i == cm.list.Cursor() && !cm.items[i].separator {
-			rows[i] = menuSelectedStyle.Width(innerW).Render(rows[i])
+			rows[i] = theme.S().MenuSelected.Width(innerW).Render(rows[i])
 		} else {
-			rows[i] = menuBgStyle.Width(innerW).Render(rows[i])
+			rows[i] = theme.S().MenuBg.Width(innerW).Render(rows[i])
 		}
 	}
 
@@ -253,7 +254,7 @@ func (cm *ChatContextMenu) View() string {
 
 	lines := strings.Split(box, "\n")
 	for i, l := range lines {
-		lines[i] = menuBgStyle.Render(l)
+		lines[i] = theme.S().MenuBg.Render(l)
 	}
 	return strings.Join(lines, "\n")
 }

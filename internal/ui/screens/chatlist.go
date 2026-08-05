@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // OpenChatMsg asks the root model to open a chat. It carries an id and a title
@@ -43,21 +44,10 @@ type ForwardToChatRequest struct {
 	Comment string // optional; sent as a separate message before the forward
 }
 
+// These two carry no color, so they stay here rather than in the theme.
 var (
-	selectedChatStyle = lipgloss.NewStyle().Background(lipgloss.Color("63")).Foreground(lipgloss.Color("0"))
-	normalChatStyle   = lipgloss.NewStyle()
-	activeChatStyle   = lipgloss.NewStyle().Bold(true)
-	onlineDotStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	// reactionStyle tints the unread-reaction glyph pink to stand apart from the
-	// numeric unread badge.
-	reactionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	// mentionStyle tints the unread-mention glyph blue to stand apart from the
-	// pink reaction glyph and the numeric unread badge.
-	mentionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	// chatHighlightBase is the tone the chat-row title highlight fades toward
-	// (approximates default light-grey text on a dark background).
-	chatHighlightBase = lipgloss.Color("250")
+	normalChatStyle = lipgloss.NewStyle()
+	activeChatStyle = lipgloss.NewStyle().Bold(true)
 )
 
 func formatUnread(count int) string {
@@ -111,15 +101,15 @@ func rowIndicators(c project.ChatRow) string {
 	}
 	var reaction string
 	if c.Reactions > 0 {
-		reaction = reactionStyle.Render(formatReactions(c.Reactions))
+		reaction = theme.S().UnreadReaction.Render(formatReactions(c.Reactions))
 	}
 	var mention string
 	if c.Mentions > 0 {
-		mention = mentionStyle.Render(formatMentions(c.Mentions))
+		mention = theme.S().UnreadMention.Render(formatMentions(c.Mentions))
 	}
 	var muted string
 	if c.Muted {
-		muted = mutedStyle.Render("×")
+		muted = theme.S().MutedChat.Render("×")
 	}
 	parts := make([]string, 0, 4)
 	for _, p := range []string{muted, reaction, mention, unread} {
@@ -145,12 +135,11 @@ type ChatListModel struct {
 	reqLimit  int
 	// activeID is the open chat, held by id rather than index so it survives a
 	// window that no longer contains it.
-	activeID          int64
-	width             int
-	height            int
-	focused           bool
-	hasDarkBackground bool
-	spinner           components.Spinner
+	activeID int64
+	width    int
+	height   int
+	focused  bool
+	spinner  components.Spinner
 
 	// highlightChatID is the chat currently flashed because a new incoming
 	// message bumped it to the top; highlightStep counts down to 0 (none).
@@ -319,13 +308,9 @@ func (m *ChatListModel) styleTitle(i int, id int64, truncated string) string {
 	if i == m.cursor && m.focused {
 		return truncated
 	}
-	fg := components.FadeAccentColor(components.HighlightAccentFor(m.hasDarkBackground), chatHighlightBase, m.highlightStep, components.HighlightFadeSteps)
+	fg := components.FadeAccentColor(theme.T().HighlightAccent, theme.T().HighlightBaseChat, m.highlightStep, components.HighlightFadeSteps)
 	return lipgloss.NewStyle().Foreground(fg).Render(truncated)
 }
-
-// SetDarkBackground records whether the terminal background is dark, so the
-// row highlight picks the accent tone suited to the theme.
-func (m *ChatListModel) SetDarkBackground(isDark bool) { m.hasDarkBackground = isDark }
 
 func (m *ChatListModel) Cursor() int { return m.cursor }
 
@@ -545,7 +530,7 @@ func (m *ChatListModel) View() string {
 			prefix = "▶   "
 		}
 		if row.IsUser && row.Online {
-			dot := onlineDotStyle.Render("●")
+			dot := theme.S().OnlineDot.Render("●")
 			if i == activeIdx {
 				prefix = "▶ " + dot + " "
 			} else {
@@ -580,7 +565,7 @@ func (m *ChatListModel) View() string {
 
 		style := normalChatStyle
 		if i == m.cursor && m.focused {
-			style = selectedChatStyle
+			style = theme.S().SelectedChat
 		} else if i == activeIdx {
 			style = activeChatStyle
 		}

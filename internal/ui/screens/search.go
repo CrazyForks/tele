@@ -11,6 +11,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 type CloseSearchMsg struct{}
@@ -50,11 +51,8 @@ func IsSearchInternalMsg(msg tea.Msg) bool {
 	return false
 }
 
-var (
-	searchActiveRow = lipgloss.NewStyle().Background(lipgloss.Color("63")).Foreground(lipgloss.Color("0"))
-	searchNormalRow = lipgloss.NewStyle()
-	searchPrompt    = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
-)
+// searchNormalRow carries no color, so it stays here rather than in the theme.
+var searchNormalRow = lipgloss.NewStyle()
 
 const searchOverlayWidth = 50
 const searchMaxResults = 8
@@ -418,7 +416,7 @@ func inputLine(text string, inner int) string {
 	if w := runewidth.StringWidth(text); w > budget {
 		text = runewidth.TruncateLeft(text, w-budget+1, "…")
 	}
-	return searchPrompt.Render(prompt) + text + searchCaret
+	return theme.S().SearchPrompt.Render(prompt) + text + searchCaret
 }
 
 func (m *SearchModel) View() string {
@@ -450,7 +448,7 @@ func (m *SearchModel) View() string {
 
 	lines := []string{queryLine, divider}
 
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	headerStyle := theme.S().SearchHeader
 	rows := m.rowModel()
 	rowFn := func(i int, selected bool) string {
 		r := rows[i]
@@ -463,14 +461,14 @@ func (m *SearchModel) View() string {
 		}
 		style := searchNormalRow
 		if selected {
-			style = searchActiveRow
+			style = theme.S().SearchActiveRow
 		}
 		return style.Inline(true).Width(inner).MaxWidth(inner).Render(row)
 	}
 
 	lines = append(lines, m.list.Render(searchMaxResults, rowFn)...)
 	if len(rows) == 0 && !m.globalLoading {
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Width(inner).Render("no results"))
+		lines = append(lines, theme.S().SearchHeader.Width(inner).Render("no results"))
 	}
 
 	content := strings.Join(lines, "\n")

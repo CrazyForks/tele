@@ -5,6 +5,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 type itemKind int
@@ -170,14 +171,14 @@ func localMediaFor(e domain.OutboxEntry, p uploadProgress) *domain.LocalMedia {
 func outboxStatusGlyph(e domain.OutboxEntry) string {
 	switch e.State {
 	case domain.OutboxSending:
-		return " " + outboxStyle.Render("↑")
+		return " " + theme.S().TickOutbox.Render("↑")
 	case domain.OutboxFailed:
-		return " " + failedStyle.Render("✕")
+		return " " + theme.S().TickFailed.Render("✕")
 	default:
 		if d := time.Until(e.NextAttemptAt); d > 0 {
-			return " " + outboxStyle.Render("↻ "+d.Round(time.Second).String())
+			return " " + theme.S().TickOutbox.Render("↻ "+d.Round(time.Second).String())
 		}
-		return " " + outboxStyle.Render("⋯")
+		return " " + theme.S().TickOutbox.Render("⋯")
 	}
 }
 

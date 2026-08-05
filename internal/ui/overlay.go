@@ -8,6 +8,7 @@ import (
 	xansi "github.com/charmbracelet/x/ansi"
 	kitty "github.com/charmbracelet/x/ansi/kitty"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // dimBackground flattens content to a faded monochrome wash behind a modal
@@ -21,12 +22,8 @@ import (
 // modal re-emits the placeholders and the image reappears without a re-transmit.
 // Visible width and line count are preserved so the overlay stamping math is
 // unaffected.
-func dimBackground(content string, dark bool) string {
-	gray := lipgloss.Color("240")
-	if !dark {
-		gray = lipgloss.Color("250")
-	}
-	dim := lipgloss.NewStyle().Foreground(gray)
+func dimBackground(content string) string {
+	dim := lipgloss.NewStyle().Foreground(theme.T().OverlayDim)
 
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {

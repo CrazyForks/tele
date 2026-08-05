@@ -9,6 +9,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 func (m RootModel) View() tea.View {
@@ -44,8 +45,7 @@ func (m RootModel) View() tea.View {
 		activeBorder := lipgloss.DoubleBorder()
 		inactiveBorder := lipgloss.NormalBorder()
 
-		lightDark := lipgloss.LightDark(m.hasDarkBackground)
-		activeFg := lightDark(lipgloss.Color("22"), lipgloss.Color("10"))
+		activeFg := theme.T().BorderPaneActive
 
 		foldersBorder := inactiveBorder
 		chatListBorder := inactiveBorder
@@ -69,7 +69,7 @@ func (m RootModel) View() tea.View {
 		if m.chat.IsTyping() {
 			chatDot = m.chat.TypingLabel()
 		} else if m.chat.PeerOnline() {
-			chatDot = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("●")
+			chatDot = lipgloss.NewStyle().Foreground(theme.T().StatusOnline).Render("●")
 		}
 
 		var main string
@@ -106,7 +106,7 @@ func (m RootModel) View() tea.View {
 
 		content = main + "\n" + m.statusBar.View()
 		if m.searchModel != nil {
-			content = overlayCenter(dimBackground(content, m.hasDarkBackground), m.searchModel.View(), m.width, m.height)
+			content = overlayCenter(dimBackground(content), m.searchModel.View(), m.width, m.height)
 		}
 		if m.contextMenu != nil {
 			content = m.overlayMenuNearBubble(content, m.contextMenu.View(), chatPanelLeft, chatBoxW)
@@ -124,18 +124,18 @@ func (m RootModel) View() tea.View {
 			content = m.overlayMenuNearBubble(content, m.openPicker.View(), chatPanelLeft, chatBoxW)
 		}
 		if m.filePicker != nil {
-			content = overlayCenter(dimBackground(content, m.hasDarkBackground), m.filePicker.View(), m.width, m.height)
+			content = overlayCenter(dimBackground(content), m.filePicker.View(), m.width, m.height)
 		}
 		if m.videoPlayer != nil {
 			// Overlay the modal over the chat using integer geometry (the chat's
 			// Kitty placeholders defeat lipgloss-based stamping).
-			content = m.videoPlayerView(dimBackground(content, m.hasDarkBackground))
+			content = m.videoPlayerView(dimBackground(content))
 		}
 		if m.photoViewer != nil {
-			content = m.photoViewerView(dimBackground(content, m.hasDarkBackground))
+			content = m.photoViewerView(dimBackground(content))
 		}
 		if m.help != nil {
-			content = overlayCenter(dimBackground(content, m.hasDarkBackground), m.help.View(), m.width, m.height)
+			content = overlayCenter(dimBackground(content), m.help.View(), m.width, m.height)
 		}
 		// Bottom-anchored toasts must clear the composer: a limit warning is
 		// useless on top of the field it is about (#126). The composer grows with

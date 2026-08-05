@@ -8,18 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
-)
-
-var (
-	barBg    = lipgloss.Color("236")
-	barFg    = lipgloss.Color("252")
-	barStyle = lipgloss.NewStyle().Background(barBg).Foreground(barFg)
-
-	barSepStyle = lipgloss.NewStyle().Background(barBg).Foreground(lipgloss.Color("240"))
-
-	modeBase   = lipgloss.NewStyle().Bold(true).Padding(0, 1).Foreground(lipgloss.Color("231"))
-	normalMode = modeBase.Background(lipgloss.Color("33")) // blue
-	insertMode = modeBase.Background(lipgloss.Color("35")) // green
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 type StatusBar struct {
@@ -98,28 +87,28 @@ func (sb *StatusBar) TickDownloadSpinner() {
 }
 
 func (sb *StatusBar) View() string {
-	modeStyle := normalMode
+	modeStyle := theme.S().ModeNormal
 	label := "NORMAL"
 	if sb.mode == keys.ModeInsert {
-		modeStyle = insertMode
+		modeStyle = theme.S().ModeInsert
 		label = "INSERT"
 	}
 
 	segs := []string{modeStyle.Render(label)}
 
 	if sb.dlText != "" {
-		segs = append(segs, barStyle.Render(sb.dlSpinner.View()+" "+sb.dlText))
+		segs = append(segs, theme.S().Bar.Render(sb.dlSpinner.View()+" "+sb.dlText))
 	} else if sb.status != "" {
-		segs = append(segs, barStyle.Render(sb.status))
+		segs = append(segs, theme.S().Bar.Render(sb.status))
 	}
 	if h := sb.hints(); h != "" {
-		segs = append(segs, barStyle.Render(h))
+		segs = append(segs, theme.S().Bar.Render(h))
 	}
 	if sb.verbose {
-		segs = append(segs, barStyle.Render(fmt.Sprintf("pane:%s key:%s", sb.activePane, sb.lastKey)))
+		segs = append(segs, theme.S().Bar.Render(fmt.Sprintf("pane:%s key:%s", sb.activePane, sb.lastKey)))
 	}
 
-	sep := barSepStyle.Render(" │ ")
+	sep := theme.S().BarSep.Render(" │ ")
 	left := strings.Join(segs, sep)
 
 	// The version sits flush right, separated from the hints by at least one
@@ -129,10 +118,10 @@ func (sb *StatusBar) View() string {
 		if gap := sb.width - lipgloss.Width(left) - lipgloss.Width(ver); gap >= 1 {
 			// Filler and version each set their own colors: the segments before
 			// them end with a reset, so an enclosing style would not survive.
-			return left + barStyle.Render(strings.Repeat(" ", gap)) + barStyle.Render(ver)
+			return left + theme.S().Bar.Render(strings.Repeat(" ", gap)) + theme.S().Bar.Render(ver)
 		}
 	}
-	return barStyle.Width(sb.width).Render(left)
+	return theme.S().Bar.Width(sb.width).Render(left)
 }
 
 // versionLabel formats the build version for the bar: local builds keep their
@@ -264,7 +253,7 @@ func hintKey(key, desc string, accent lipgloss.Style) string {
 		return ""
 	}
 	text, spans := hintLayout(key, desc)
-	return applyAccent(text, spans, barStyle, accent)
+	return applyAccent(text, spans, theme.S().Bar, accent)
 }
 
 func hintNav(downKey, upKey, desc string, accent lipgloss.Style) string {
@@ -272,13 +261,13 @@ func hintNav(downKey, upKey, desc string, accent lipgloss.Style) string {
 	if text == "" {
 		return ""
 	}
-	return applyAccent(text, spans, barStyle, accent)
+	return applyAccent(text, spans, theme.S().Bar, accent)
 }
 
 // hintLiteral renders a non-key keyword (e.g. the picker's "type" filter hint)
 // as an accented indicator followed by the plain description.
 func hintLiteral(keyword, desc string, accent lipgloss.Style) string {
-	return applyAccent(keyword+" "+desc, []span{{0, utf8.RuneCountInString(keyword)}}, barStyle, accent)
+	return applyAccent(keyword+" "+desc, []span{{0, utf8.RuneCountInString(keyword)}}, theme.S().Bar, accent)
 }
 
 func joinHints(parts ...string) string {
@@ -288,7 +277,7 @@ func joinHints(parts ...string) string {
 			out = append(out, p)
 		}
 	}
-	return strings.Join(out, barStyle.Render(" · "))
+	return strings.Join(out, theme.S().Bar.Render(" · "))
 }
 
 // span is a rune range [lo,hi) within a hint's visible text that should be
@@ -385,12 +374,12 @@ func applyAccent(text string, spans []span, base, accent lipgloss.Style) string 
 	return b.String()
 }
 
-// accentStyle returns the key-accent style for the current vim mode: bright
-// blue in NORMAL, bright green in INSERT, both over the bar background.
+// accentStyle returns the key-accent style for the current vim mode: the accent
+// in NORMAL, the insert accent in INSERT, both over the bar background.
 func (sb *StatusBar) accentStyle() lipgloss.Style {
-	fg := lipgloss.Color("39") // bright blue — NORMAL
+	fg := theme.T().Accent
 	if sb.mode == keys.ModeInsert {
-		fg = lipgloss.Color("40") // bright green — INSERT
+		fg = theme.T().AccentInsert
 	}
-	return lipgloss.NewStyle().Background(barBg).Foreground(fg)
+	return lipgloss.NewStyle().Background(theme.T().SurfaceStatusBar).Foreground(fg)
 }

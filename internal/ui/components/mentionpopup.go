@@ -5,10 +5,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	lipcompat "charm.land/lipgloss/v2/compat"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // MentionSelectedMsg is emitted when the user picks a member from the popup.
@@ -20,19 +20,6 @@ type CloseMentionPopupMsg struct{}
 const (
 	mentionPopupMaxRows  = 6
 	mentionPopupMinWidth = 16
-)
-
-var (
-	mentionBg = lipcompat.AdaptiveColor{Light: lipgloss.Color("252"), Dark: lipgloss.Color("235")}
-
-	mentionRowStyle = lipgloss.NewStyle().Background(mentionBg)
-	mentionSelStyle = lipgloss.NewStyle().Background(lipgloss.Color("63")).
-			Foreground(lipgloss.Color("231"))
-	mentionDimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Background(mentionBg)
-	mentionSelDimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("254")).Background(lipgloss.Color("63"))
-	mentionBorderFg    = lipcompat.AdaptiveColor{Light: lipgloss.Color("63"), Dark: lipgloss.Color("63")}
-	mentionStatusStyle = lipgloss.NewStyle().Background(mentionBg).
-				Foreground(lipgloss.Color("245")).Italic(true)
 )
 
 // MentionPopup is a keyboard-driven autocomplete overlay listing chat members
@@ -134,7 +121,7 @@ func (p *MentionPopup) View() string {
 		if !p.loading {
 			text = "no matches"
 		}
-		return p.box([]string{mentionStatusStyle.Render(" " + text + " ")}, lipgloss.Width(text)+2)
+		return p.box([]string{theme.S().MentionStatus.Render(" " + text + " ")}, lipgloss.Width(text)+2)
 	}
 
 	// Render only the visible window [offset, offset+maxRows) so the cursor stays
@@ -173,9 +160,9 @@ func (p *MentionPopup) View() string {
 // renderRow lays out one candidate padded to innerW so the row background spans
 // the full bubble width. The @handle is dimmed relative to the name.
 func (p *MentionPopup) renderRow(r mentionRow, selected bool, innerW int) string {
-	base, dim := mentionRowStyle, mentionDimStyle
+	base, dim := theme.S().MentionRow, theme.S().MentionDim
 	if selected {
-		base, dim = mentionSelStyle, mentionSelDimStyle
+		base, dim = theme.S().MentionSel, theme.S().MentionSelDim
 	}
 	// Compose the visible text, padding to innerW with the row background.
 	used := 1 + lipgloss.Width(r.name) // leading space + name
@@ -201,5 +188,5 @@ func (p *MentionPopup) renderRow(r mentionRow, selected bool, innerW int) string
 // box wraps pre-padded lines in a rounded border bubble innerW wide.
 func (p *MentionPopup) box(lines []string, innerW int) string {
 	content := strings.Join(lines, "\n")
-	return RenderBox(content, "", "", "", "", lipgloss.RoundedBorder(), mentionBorderFg, innerW+2, len(lines)+2)
+	return RenderBox(content, "", "", "", "", lipgloss.RoundedBorder(), theme.T().SurfaceSelected, innerW+2, len(lines)+2)
 }

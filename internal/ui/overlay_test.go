@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -8,26 +9,38 @@ import (
 	xansi "github.com/charmbracelet/x/ansi"
 	kitty "github.com/charmbracelet/x/ansi/kitty"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 )
 
+// dimSeq is the SGR sequence the current theme's overlay dim renders as.
+func dimSeq() string {
+	r, g, b, _ := theme.T().OverlayDim.RGBA()
+	return fmt.Sprintf("38;2;%d;%d;%d", r>>8, g>>8, b>>8)
+}
+
 func TestDimBackground_StripsColorAndAppliesGray(t *testing.T) {
+	theme.Apply(theme.Default, true)
 	// A line with a green foreground SGR around visible text.
 	colored := "\x1b[32mhello\x1b[0m world"
-	out := dimBackground(colored, true)
+	out := dimBackground(colored)
 
 	// Original green (32) color is gone.
 	assert.NotContains(t, out, "[32m")
 	// Visible text is preserved.
 	assert.Equal(t, "hello world", xansi.Strip(out))
-	// A faded gray foreground is applied (256-color index 240 for dark bg).
-	assert.Contains(t, out, "240")
+	// A faded gray foreground is applied.
+	assert.Contains(t, out, dimSeq())
 }
 
-func TestDimBackground_LightBackgroundUsesLighterGray(t *testing.T) {
-	out := dimBackground("plain text", false)
-	assert.Contains(t, out, "250")
-	assert.Equal(t, "plain text", xansi.Strip(out))
+func TestDimBackground_LightFlavourUsesLighterGray(t *testing.T) {
+	theme.Apply(theme.Default, true)
+	dark := dimBackground("plain text")
+	theme.Apply(theme.Default, false)
+	light := dimBackground("plain text")
+
+	assert.NotEqual(t, dark, light, "the light flavour must dim to a lighter gray")
+	assert.Equal(t, "plain text", xansi.Strip(light))
 }
 
 func TestDimBackground_BlanksKittyPlaceholderLines(t *testing.T) {
@@ -35,14 +48,15 @@ func TestDimBackground_BlanksKittyPlaceholderLines(t *testing.T) {
 	fg := "\x1b[38;2;0;0;5m" // id-carrying placeholder foreground
 	// Bubble-wrapped image row: border + space + 3 placeholder cells + space + border.
 	imageLine := "\x1b[90m│\x1b[0m " + fg + cell + cell + cell + "\x1b[0m \x1b[90m│\x1b[0m"
-	out := dimBackground(imageLine, true)
+	theme.Apply(theme.Default, true)
+	out := dimBackground(imageLine)
 
 	// No placeholder runes survive, so the terminal draws no image behind the modal.
 	assert.NotContains(t, out, string(kitty.Placeholder))
 	// Border/spacing preserved with the placeholder cells collapsed to blanks.
 	assert.Equal(t, "│     │", xansi.Strip(out))
-	// Dimmed like every other background line (256-color index 240 for dark bg).
-	assert.Contains(t, out, "240")
+	// Dimmed like every other background line.
+	assert.Contains(t, out, dimSeq())
 }
 
 func TestBlankKittyPlaceholders_CollapsesCellsToSpaces(t *testing.T) {
@@ -58,7 +72,7 @@ func TestBlankKittyPlaceholders_CollapsesCellsToSpaces(t *testing.T) {
 
 func TestDimBackground_PreservesLineCountAndWidth(t *testing.T) {
 	in := "\x1b[1;31mline one\x1b[0m\nplain two\n" + string(kitty.Placeholder)
-	out := dimBackground(in, true)
+	out := dimBackground(in)
 
 	inLines := strings.Split(in, "\n")
 	outLines := strings.Split(out, "\n")

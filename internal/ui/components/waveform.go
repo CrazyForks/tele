@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // waveformBlocks maps an amplitude level (0..7) to a Unicode block glyph.
@@ -81,9 +81,6 @@ func decodeWaveform(packed []byte) []byte {
 	return out
 }
 
-// waveformPlayedStyle colours the already-played portion of a voice waveform.
-var waveformPlayedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-
 // renderWaveformProgress draws the waveform with the played fraction (0..1)
 // highlighted, for an animated playback playhead. The bar glyphs are identical
 // to renderWaveform; only the leading played run is styled.
@@ -105,7 +102,8 @@ func renderWaveformProgress(samples []byte, width int, progress float64) string 
 	if played > len(bars) {
 		played = len(bars)
 	}
-	return waveformPlayedStyle.Render(string(bars[:played])) + string(bars[played:])
+	// The already-played portion is coloured; the rest stays plain.
+	return theme.S().WaveformPlayed.Render(string(bars[:played])) + string(bars[played:])
 }
 
 // renderWaveform draws amplitude samples as a Unicode block sparkline of the

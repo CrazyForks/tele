@@ -7,9 +7,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	lipcompat "charm.land/lipgloss/v2/compat"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 type helpRow struct {
@@ -164,32 +164,7 @@ const helpMargin = 2
 
 // The modal is an opaque overlay: it carries its own background so text stays
 // readable on both light and dark terminals (a transparent overlay left the
-// light gray descriptions invisible on a light background). All colors are
-// adaptive.
-var (
-	helpBg = lipcompat.AdaptiveColor{
-		Light: lipgloss.Color("254"),
-		Dark:  lipgloss.Color("235"),
-	}
-	helpAccentFg = lipcompat.AdaptiveColor{
-		Light: lipgloss.Color("25"), // blue, dark enough on a light fill
-		Dark:  lipgloss.Color("39"),
-	}
-	helpTextFg = lipcompat.AdaptiveColor{
-		Light: lipgloss.Color("238"), // dark gray on light, light gray on dark
-		Dark:  lipgloss.Color("250"),
-	}
-	helpBorderFg = lipcompat.AdaptiveColor{
-		Light: lipgloss.Color("245"),
-		Dark:  lipgloss.Color("240"),
-	}
-
-	helpBgStyle      = lipgloss.NewStyle().Background(helpBg)
-	helpTitleStyle   = lipgloss.NewStyle().Background(helpBg).Foreground(helpAccentFg).Bold(true)
-	helpKeyStyle     = lipgloss.NewStyle().Background(helpBg).Foreground(helpAccentFg)
-	helpSectionStyle = lipgloss.NewStyle().Background(helpBg).Foreground(helpTextFg).Bold(true)
-	helpDescStyle    = lipgloss.NewStyle().Background(helpBg).Foreground(helpTextFg)
-)
+// light gray descriptions invisible on a light background).
 
 // HelpModal is a scrollable, centered overlay listing every keyboard shortcut,
 // generated from the effective keymap. It owns scroll (j/k, arrows) and closes
@@ -236,7 +211,7 @@ func (h *HelpModal) build(km keys.KeyMap) {
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, helpSectionStyle.Render(s.Title))
+		lines = append(lines, theme.S().HelpSection.Render(s.Title))
 		for _, r := range s.Rows {
 			key := r.Key
 			if len(key) > keyCol {
@@ -245,8 +220,8 @@ func (h *HelpModal) build(km keys.KeyMap) {
 			pad := strings.Repeat(" ", keyCol-len(key))
 			// Every segment (including gaps) carries the modal background so the
 			// row fill stays solid across the reset sequences between runs.
-			line := helpBgStyle.Render("  ") + helpKeyStyle.Render(key) +
-				helpBgStyle.Render(pad+"  ") + helpDescStyle.Render(r.Desc)
+			line := theme.S().HelpBg.Render("  ") + theme.S().HelpKey.Render(key) +
+				theme.S().HelpBg.Render(pad+"  ") + theme.S().HelpDesc.Render(r.Desc)
 			lines = append(lines, line)
 		}
 	}
@@ -321,28 +296,28 @@ func (h *HelpModal) View() string {
 	visible := make([]string, 0, vh)
 	for i := h.offset; i < end; i++ {
 		// Pad each row to the inner width with the modal background.
-		visible = append(visible, helpBgStyle.Width(innerW).MaxWidth(innerW).Render(h.lines[i]))
+		visible = append(visible, theme.S().HelpBg.Width(innerW).MaxWidth(innerW).Render(h.lines[i]))
 	}
 	for len(visible) < vh {
-		visible = append(visible, helpBgStyle.Width(innerW).Render(""))
+		visible = append(visible, theme.S().HelpBg.Width(innerW).Render(""))
 	}
 
 	scrollNote := ""
 	if len(h.lines) > vh {
-		scrollNote = helpDescStyle.Render(fmt.Sprintf(" %d-%d/%d", h.offset+1, end, len(h.lines)))
+		scrollNote = theme.S().HelpDesc.Render(fmt.Sprintf(" %d-%d/%d", h.offset+1, end, len(h.lines)))
 	}
-	hint := OverlayHint([][2]string{{"j/k", "scroll"}, {"esc", "close"}}, helpBg) + scrollNote
+	hint := OverlayHint([][2]string{{"j/k", "scroll"}, {"esc", "close"}}, theme.T().SurfaceHelp) + scrollNote
 
 	content := strings.Join(visible, "\n")
 	outerW := innerW + 2
 	outerH := vh + 2
-	box := RenderBox(content, helpTitleStyle.Render("Keyboard shortcuts"), "", hint, "",
-		lipgloss.RoundedBorder(), helpBorderFg, outerW, outerH)
+	box := RenderBox(content, theme.S().HelpTitle.Render("Keyboard shortcuts"), "", hint, "",
+		lipgloss.RoundedBorder(), theme.T().BorderOverlay, outerW, outerH)
 	// Bake the modal background onto every box line so the border and any gaps
 	// share the fill (each inner run already sets its own bg, so it survives).
 	boxLines := strings.Split(box, "\n")
 	for i, l := range boxLines {
-		boxLines[i] = helpBgStyle.Render(l)
+		boxLines[i] = theme.S().HelpBg.Render(l)
 	}
 	return strings.Join(boxLines, "\n")
 }

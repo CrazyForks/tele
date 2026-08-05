@@ -72,5 +72,5 @@ func (m RootModel) noticeView(content string) string {
 		maxW = 24
 	}
 	box := components.RenderNoticeBox(n.Title, n.Body, m.noticeLeft, maxW)
-	return overlayCenter(dimBackground(content, m.hasDarkBackground), box, m.width, m.height)
+	return overlayCenter(dimBackground(content), box, m.width, m.height)
 }

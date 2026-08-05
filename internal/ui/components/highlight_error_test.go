@@ -3,19 +3,22 @@ package components
 import (
 	"testing"
 
-	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
-func TestErrorAccentFor_DarkLightDiffer(t *testing.T) {
-	assert.Equal(t, ErrorAccent, ErrorAccentFor(true))
-	assert.Equal(t, ErrorAccentLight, ErrorAccentFor(false))
-	assert.NotEqual(t, ErrorAccentFor(true), ErrorAccentFor(false))
+func TestErrorAccent_DiffersByFlavour(t *testing.T) {
+	theme.Apply(theme.Default, true)
+	dark := theme.T().HighlightError
+	theme.Apply(theme.Default, false)
+	assert.NotEqual(t, dark, theme.T().HighlightError, "the error accent must adapt to the background")
 }
 
-func TestErrorAccent_IsTruecolorRed(t *testing.T) {
-	// Anchored to the toast error red (xterm 203).
-	assert.Equal(t, lipgloss.Color("#ff5f5f"), ErrorAccent)
+func TestErrorAccent_MatchesToastErrorRed(t *testing.T) {
+	// The rollback highlight and the failure toast must read as one color.
+	theme.Apply(theme.Default, true)
+	assert.Equal(t, theme.T().StatusError, theme.T().HighlightError)
 }
 
 func TestHighlightKind_InfoIsZero(t *testing.T) {

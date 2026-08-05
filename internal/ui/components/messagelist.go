@@ -8,20 +8,19 @@ import (
 
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
-	items             []listItem
-	viewStart         int // index of first (possibly partial) visible message
-	lineOffset        int // lines of messages[viewStart] to skip from the top
-	viewHeight        int
-	viewWidth         int
-	isGroup           bool
-	outboxReadMaxID   int
-	inboxReadMaxID    int
-	imageCache        *imagecache.Cache
-	showIndicator     bool
-	hasDarkBackground bool
-	renderer          media.Renderer
-	maxMediaPx        int        // photos.max_long_side_px; 0 => media package default
-	imageMode         media.Mode // inline-image backend; static stickers render in Kitty only
+	items           []listItem
+	viewStart       int // index of first (possibly partial) visible message
+	lineOffset      int // lines of messages[viewStart] to skip from the top
+	viewHeight      int
+	viewWidth       int
+	isGroup         bool
+	outboxReadMaxID int
+	inboxReadMaxID  int
+	imageCache      *imagecache.Cache
+	showIndicator   bool
+	renderer        media.Renderer
+	maxMediaPx      int        // photos.max_long_side_px; 0 => media package default
+	imageMode       media.Mode // inline-image backend; static stickers render in Kitty only
 
 	// Voice playback state: the document being played, its progress (0..1) and
 	// current position in seconds. playingVoiceID == 0 means nothing is playing.
@@ -173,8 +172,7 @@ func (ml *MessageList) SetOutboxReadMaxID(id int) { ml.outboxReadMaxID = id }
 func (ml *MessageList) SetInboxReadMaxID(id int)  { ml.inboxReadMaxID = id }
 
 // InboxReadMaxID reports the read pointer the projection last pushed in.
-func (ml *MessageList) InboxReadMaxID() int           { return ml.inboxReadMaxID }
-func (ml *MessageList) SetDarkBackground(isDark bool) { ml.hasDarkBackground = isDark }
+func (ml *MessageList) InboxReadMaxID() int { return ml.inboxReadMaxID }
 
 // SetImageMode tells the list which inline-image backend is active. Static
 // stickers only render in Kitty mode (transparency); other modes keep the

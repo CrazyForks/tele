@@ -11,6 +11,21 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Changed
+
+- Every colour the interface draws with now lives in one place, as groundwork
+  for selectable themes. Colours are held as named roles — the accent, the
+  selection fill, the read tick, the error tone — rather than being written into
+  each component, and the light and dark variants are two complete palettes
+  instead of a per-colour switch. Two things do look different: the selected row
+  — in the chat list, context menus, the reaction picker, search, folders and the
+  file picker — is now white on the blue fill instead of black, which was hard to
+  read, and the status bar text is a little brighter. Beyond that the only change
+  is that the eight basic terminal colours (the online dot, read ticks,
+  sender-name colours, the edited marker) used to be taken from your terminal's
+  own palette and are now fixed values, so on a terminal with a customised
+  palette those particular colours will shift slightly.
+
 ## [1.10.0] - 2026-08-04
 
 ### Added

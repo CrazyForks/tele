@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -784,8 +785,8 @@ func TestComposer_FlashChangesBorderColour(t *testing.T) {
 // background but wash out on a light one.
 func TestComposer_CounterColourIsThemeAware(t *testing.T) {
 	render := func(dark bool) string {
+		theme.Apply(theme.Default, dark)
 		c := components.NewComposer(60)
-		c.SetDarkBackground(dark)
 		c.SetValue(strings.Repeat("a", 4090)) // remaining 6: amber
 		return c.View()
 	}

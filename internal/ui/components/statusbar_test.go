@@ -1,6 +1,8 @@
 package components_test
 
 import (
+	"fmt"
+	"image/color"
 	"strings"
 	"testing"
 
@@ -13,6 +15,14 @@ import (
 // strip removes ANSI styling so assertions can match the visible text even
 // when a hint's key letter is colored mid-word.
 func strip(s string) string { return xansi.Strip(s) }
+
+// fgSeq is the SGR sequence lipgloss emits to set c as the foreground. Tests
+// assert on this rather than on a literal escape, so they follow the theme
+// instead of pinning a palette index.
+func fgSeq(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("38;2;%d;%d;%d", r>>8, g>>8, b>>8)
+}
 
 func TestStatusBar_NormalMode(t *testing.T) {
 	sb := components.NewStatusBar(80)

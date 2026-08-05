@@ -5,9 +5,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	lipcompat "charm.land/lipgloss/v2/compat"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // CloseContextMenuMsg is emitted when the context menu closes without an action.
@@ -88,18 +88,6 @@ type menuItem struct {
 	isFolder  bool // folder-picker entry in the add-to-folder submenu
 	filterID  int  // folder id for isFolder entries
 }
-
-var (
-	menuBgStyle = lipgloss.NewStyle().
-			Background(lipcompat.AdaptiveColor{
-			Light: lipgloss.Color("252"),
-			Dark:  lipgloss.Color("235"),
-		})
-
-	menuSelectedStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("63")).
-				Foreground(lipgloss.Color("0"))
-)
 
 // ContextMenu is a keyboard-navigable context menu overlaid on the chat view.
 type ContextMenu struct {
@@ -380,8 +368,8 @@ func (cm *ContextMenu) View() string {
 	// Menu item labels carry the hotkey accented in place, matching the
 	// status-bar hint style (btop rules via hintLayout). The selected row stays
 	// plain so its highlight background keeps full contrast.
-	base := lipgloss.NewStyle().Background(OverlayMenuBg)
-	accent := lipgloss.NewStyle().Background(OverlayMenuBg).Foreground(lipgloss.Color("39"))
+	base := lipgloss.NewStyle().Background(OverlayMenuBg())
+	accent := lipgloss.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().Accent)
 	rows := make([]string, len(cm.items))
 	for i, item := range cm.items {
 		if item.action == keys.ActionNone {
@@ -406,7 +394,7 @@ func (cm *ContextMenu) View() string {
 		{down + "/" + up, DescribeShort(ctx, keys.ActionDown)},
 		{confirm, DescribeShort(ctx, keys.ActionConfirm)},
 		{cancel, DescribeShort(ctx, keys.ActionCancel)},
-	}, OverlayMenuBg)
+	}, OverlayMenuBg())
 
 	// compute inner width: max of content width+padding and hint minimum
 	innerW := 0
@@ -424,9 +412,9 @@ func (cm *ContextMenu) View() string {
 	// apply per-row backgrounds (selected vs normal)
 	for i := range rows {
 		if i == cm.list.Cursor() && cm.items[i].action != keys.ActionNone {
-			rows[i] = menuSelectedStyle.Width(innerW).Render(rows[i])
+			rows[i] = theme.S().MenuSelected.Width(innerW).Render(rows[i])
 		} else {
-			rows[i] = menuBgStyle.Width(innerW).Render(rows[i])
+			rows[i] = theme.S().MenuBg.Width(innerW).Render(rows[i])
 		}
 	}
 
@@ -437,7 +425,7 @@ func (cm *ContextMenu) View() string {
 	// apply background to border rows (top, bottom) so the entire box shares the bg
 	lines := strings.Split(box, "\n")
 	for i, l := range lines {
-		lines[i] = menuBgStyle.Render(l)
+		lines[i] = theme.S().MenuBg.Render(l)
 	}
 	return strings.Join(lines, "\n")
 }

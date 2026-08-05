@@ -21,6 +21,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
@@ -43,22 +44,21 @@ const (
 const borderSize = 1
 
 type RootModel struct {
-	ctx               context.Context
-	screen            Screen
-	focus             Focus
-	width             int
-	height            int
-	hasDarkBackground bool
-	chatList          *screens.ChatListModel
-	chat              *screens.ChatModel
-	login             screens.LoginModel
-	statusBar         *components.StatusBar
-	toasts            *components.ToastStack
-	vimState          *keys.VimState
-	keyMap            keys.KeyMap
-	matcher           *keys.Matcher
-	st                store.Store
-	owner             Owner
+	ctx       context.Context
+	screen    Screen
+	focus     Focus
+	width     int
+	height    int
+	chatList  *screens.ChatListModel
+	chat      *screens.ChatModel
+	login     screens.LoginModel
+	statusBar *components.StatusBar
+	toasts    *components.ToastStack
+	vimState  *keys.VimState
+	keyMap    keys.KeyMap
+	matcher   *keys.Matcher
+	st        store.Store
+	owner     Owner
 	// chatListSub is the chatlist subscription; chatSub is the open chat's.
 	// Zero means not subscribed.
 	chatListSub project.SubID
@@ -161,34 +161,34 @@ func NewRootModel(st store.Store, historyLimit int, verbose bool) RootModel {
 	sb.SetKeyMap(km)
 	sb.SetVersion(version.Version)
 	ts := components.NewToastStack(80, 24, 3, components.ZoneBottomRight, components.ZoneTopRight)
-	ts.SetDarkBackground(true) // matches hasDarkBackground default; updated on theme detection
+	// Assume a dark terminal until detection reports otherwise.
+	theme.Apply(theme.Default, true)
 	cl := screens.NewChatListModel()
 	cl.SetFocused(true)
 	chat := screens.NewChatModel(80, 24)
 	chat.SetKeyMap(km)
 	return RootModel{
-		ctx:               context.Background(),
-		screen:            ScreenLogin,
-		focus:             FocusChatList,
-		hasDarkBackground: true,
-		chatList:          cl,
-		chat:              chat,
-		folderBar:         screens.NewFoldersModel(),
-		statusBar:         sb,
-		toasts:            ts,
-		vimState:          keys.NewVimState(),
-		keyMap:            km,
-		matcher:           keys.NewMatcher(km),
-		st:                st,
-		historyLimit:      historyLimit,
-		verbose:           verbose,
-		imageCache:        imagecache.New(thumbCacheCap),
-		fullImageCache:    imagecache.New(fullCacheCap),
-		gifFrames:         make(map[int64][]image.Image),
-		mentionMembers:    make(map[int64][]domain.ChatMember),
-		kittyStore:        media.NewKittyStore(),
-		kittyLive:         make(map[int64]bool),
-		logo:              components.NewLogoLoader(80),
+		ctx:            context.Background(),
+		screen:         ScreenLogin,
+		focus:          FocusChatList,
+		chatList:       cl,
+		chat:           chat,
+		folderBar:      screens.NewFoldersModel(),
+		statusBar:      sb,
+		toasts:         ts,
+		vimState:       keys.NewVimState(),
+		keyMap:         km,
+		matcher:        keys.NewMatcher(km),
+		st:             st,
+		historyLimit:   historyLimit,
+		verbose:        verbose,
+		imageCache:     imagecache.New(thumbCacheCap),
+		fullImageCache: imagecache.New(fullCacheCap),
+		gifFrames:      make(map[int64][]image.Image),
+		mentionMembers: make(map[int64][]domain.ChatMember),
+		kittyStore:     media.NewKittyStore(),
+		kittyLive:      make(map[int64]bool),
+		logo:           components.NewLogoLoader(80),
 	}
 }
 
@@ -256,7 +256,6 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	}
 	m.toasts = components.NewToastStack(w, h, cfg.UI.Toasts.MaxVisible,
 		parseToastZone(cfg.UI.Toasts.ErrorZone), parseToastZone(cfg.UI.Toasts.NotifyZone))
-	m.toasts.SetDarkBackground(m.hasDarkBackground)
 	return m
 }
 
