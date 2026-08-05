@@ -24,8 +24,10 @@ jobs:
       - name: vet
         run: go vet ./...
 
+      # No package takes longer than ~20s, so 5m is pure headroom: a wedged test
+      # binary fails the job in a quarter of the time the 10m default costs.
       - name: test
-        run: go test -race ./...
+        run: go test -race -timeout 5m ./...
 
       - name: lint
         uses: golangci/golangci-lint-action@v9
@@ -56,8 +58,11 @@ jobs:
       - name: build
         run: go build ./...
 
+      # Windows gets no goroutine dump from go test's outer kill (it cannot send
+      # SIGQUIT), so the shorter timeout is also what makes the testing package's
+      # own watchdog fire first and print the stacks.
       - name: test
-        run: go test ./...
+        run: go test -timeout 5m ./...
 
   # BSD support is cross-compile-only: no BSD runners exist on GitHub, and the
   # regressions we guard against (#176) are compile failures from non-portable
