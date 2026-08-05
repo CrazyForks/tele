@@ -13,11 +13,11 @@ import (
 type toastAnimTickMsg struct{}
 
 // setDarkBackground records the terminal/OS theme by selecting the matching
-// theme flavour. Every color in the app comes from the current theme, so the
-// flavour is the whole of the state and this is the only place it changes
+// slot. Every color in the app comes from the current theme, so the selected
+// slot is the whole of the state and this is the only place it changes
 // (issue #148).
 func (m *RootModel) setDarkBackground(isDark bool) {
-	theme.Apply(theme.Default, isDark)
+	theme.Apply(isDark)
 }
 
 // updateUIMsg handles messages that update layout, navigation, overlays, and animations.

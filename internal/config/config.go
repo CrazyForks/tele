@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,10 +15,24 @@ type TelegramConfig struct {
 	SessionFile string `mapstructure:"session_file"`
 }
 
+// ThemeSlots names the theme to use against each terminal background. An empty
+// name means the built-in for that slot.
+type ThemeSlots struct {
+	Dark, Light string
+}
+
+// themesDirName is the directory, alongside the config file, that theme files
+// are read from.
+const themesDirName = "themes"
+
 type UIConfig struct {
-	Theme        string `mapstructure:"theme"`
-	DateFormat   string `mapstructure:"date_format"`
-	HistoryLimit int    `mapstructure:"history_limit"`
+	// Theme is kept as written because its two spellings mean different things:
+	// a name puts that theme in both slots, a map fills the slots it names. Read
+	// ThemeSlots instead; resolveTheme fills it.
+	Theme        any        `mapstructure:"theme"`
+	ThemeSlots   ThemeSlots `mapstructure:"-"`
+	DateFormat   string     `mapstructure:"date_format"`
+	HistoryLimit int        `mapstructure:"history_limit"`
 	// NotificationPreview controls whether the message text is included in
 	// desktop notifications. Set false to send only the sender name (#80).
 	NotificationPreview bool         `mapstructure:"notification_preview"`
@@ -64,13 +79,42 @@ type Config struct {
 	// the ownership lock. See resolveState for how it is chosen.
 	StateDir string `mapstructure:"state_dir"`
 
+	// ThemesDir holds the user's theme files. It sits beside the config rather
+	// than in the state directory: a theme is something you edit, like the
+	// config, not something the app maintains.
+	ThemesDir string `mapstructure:"-"`
+
 	// SessionPinned reports that telegram.session_file named a deliberate
 	// location. The caller must not migrate files away from it.
 	SessionPinned bool `mapstructure:"-"`
 
 	// Warnings collects non-fatal config notices for the caller to log, in the
 	// same spirit as keys.MergeOverrides.
-	Warnings []string `mapstructure:"-"`
+	Warnings []Warning `mapstructure:"-"`
+}
+
+// Warning is a non-fatal config notice.
+//
+// Most describe something that is still wrong — a theme that is not there, a
+// color that did not parse — and belong on screen every launch, because every
+// launch they are still true.
+//
+// One carrying an ID does not: it describes a key that is merely dead, where
+// acting on it changes nothing and only tidies the file. Repeating that at every
+// launch is nagging, so the ID keys a seen-state and it is shown once.
+type Warning struct {
+	Text string
+	ID   string
+}
+
+// warn records a warning shown at every launch.
+func (c *Config) warn(format string, args ...any) {
+	c.Warnings = append(c.Warnings, Warning{Text: fmt.Sprintf(format, args...)})
+}
+
+// warnOnce records a warning shown only until the user has seen it.
+func (c *Config) warnOnce(id, format string, args ...any) {
+	c.Warnings = append(c.Warnings, Warning{Text: fmt.Sprintf(format, args...), ID: id})
 }
 
 // Load reads the config at path. defaultStateDir is the platform state
@@ -87,7 +131,72 @@ func Load(path, defaultStateDir string) (*Config, error) {
 		return nil, err
 	}
 	cfg.resolveState(defaultStateDir)
+	cfg.ThemesDir = filepath.Join(filepath.Dir(path), themesDirName)
+	cfg.resolveTheme()
 	return &cfg, nil
+}
+
+// legacyThemeName is the value shipped in every config tele has ever written. It
+// named a family holding both a dark and a light palette; themes no longer come
+// in pairs, so nothing resolves by it and it is read as "leave both slots
+// alone" — which is exactly what it used to do.
+const legacyThemeName = "default"
+
+// resolveTheme reads ui.theme, which is either a theme name or a map naming one
+// per slot:
+//
+//	theme: gruvbox-dark          # this theme against either background
+//	theme: {dark: g, light: s}   # one per background
+//	theme: {dark: g}             # dark from g, light stays built-in
+//
+// The spelling carries the intent, so nothing has to be guessed. A bare name
+// filling both slots is what makes "follow the terminal" need no off switch:
+// both slots are always filled, and naming one theme fills them with the same
+// one.
+func (c *Config) resolveTheme() {
+	switch v := c.UI.Theme.(type) {
+	case nil:
+		return
+	case string:
+		name := c.themeName(v)
+		c.UI.ThemeSlots = ThemeSlots{Dark: name, Light: name}
+	case map[string]any:
+		for key, raw := range v {
+			name, ok := raw.(string)
+			if !ok {
+				c.warn("ui.theme.%s must be a theme name; ignored", key)
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(key)) {
+			case "dark":
+				c.UI.ThemeSlots.Dark = c.themeName(name)
+			case "light":
+				c.UI.ThemeSlots.Light = c.themeName(name)
+			default:
+				c.warn("ui.theme has no slot %q; the slots are dark and light", key)
+			}
+		}
+	default:
+		c.warn("ui.theme must be a theme name or a map of dark/light; ignored")
+	}
+}
+
+// themeName normalizes one name out of ui.theme, turning the retired "default"
+// into the empty name that means the built-in.
+func (c *Config) themeName(s string) string {
+	name := strings.TrimSpace(s)
+	if name == "" {
+		return ""
+	}
+	if strings.EqualFold(name, legacyThemeName) {
+		// Shown once: the config already behaves the way it always did, and the
+		// only thing left to do is delete a line. Nagging about that every
+		// launch would be worse than the dead line itself.
+		c.warnOnce("config.ui.theme.default",
+			`ui.theme: "default" is no longer a theme name and is ignored — the built-in themes are tele-dark and tele-light. Nothing has changed for you; you can delete the line. See docs/themes.md`)
+		return ""
+	}
+	return name
 }
 
 // resolveState fixes StateDir and Telegram.SessionFile. Precedence:
@@ -103,15 +212,13 @@ func (c *Config) resolveState(defaultStateDir string) {
 	case c.StateDir != "":
 		c.StateDir = ExpandTilde(c.StateDir)
 		if c.Telegram.SessionFile != "" {
-			c.Warnings = append(c.Warnings,
-				"telegram.session_file is ignored because state_dir is set; remove it from the config")
+			c.warn("telegram.session_file is ignored because state_dir is set; remove it from the config")
 		}
 	case c.Telegram.SessionFile != "":
 		c.Telegram.SessionFile = ExpandTilde(c.Telegram.SessionFile)
 		c.StateDir = filepath.Dir(c.Telegram.SessionFile)
 		c.SessionPinned = true
-		c.Warnings = append(c.Warnings,
-			"telegram.session_file is deprecated and will be removed in the next release; set state_dir instead")
+		c.warn("telegram.session_file is deprecated and will be removed in the next release; set state_dir instead")
 		return
 	default:
 		c.StateDir = defaultStateDir

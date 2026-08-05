@@ -26,8 +26,10 @@ func OverlayHint(pairs [][2]string, bg color.Color) string {
 	base := theme.S().OverlayHintDim
 	accent := theme.S().OverlayHintAccent
 	if bg != nil {
+		// A panel is painted behind the hint, so the accent for a panel applies
+		// rather than the one meant for the bare terminal background.
 		base = base.Background(bg)
-		accent = accent.Background(bg)
+		accent = accent.Background(bg).Foreground(theme.T().AccentOnSurface)
 	}
 	parts := make([]string, 0, len(pairs))
 	for _, p := range pairs {

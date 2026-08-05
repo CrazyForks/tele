@@ -1143,10 +1143,10 @@ func TestMessageList_SenderColor_DarkVsLight(t *testing.T) {
 		{ID: 1, ChatID: 1, SenderID: 0, SenderName: "Alice", Text: "hi", Date: now},
 	}
 
-	// The theme is process-global, so each flavour must be rendered under its
-	// own Apply rather than held side by side.
+	// The theme is process-global, so each slot must be rendered under its own
+	// Apply rather than held side by side.
 	render := func(dark bool) string {
-		theme.Apply(theme.Default, dark)
+		theme.Apply(dark)
 		ml := components.NewMessageList(20, 80)
 		ml.SetIsGroup(true)
 		ml.SetMessages(msgs)

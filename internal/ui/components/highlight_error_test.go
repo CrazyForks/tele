@@ -8,16 +8,16 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
-func TestErrorAccent_DiffersByFlavour(t *testing.T) {
-	theme.Apply(theme.Default, true)
+func TestErrorAccent_DiffersBySlot(t *testing.T) {
+	theme.Apply(true)
 	dark := theme.T().HighlightError
-	theme.Apply(theme.Default, false)
+	theme.Apply(false)
 	assert.NotEqual(t, dark, theme.T().HighlightError, "the error accent must adapt to the background")
 }
 
 func TestErrorAccent_MatchesToastErrorRed(t *testing.T) {
 	// The rollback highlight and the failure toast must read as one color.
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	assert.Equal(t, theme.T().StatusError, theme.T().HighlightError)
 }
 

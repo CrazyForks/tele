@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"os"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -81,6 +82,11 @@ type RootModel struct {
 	verbose       bool
 	log           *zap.Logger
 	cfg           *config.Config
+	// configWarnings are the non-fatal config notices, shown as toasts once the
+	// TUI is up. They are also logged and printed to stderr, but stderr is wiped
+	// by the alt-screen a moment later, so on their own those two amount to
+	// telling nobody.
+	configWarnings []config.Warning
 	// Pending one-time startup notices (#197). The head of the queue is shown
 	// above every screen, including login; noticeLeft counts down whole seconds
 	// of blocked dismissal.
@@ -161,8 +167,9 @@ func NewRootModel(st store.Store, historyLimit int, verbose bool) RootModel {
 	sb.SetKeyMap(km)
 	sb.SetVersion(version.Version)
 	ts := components.NewToastStack(80, 24, 3, components.ZoneBottomRight, components.ZoneTopRight)
-	// Assume a dark terminal until detection reports otherwise.
-	theme.Apply(theme.Default, true)
+	// Assume a dark terminal until detection reports otherwise. Which themes
+	// are switched between was decided at startup, before the TUI existed.
+	theme.Apply(true)
 	cl := screens.NewChatListModel()
 	cl.SetFocused(true)
 	chat := screens.NewChatModel(80, 24)
@@ -256,7 +263,37 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	}
 	m.toasts = components.NewToastStack(w, h, cfg.UI.Toasts.MaxVisible,
 		parseToastZone(cfg.UI.Toasts.ErrorZone), parseToastZone(cfg.UI.Toasts.NotifyZone))
+	m.configWarnings = cfg.Warnings
 	return m
+}
+
+// configWarningDuration is how long a config warning stays on screen. It is
+// longer than an ordinary warning toast because it appears during startup, when
+// the user is not necessarily looking yet, and because acting on it means
+// editing a file rather than retrying something.
+const configWarningDuration = 15 * time.Second
+
+// configWarningCmds shows each config warning as a toast and returns the timers
+// that retire them.
+//
+// A warning carrying an ID is advisory — a dead key that changes nothing — and
+// is shown only until it has been seen once. The rest describe something still
+// broken and reappear every launch, because every launch they are still true.
+func (m RootModel) configWarningCmds() []tea.Cmd {
+	cmds := make([]tea.Cmd, 0, len(m.configWarnings))
+	for _, w := range m.configWarnings {
+		if w.ID != "" && m.noticeSeen != nil {
+			if m.noticeSeen.IsSeen(w.ID) {
+				continue
+			}
+			m.noticeSeen.MarkSeen(w.ID)
+		}
+		serial := m.toasts.Add(components.ToastWarning, w.Text)
+		cmds = append(cmds, tea.Tick(configWarningDuration, func(time.Time) tea.Msg {
+			return ClearStatusErrMsg{Serial: serial}
+		}))
+	}
+	return cmds
 }
 
 // parseToastZone maps a config zone string to a ToastZone, defaulting unknown
@@ -314,6 +351,7 @@ func (m RootModel) Init() tea.Cmd {
 	if m.noticeActive() {
 		cmds = append(cmds, noticeTickCmd())
 	}
+	cmds = append(cmds, m.configWarningCmds()...)
 	return tea.Batch(cmds...)
 }
 

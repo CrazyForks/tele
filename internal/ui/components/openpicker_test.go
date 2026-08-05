@@ -69,7 +69,7 @@ func TestOpenPicker_Digit_ChoosesThatTarget(t *testing.T) {
 }
 
 func TestOpenPicker_AccentsDigits(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	p := components.NewOpenPicker(openTargets(), 60)
 	// Row 0 is selected (plain); a non-selected row's number is accent-colored.
 	raw := p.View()

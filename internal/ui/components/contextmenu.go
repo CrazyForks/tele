@@ -368,8 +368,8 @@ func (cm *ContextMenu) View() string {
 	// Menu item labels carry the hotkey accented in place, matching the
 	// status-bar hint style (btop rules via hintLayout). The selected row stays
 	// plain so its highlight background keeps full contrast.
-	base := lipgloss.NewStyle().Background(OverlayMenuBg())
-	accent := lipgloss.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().Accent)
+	base := lipgloss.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().TextOnSurface)
+	accent := lipgloss.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().AccentOnSurface)
 	rows := make([]string, len(cm.items))
 	for i, item := range cm.items {
 		if item.action == keys.ActionNone {

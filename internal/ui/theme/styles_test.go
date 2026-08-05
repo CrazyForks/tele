@@ -9,20 +9,20 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
-// S must follow Apply: styles are rebuilt from the flavour that was applied.
-func TestS_FollowsAppliedFlavour(t *testing.T) {
-	theme.Apply(theme.Default, true)
+// S must follow Apply: styles are rebuilt from the theme in the applied slot.
+func TestS_FollowsAppliedSlot(t *testing.T) {
+	theme.Apply(true)
 	dark := theme.S().HelpDesc.GetForeground()
 
-	theme.Apply(theme.Default, false)
+	theme.Apply(false)
 	light := theme.S().HelpDesc.GetForeground()
 
-	assert.NotEqual(t, dark, light, "help body text must differ between flavours")
+	assert.NotEqual(t, dark, light, "help body text must differ between slots")
 }
 
 // Styles carry their non-color attributes, not just the color.
 func TestS_KeepsNonColorAttributes(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	s := theme.S()
 	assert.True(t, s.NameIncoming.GetBold(), "incoming sender name is bold")
 	assert.True(t, s.NameEditing.GetBold(), "edited-name marker is bold")
@@ -32,7 +32,7 @@ func TestS_KeepsNonColorAttributes(t *testing.T) {
 // The styles pointer and the theme pointer are swapped together, so a render
 // can never mix a new theme with old styles.
 func TestS_MatchesT(t *testing.T) {
-	theme.Apply(theme.Default, false)
-	require.False(t, theme.T().Dark)
+	theme.Apply(false)
+	require.Equal(t, "tele-light", theme.T().Name)
 	assert.Equal(t, theme.T().TextDim, theme.S().Timestamp.GetForeground())
 }

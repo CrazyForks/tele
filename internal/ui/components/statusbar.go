@@ -377,7 +377,7 @@ func applyAccent(text string, spans []span, base, accent lipgloss.Style) string 
 // accentStyle returns the key-accent style for the current vim mode: the accent
 // in NORMAL, the insert accent in INSERT, both over the bar background.
 func (sb *StatusBar) accentStyle() lipgloss.Style {
-	fg := theme.T().Accent
+	fg := theme.T().AccentStatusBar
 	if sb.mode == keys.ModeInsert {
 		fg = theme.T().AccentInsert
 	}

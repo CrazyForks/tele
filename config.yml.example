@@ -10,8 +10,18 @@ telegram:
 ui:
   date_format: "15:04"
   history_limit: 50
-  theme: default
   notification_preview: true  # set false to omit message text from desktop notifications
+
+  # Themes. Leaving this out gives the built-in tele-dark and tele-light,
+  # switched by the terminal background. Name one theme to use it whatever the
+  # background is, or fill the slots one at a time. Files live in
+  # ~/.config/tele/themes/<name>.yml — see docs/themes.md.
+  #
+  # theme: gruvbox-dark
+  #
+  # theme:
+  #   dark: gruvbox-dark
+  #   light: solarized-light
 
 photos:
   eager_full_quality: true  # download full resolution in background on chat open

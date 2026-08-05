@@ -16,6 +16,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/statedir"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
@@ -31,6 +32,9 @@ func main() {
 	verbose := flag.Bool("e", false, "debug logging")
 	trace := flag.Bool("trace", false, "log sensitive metadata (peer IDs, message lengths) — never use in shared environments")
 	versionFlag := flag.Bool("version", false, "print version and exit")
+	var themeCheck, themeDump optionalArg
+	flag.Var(&themeCheck, "theme-check", "print which theme each slot resolved to and where its tokens came from, then exit; give a theme name to inspect one")
+	flag.Var(&themeDump, "theme-dump", "print a slot's theme (dark or light) as a complete theme file, then exit; give a theme name to dump one")
 	flag.Parse()
 
 	if *versionFlag {
@@ -56,6 +60,32 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Themes are resolved here, before the TUI exists, so a bad theme file is an
+	// ordinary config warning rather than something the interface has to cope
+	// with. The TUI is handed the result and never sees the config.
+	themesDir := cfg.ThemesDir
+	themes := theme.LoadSlots(themesDir, cfg.UI.ThemeSlots.Dark, cfg.UI.ThemeSlots.Light)
+	// Theme problems repeat every launch: unlike a dead config key, they are
+	// still true next time.
+	for _, w := range themes.Warnings {
+		cfg.Warnings = append(cfg.Warnings, config.Warning{Text: "theme: " + w})
+	}
+	theme.SetSlots(themes.Slots())
+
+	if themeCheck.set {
+		fmt.Print(themeReport(themesDir, themes, themeCheck.value, cfg.Warnings))
+		os.Exit(0)
+	}
+	if themeDump.set {
+		out, err := themeDumpText(themesDir, themes, themeDump.value)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "theme: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(out)
+		os.Exit(0)
 	}
 
 	if cfg.Telegram.APIID == 0 {
@@ -99,9 +129,11 @@ func main() {
 	log := zap.New(core).With(zap.String("v", version.Version))
 	defer log.Sync() //nolint:errcheck
 
+	// The log keeps every warning on every run, including the ones the TUI shows
+	// only once: suppressing a toast must not lose the record.
 	for _, w := range cfg.Warnings {
-		log.Warn("config: " + w)
-		fmt.Fprintf(os.Stderr, "config: %s\n", w)
+		log.Warn("config: " + w.Text)
+		fmt.Fprintf(os.Stderr, "config: %s\n", w.Text)
 	}
 
 	// Ownership of the state directory is taken before anything opens the
@@ -150,7 +182,12 @@ const defaultConfigHead = `telegram:
 ui:
   date_format: "15:04"
   history_limit: 50
-  theme: default
+  # Themes follow the terminal background: a dark one and a light one, each
+  # named here. Leave this out for the built-in tele-dark and tele-light. See
+  # docs/themes.md.
+  # theme:
+  #   dark: my-dark
+  #   light: my-light
 
 photos:
   eager_full_quality: true  # download full resolution in background on chat open

@@ -97,19 +97,19 @@ func buildStyles(t Theme) Styles {
 		OverlayHintDim:    n().Foreground(t.TextFaint),
 		OverlayHintAccent: n().Foreground(t.Accent),
 
-		MenuBg:         n().Background(t.SurfaceOverlay),
+		MenuBg:         n().Background(t.SurfaceOverlay).Foreground(t.TextOnSurface),
 		MenuSelected:   n().Background(t.SurfaceSelected).Foreground(t.TextOnSelected),
-		PickerBg:       n().Background(t.SurfaceOverlay),
+		PickerBg:       n().Background(t.SurfaceOverlay).Foreground(t.TextOnSurface),
 		PickerSelected: n().Background(t.SurfaceSelected).Foreground(t.TextOnSelected),
 		PickerChosen:   n().Foreground(t.ReactionChosen).Bold(true),
 
-		MentionRow:    n().Background(t.SurfaceOverlay),
+		MentionRow:    n().Background(t.SurfaceOverlay).Foreground(t.TextOnSurface),
 		MentionSel:    n().Background(t.SurfaceSelected).Foreground(t.TextOnSelected),
 		MentionDim:    n().Foreground(t.TextDim).Background(t.SurfaceOverlay),
 		MentionSelDim: n().Foreground(t.TextOnSelectedMuted).Background(t.SurfaceSelected),
 		MentionStatus: n().Background(t.SurfaceOverlay).Foreground(t.TextDim).Italic(true),
 
-		HelpBg:      n().Background(t.SurfaceHelp),
+		HelpBg:      n().Background(t.SurfaceHelp).Foreground(t.TextOnSurface),
 		HelpTitle:   n().Background(t.SurfaceHelp).Foreground(t.AccentOnSurface).Bold(true),
 		HelpKey:     n().Background(t.SurfaceHelp).Foreground(t.AccentOnSurface),
 		HelpSection: n().Background(t.SurfaceHelp).Foreground(t.TextOnSurface).Bold(true),

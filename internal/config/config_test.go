@@ -41,7 +41,68 @@ func TestLoad_Defaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 50, cfg.UI.HistoryLimit)
 	assert.Equal(t, "15:04", cfg.UI.DateFormat)
-	assert.Equal(t, "default", cfg.UI.Theme)
+	assert.Equal(t, config.ThemeSlots{}, cfg.UI.ThemeSlots, "no ui.theme leaves both slots built-in")
+	assert.Empty(t, cfg.Warnings)
+}
+
+// A bare name fills both slots. That is how "this theme, whatever the terminal
+// is doing" is said, and it needs no separate switch.
+func TestTheme_NameFillsBothSlots(t *testing.T) {
+	cfg := loadWithUI(t, "  theme: gruvbox-dark\n")
+
+	assert.Equal(t, config.ThemeSlots{Dark: "gruvbox-dark", Light: "gruvbox-dark"}, cfg.UI.ThemeSlots)
+	assert.Empty(t, cfg.Warnings)
+}
+
+// A map fills the slots it names and leaves the others built-in.
+func TestTheme_MapFillsNamedSlots(t *testing.T) {
+	cfg := loadWithUI(t, "  theme:\n    dark: gruvbox-dark\n    light: solarized-light\n")
+	assert.Equal(t, config.ThemeSlots{Dark: "gruvbox-dark", Light: "solarized-light"}, cfg.UI.ThemeSlots)
+	assert.Empty(t, cfg.Warnings)
+
+	half := loadWithUI(t, "  theme:\n    dark: gruvbox-dark\n")
+	assert.Equal(t, config.ThemeSlots{Dark: "gruvbox-dark"}, half.UI.ThemeSlots,
+		"the unnamed slot keeps the built-in")
+	assert.Empty(t, half.Warnings)
+}
+
+// Every config tele ever wrote carries ui.theme: default. It named a pair that
+// no longer exists, so it must go on meaning what it did — both slots built-in —
+// and say so once.
+func TestTheme_LegacyDefaultIsIgnoredWithAWarning(t *testing.T) {
+	cfg := loadWithUI(t, "  theme: default\n")
+
+	assert.Equal(t, config.ThemeSlots{}, cfg.UI.ThemeSlots)
+	require.Len(t, cfg.Warnings, 1)
+	assert.Contains(t, cfg.Warnings[0].Text, "tele-dark")
+	assert.NotEmpty(t, cfg.Warnings[0].ID,
+		"a dead key changes nothing when removed, so it is said once, not every launch")
+}
+
+func TestTheme_UnknownSlotWarns(t *testing.T) {
+	cfg := loadWithUI(t, "  theme:\n    medium: gruvbox\n")
+
+	assert.Equal(t, config.ThemeSlots{}, cfg.UI.ThemeSlots)
+	require.Len(t, cfg.Warnings, 1)
+	assert.Contains(t, cfg.Warnings[0].Text, "medium")
+	assert.Empty(t, cfg.Warnings[0].ID, "a slot that does not exist is still wrong next launch")
+}
+
+func TestTheme_WrongTypeWarns(t *testing.T) {
+	cfg := loadWithUI(t, "  theme: 42\n")
+
+	assert.Equal(t, config.ThemeSlots{}, cfg.UI.ThemeSlots)
+	require.Len(t, cfg.Warnings, 1)
+}
+
+// loadWithUI loads a minimal config with the given ui: section body.
+func loadWithUI(t *testing.T, uiBody string) *config.Config {
+	t.Helper()
+	f := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(f, []byte("telegram:\n  api_id: 1\n  api_hash: x\nui:\n"+uiBody), 0600))
+	cfg, err := config.Load(f, t.TempDir())
+	require.NoError(t, err)
+	return cfg
 }
 
 func TestDefaults_Toasts(t *testing.T) {
@@ -135,7 +196,7 @@ func TestLoad_SessionFilePinsItsOwnDirectoryAndWarns(t *testing.T) {
 	assert.Equal(t, "/vault/tg.json", cfg.Telegram.SessionFile)
 	assert.True(t, cfg.SessionPinned, "a deliberate session path must not be migrated away")
 	require.Len(t, cfg.Warnings, 1)
-	assert.Contains(t, cfg.Warnings[0], "session_file is deprecated")
+	assert.Contains(t, cfg.Warnings[0].Text, "session_file is deprecated")
 }
 
 func TestLoad_StateDirWinsOverSessionFile(t *testing.T) {
@@ -151,7 +212,7 @@ func TestLoad_StateDirWinsOverSessionFile(t *testing.T) {
 	assert.Equal(t, filepath.Join("/custom/state", "session.json"), cfg.Telegram.SessionFile)
 	assert.False(t, cfg.SessionPinned)
 	require.Len(t, cfg.Warnings, 1)
-	assert.Contains(t, cfg.Warnings[0], "ignored")
+	assert.Contains(t, cfg.Warnings[0].Text, "ignored")
 }
 
 func TestExpandTilde(t *testing.T) {

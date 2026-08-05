@@ -10,7 +10,7 @@ import (
 )
 
 func TestBubbleBorderFg_NormalWhenNoHighlight(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	ml := NewMessageList(20, 80)
 	in := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
 	assert.Equal(t, theme.T().BorderBubbleIn, in)
@@ -19,7 +19,7 @@ func TestBubbleBorderFg_NormalWhenNoHighlight(t *testing.T) {
 }
 
 func TestBubbleBorderFg_AccentWhenHighlighted_Dark(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	ml := NewMessageList(20, 80)
 	ml.HighlightMessage(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
@@ -28,18 +28,18 @@ func TestBubbleBorderFg_AccentWhenHighlighted_Dark(t *testing.T) {
 }
 
 func TestBubbleBorderFg_AccentWhenHighlighted_Light(t *testing.T) {
-	theme.Apply(theme.Default, false)
+	theme.Apply(false)
 	ml := NewMessageList(20, 80)
 	ml.HighlightMessage(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
 	want := FadeAccentColor(theme.T().HighlightAccent, theme.T().BorderBubbleIn, HighlightFadeSteps, HighlightFadeSteps)
 	assert.Equal(t, want, got)
 	// The light accent must differ from the dark one.
-	assert.NotEqual(t, theme.Default.Dark.HighlightAccent, theme.Default.Light.HighlightAccent)
+	assert.NotEqual(t, theme.TeleDark.HighlightAccent, theme.TeleLight.HighlightAccent)
 }
 
 func TestBubbleBorderFg_OtherMessagesUnaffected(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	ml := NewMessageList(20, 80)
 	ml.HighlightMessage(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 99, IsOut: false})
@@ -47,7 +47,7 @@ func TestBubbleBorderFg_OtherMessagesUnaffected(t *testing.T) {
 }
 
 func TestBubbleBorderFg_ErrorAccentWhenHighlighted_Dark(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	ml := NewMessageList(20, 80)
 	ml.HighlightMessageError(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})
@@ -57,7 +57,7 @@ func TestBubbleBorderFg_ErrorAccentWhenHighlighted_Dark(t *testing.T) {
 }
 
 func TestBubbleBorderFg_ErrorAccentWhenHighlighted_Light(t *testing.T) {
-	theme.Apply(theme.Default, false)
+	theme.Apply(false)
 	ml := NewMessageList(20, 80)
 	ml.HighlightMessageError(1)
 	got := ml.bubbleBorderFg(domain.Message{ID: 1, IsOut: false})

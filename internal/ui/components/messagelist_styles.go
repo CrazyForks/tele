@@ -10,11 +10,15 @@ import (
 )
 
 func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
-	idx := senderID % 8
+	pal := theme.T().SenderPalette
+	if len(pal) == 0 {
+		return lipgloss.NewStyle().Bold(true)
+	}
+	idx := senderID % int64(len(pal))
 	if idx < 0 {
 		idx = -idx
 	}
-	return lipgloss.NewStyle().Foreground(theme.T().SenderPalette[idx]).Bold(true)
+	return lipgloss.NewStyle().Foreground(pal[idx]).Bold(true)
 }
 
 func buildReactStr(reactions []domain.Reaction) string {

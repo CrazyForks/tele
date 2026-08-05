@@ -154,17 +154,23 @@ func (l *LogoLoader) Tick() {
 }
 
 func logoInterpolateColor(intensity float64, pal []theme.GradientStop) (r, g, b uint8) {
+	// A theme sets the ramp, so its length is not fixed and an empty one has to
+	// be survivable rather than a panic mid-frame.
+	if len(pal) == 0 {
+		return 0, 0, 0
+	}
 	for i := 0; i < len(pal)-1; i++ {
 		lo, hi := pal[i], pal[i+1]
 		if intensity >= lo.Pos && intensity <= hi.Pos {
+			lr, lg, lb := rgb8(lo.Color)
+			hr, hg, hb := rgb8(hi.Color)
 			f := (intensity - lo.Pos) / (hi.Pos - lo.Pos)
-			return uint8(float64(lo.R) + f*float64(hi.R-lo.R)),
-				uint8(float64(lo.G) + f*float64(hi.G-lo.G)),
-				uint8(float64(lo.B) + f*float64(hi.B-lo.B))
+			return uint8(float64(lr) + f*(float64(hr)-float64(lr))),
+				uint8(float64(lg) + f*(float64(hg)-float64(lg))),
+				uint8(float64(lb) + f*(float64(hb)-float64(lb)))
 		}
 	}
-	last := pal[len(pal)-1]
-	return last.R, last.G, last.B
+	return rgb8(pal[len(pal)-1].Color)
 }
 
 func logoBorderWaveChar(orig rune, t float64) rune {
@@ -225,8 +231,7 @@ func (l LogoLoader) View() string {
 		runes[r] = row
 	}
 
-	gradient := theme.T().LogoGradient
-	pal := gradient[:]
+	pal := theme.T().LogoGradient
 
 	var sb strings.Builder
 	for r := range logoArt {

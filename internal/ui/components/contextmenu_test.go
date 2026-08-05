@@ -67,13 +67,21 @@ func TestNewContextMenu_OutgoingItems(t *testing.T) {
 }
 
 func TestNewContextMenu_AccentsHotkeyLetters(t *testing.T) {
-	theme.Apply(theme.Default, true)
-	cm := components.NewContextMenu(1, false, 0, 0, false, false, nil, defaultKM())
-	raw := cm.View()
-	// Labels render plain text; the hotkey letter is accent-colored in place,
-	// matching the status-bar hint style (btop rules).
-	assert.Contains(t, strip(raw), "reply")
-	assert.Contains(t, raw, fgSeq(theme.T().Accent), "hotkey letters must be accent-colored")
+	// Both slots: the menu paints its own panel, and the accent that belongs on
+	// a panel is not the one that belongs on the terminal background. In the dark
+	// slot the two happen to be equal, so testing only that proves nothing.
+	for _, dark := range []bool{true, false} {
+		theme.Apply(dark)
+		cm := components.NewContextMenu(1, false, 0, 0, false, false, nil, defaultKM())
+		raw := cm.View()
+		// Labels render in the panel's body color; the hotkey letter is accented
+		// in place, matching the status-bar hint style (btop rules).
+		assert.Contains(t, strip(raw), "reply")
+		assert.Contains(t, raw, fgSeq(theme.T().AccentOnSurface), "hotkey letters must be accent-colored")
+		assert.Contains(t, raw, fgSeq(theme.T().TextOnSurface),
+			"labels must set their own color, not inherit the terminal's")
+	}
+	theme.Apply(true)
 }
 
 func TestNewContextMenu_ShowsNavHintInBottomBorder(t *testing.T) {

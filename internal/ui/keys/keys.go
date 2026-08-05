@@ -25,6 +25,11 @@ const (
 	ActionQuit          Action = "quit"
 	ActionDismissToast  Action = "dismiss_toast"
 	ActionShowHelp      Action = "show_help"
+	// ActionReloadThemes re-reads the theme files and reapplies them. It ships
+	// with no default binding: it exists for the few minutes someone spends
+	// writing a theme, and does not deserve a key the rest of the time. Bind it
+	// from the config when you need it.
+	ActionReloadThemes Action = "reload_themes"
 )
 
 // ActionMsg wraps an Action as a bubbletea message.

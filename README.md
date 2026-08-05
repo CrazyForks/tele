@@ -326,6 +326,8 @@ Then prompts for:
 | `-e`              | Enable debug logging                                                                           |
 | `--trace`         | Log sensitive metadata (peer IDs, message lengths). Never use on shared or synced file systems |
 | `--version`       | Print version and exit                                                                         |
+| `--theme-check`   | Print which theme each slot resolved to and where its tokens came from, then exit              |
+| `--theme-dump`    | Print a slot's theme as a complete theme file, then exit (`--theme-dump=light`)                |
 
 ---
 
@@ -362,6 +364,9 @@ Full reference: [docs/keybindings.md](docs/keybindings.md)
 ui:
   history_limit: 50 # messages fetched per chat on open
   notification_preview: true # set false to omit message text from desktop notifications
+  # theme: # omit for the built-in tele-dark / tele-light
+  #   dark: my-dark # ~/.config/tele/themes/my-dark.yml
+  #   light: my-light
 
 photos:
   mode: auto # auto | kitty | blocks — inline image renderer
@@ -397,6 +402,29 @@ automatically on first run — nothing is lost and you stay logged in.
 > (mirrors the desktop clients' fixed media size). The height is additionally
 > bounded to 2/3 of the chat pane so a tall photo never dominates the view.
 > Raise it for larger inline images, lower it for more compact ones.
+
+### Themes
+
+tele holds two themes at once and switches between them as your terminal
+background changes: `ui.theme.dark` and `ui.theme.light`. Leave `ui.theme` out
+and you get the built-in `tele-dark` and `tele-light`; name a single theme
+(`theme: gruvbox-dark`) to use it whatever the background is.
+
+Your own themes are files in `~/.config/tele/themes/`, one theme per file. A
+theme sets only the tokens it cares about and inherits the rest, so changing one
+color is three lines:
+
+```yaml
+# ~/.config/tele/themes/my-dark.yml
+base: tele-dark
+border_pane_active: "#8ec07c"
+```
+
+Start from `tele --theme-dump > ~/.config/tele/themes/my-dark.yml`, and use
+`tele --theme-check` when the result is not what you expected.
+
+Full reference, including every token and the color syntax:
+[docs/themes.md](docs/themes.md)
 
 ### Customizing keybindings
 

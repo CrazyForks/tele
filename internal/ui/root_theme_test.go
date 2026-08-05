@@ -12,15 +12,15 @@ import (
 )
 
 // The root is the only place the theme changes. A background report must select
-// the matching flavour, not merely record a flag.
-func TestRoot_BackgroundColorMsg_AppliesThemeFlavour(t *testing.T) {
+// the matching slot, not merely record a flag.
+func TestRoot_BackgroundColorMsg_SelectsThemeSlot(t *testing.T) {
 	m := idleMainModel()
 
 	m.setDarkBackground(false)
-	assert.False(t, theme.T().Dark, "light background selects the light flavour")
+	assert.Equal(t, "tele-light", theme.T().Name, "light background selects the light slot")
 
 	m.setDarkBackground(true)
-	assert.True(t, theme.T().Dark, "dark background selects the dark flavour")
+	assert.Equal(t, "tele-dark", theme.T().Name, "dark background selects the dark slot")
 }
 
 // The 2s background-color poll is replaced by event-driven theme detection
@@ -30,7 +30,7 @@ func TestRoot_BackgroundColorMsg_UpdatesThemeWithoutPolling(t *testing.T) {
 	m := idleMainModel()
 	_, cmd := m.Update(tea.BackgroundColorMsg{Color: color.Black})
 	assert.Nil(t, cmd, "background color must not reschedule a poll")
-	assert.True(t, theme.T().Dark, "black background is dark")
+	assert.Equal(t, "tele-dark", theme.T().Name, "black background is dark")
 }
 
 // Unsolicited OS color-scheme reports (DEC mode 2031) arrive as raw ultraviolet
@@ -40,11 +40,11 @@ func TestRoot_ColorSchemeEvents_UpdateTheme(t *testing.T) {
 
 	dark, cmd := m.Update(uv.DarkColorSchemeEvent{})
 	assert.Nil(t, cmd)
-	assert.True(t, theme.T().Dark, "dark color-scheme event sets dark")
+	assert.Equal(t, "tele-dark", theme.T().Name, "dark color-scheme event selects the dark slot")
 
 	_, cmd = dark.(RootModel).Update(uv.LightColorSchemeEvent{})
 	assert.Nil(t, cmd)
-	assert.False(t, theme.T().Dark, "light color-scheme event clears dark")
+	assert.Equal(t, "tele-light", theme.T().Name, "light color-scheme event selects the light slot")
 }
 
 // Fallback for terminals without mode 2031: regaining focus re-reads the

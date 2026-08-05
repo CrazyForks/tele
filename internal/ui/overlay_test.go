@@ -20,7 +20,7 @@ func dimSeq() string {
 }
 
 func TestDimBackground_StripsColorAndAppliesGray(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	// A line with a green foreground SGR around visible text.
 	colored := "\x1b[32mhello\x1b[0m world"
 	out := dimBackground(colored)
@@ -33,13 +33,13 @@ func TestDimBackground_StripsColorAndAppliesGray(t *testing.T) {
 	assert.Contains(t, out, dimSeq())
 }
 
-func TestDimBackground_LightFlavourUsesLighterGray(t *testing.T) {
-	theme.Apply(theme.Default, true)
+func TestDimBackground_LightSlotUsesLighterGray(t *testing.T) {
+	theme.Apply(true)
 	dark := dimBackground("plain text")
-	theme.Apply(theme.Default, false)
+	theme.Apply(false)
 	light := dimBackground("plain text")
 
-	assert.NotEqual(t, dark, light, "the light flavour must dim to a lighter gray")
+	assert.NotEqual(t, dark, light, "the light slot must dim to a lighter gray")
 	assert.Equal(t, "plain text", xansi.Strip(light))
 }
 
@@ -48,7 +48,7 @@ func TestDimBackground_BlanksKittyPlaceholderLines(t *testing.T) {
 	fg := "\x1b[38;2;0;0;5m" // id-carrying placeholder foreground
 	// Bubble-wrapped image row: border + space + 3 placeholder cells + space + border.
 	imageLine := "\x1b[90m│\x1b[0m " + fg + cell + cell + cell + "\x1b[0m \x1b[90m│\x1b[0m"
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	out := dimBackground(imageLine)
 
 	// No placeholder runes survive, so the terminal draws no image behind the modal.

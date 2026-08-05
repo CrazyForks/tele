@@ -298,7 +298,7 @@ func (s *ToastStack) footer(t toast, innerW int) string {
 	}
 	bg := s.panelBg()
 	base := lipgloss.NewStyle().Background(bg).Foreground(s.panelFg())
-	accent := lipgloss.NewStyle().Background(bg).Foreground(theme.T().Accent).Bold(true)
+	accent := lipgloss.NewStyle().Background(bg).Foreground(theme.T().AccentOnSurface).Bold(true)
 	parts := make([]string, 0, len(t.actions))
 	for _, a := range t.actions {
 		text, spans := hintLayout(a.Key, a.Label)

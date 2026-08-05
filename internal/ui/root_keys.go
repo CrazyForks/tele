@@ -142,6 +142,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keys.ActionShowHelp:
 			m.help = components.NewHelpModal(m.keyMap, m.width, m.height)
 			return m, nil
+		case keys.ActionReloadThemes:
+			return m.reloadThemes()
 		}
 	}
 

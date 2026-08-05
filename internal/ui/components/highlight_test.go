@@ -59,8 +59,8 @@ func TestHighlightConstants(t *testing.T) {
 }
 
 func TestHighlightAccent_PicksThemeTone(t *testing.T) {
-	theme.Apply(theme.Default, true)
+	theme.Apply(true)
 	dark := theme.T().HighlightAccent
-	theme.Apply(theme.Default, false)
+	theme.Apply(false)
 	assert.NotEqual(t, dark, theme.T().HighlightAccent, "the highlight accent must adapt to the background")
 }

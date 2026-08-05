@@ -785,7 +785,7 @@ func TestComposer_FlashChangesBorderColour(t *testing.T) {
 // background but wash out on a light one.
 func TestComposer_CounterColourIsThemeAware(t *testing.T) {
 	render := func(dark bool) string {
-		theme.Apply(theme.Default, dark)
+		theme.Apply(dark)
 		c := components.NewComposer(60)
 		c.SetValue(strings.Repeat("a", 4090)) // remaining 6: amber
 		return c.View()

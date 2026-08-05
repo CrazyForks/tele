@@ -224,16 +224,16 @@ func TestToastStack_NoClickMsgNoWholeBoxHit(t *testing.T) {
 	}
 }
 
-func TestToastStack_ThemeFlavourChangesRender(t *testing.T) {
+func TestToastStack_ThemeSlotChangesRender(t *testing.T) {
 	mk := func(dark bool) string {
-		theme.Apply(theme.Default, dark)
+		theme.Apply(dark)
 		s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
 		s.Add(ToastError, "boom")
 		settle(s)
 		return s.Zones()[0].Block
 	}
 	if mk(true) == mk(false) {
-		t.Fatal("dark and light flavours should render differently")
+		t.Fatal("the dark and light slots should render differently")
 	}
 }
 
