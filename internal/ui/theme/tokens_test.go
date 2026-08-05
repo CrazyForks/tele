@@ -33,7 +33,9 @@ func TestTokenKeys_MatchTheGoldenList(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	assert.Equal(t, string(want), got,
+	// Git hands this file over with CRLF on a Windows checkout. The token names
+	// are what is being pinned, not how the working copy spells a line break.
+	assert.Equal(t, strings.ReplaceAll(string(want), "\r\n", "\n"), got,
 		"the token keys changed; user theme files are written against these names")
 }
 
