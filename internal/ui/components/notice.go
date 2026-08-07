@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // RenderNoticeBox renders a one-time startup notice: a bordered box with a
@@ -26,8 +28,8 @@ func RenderNoticeBox(title, body string, remaining, maxW int) string {
 		footer = fmt.Sprintf("continue in %ds", remaining)
 	}
 
-	wrapped := lipgloss.NewStyle().Width(innerW).Render(body)
-	dim := lipgloss.NewStyle().Faint(true).Render(footer)
+	wrapped := theme.S().Body.Width(innerW).Render(body)
+	dim := theme.S().Body.Faint(true).Render(footer)
 	content := strings.Join([]string{wrapped, "", dim}, "\n")
 
 	lines := strings.Split(content, "\n")
@@ -40,7 +42,7 @@ func RenderNoticeBox(title, body string, remaining, maxW int) string {
 	if contentW > innerW {
 		contentW = innerW
 	}
-	padded := lipgloss.NewStyle().Padding(padV, padH).Render(content)
+	padded := theme.NewStyle().Padding(padV, padH).Render(content)
 	return RenderBox(padded, title, "", "", "",
 		lipgloss.RoundedBorder(), nil, contentW+2*padH+2, len(lines)+2*padV+2)
 }

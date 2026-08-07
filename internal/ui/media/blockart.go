@@ -8,6 +8,8 @@ import (
 	xansi "github.com/charmbracelet/x/ansi"
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/nfnt/resize"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // SliceArtWindow returns the sub-rectangle [vOff, vOff+winRows) x [hOff,
@@ -24,9 +26,9 @@ func SliceArtWindow(lines []string, hOff, vOff, winCols, winRows int) []string {
 			src = lines[i]
 		}
 		sliced := xansi.Cut(src, hOff, hOff+winCols)
-		if w := xansi.StringWidth(sliced); w < winCols {
-			sliced += strings.Repeat(" ", winCols-w)
-		}
+		// The art window is padded out to its full width; those cells sit inside
+		// a bubble, on the canvas, and are painted by nothing else.
+		sliced += theme.PadTo(xansi.StringWidth(sliced), winCols)
 		out[r] = sliced
 	}
 	return out

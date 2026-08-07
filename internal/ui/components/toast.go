@@ -270,11 +270,11 @@ func (s *ToastStack) renderToast(t toast) string {
 	innerW := s.boxWidth() - 2 // account for left/right border
 	bg := s.panelBg()
 	fg := s.panelFg()
-	body := lipgloss.NewStyle().Width(innerW).Background(bg).Foreground(fg).Render(t.text)
+	body := theme.NewStyle().Width(innerW).Background(bg).Foreground(fg).Render(t.text)
 	if footer := s.footer(t, innerW); footer != "" {
 		body = body + "\n" + footer
 	}
-	return lipgloss.NewStyle().
+	return theme.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(toastBorderColor(t.kind)).
 		BorderBackground(bg).
@@ -297,14 +297,14 @@ func (s *ToastStack) footer(t toast, innerW int) string {
 		return ""
 	}
 	bg := s.panelBg()
-	base := lipgloss.NewStyle().Background(bg).Foreground(s.panelFg())
-	accent := lipgloss.NewStyle().Background(bg).Foreground(theme.T().AccentOnSurface).Bold(true)
+	base := theme.NewStyle().Background(bg).Foreground(s.panelFg())
+	accent := theme.NewStyle().Background(bg).Foreground(theme.T().AccentOnSurface).Bold(true)
 	parts := make([]string, 0, len(t.actions))
 	for _, a := range t.actions {
 		text, spans := hintLayout(a.Key, a.Label)
 		parts = append(parts, applyAccent(text, spans, base, accent))
 	}
-	return lipgloss.NewStyle().Width(innerW).Background(bg).Render(strings.Join(parts, "  "))
+	return theme.NewStyle().Width(innerW).Background(bg).Render(strings.Join(parts, "  "))
 }
 
 // visibleFor returns the toasts to show for a zone (most recent maxVisible) and
@@ -339,7 +339,7 @@ func (s *ToastStack) zoneLayout(zone ToastZone) (entries []zoneEntry, top, left 
 		return nil, 0, 0
 	}
 	more := zoneEntry{lines: []string{
-		lipgloss.NewStyle().Foreground(theme.T().TextSubtle).
+		theme.NewStyle().Foreground(theme.T().TextSubtle).
 			Render(fmt.Sprintf("+%d more", hidden)),
 	}}
 	toEntry := func(t toast) zoneEntry {

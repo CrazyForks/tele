@@ -17,6 +17,8 @@ func wrappedLineCount(text string, entities []domain.MessageEntity, contentW int
 		contentW = 1
 	}
 	rendered := RenderEntities(text, entities)
+	// canvas:ok measurement only — the render is counted, never emitted, so a
+	// background here would cost work on the height path and reach no cell.
 	wrapStyle := lipgloss.NewStyle().Width(contentW)
 	n := 0
 	for _, part := range strings.Split(rendered, "\n") {

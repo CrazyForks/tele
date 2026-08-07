@@ -716,11 +716,13 @@ func (m *ChatModel) View() string {
 		if listH < 1 {
 			listH = 1
 		}
-		style := lipgloss.NewStyle().Foreground(theme.T().StatusError)
-		return lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center, style.Render(m.loadErr))
+		style := theme.NewStyle().Foreground(theme.T().StatusError)
+		return lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center,
+			style.Render(m.loadErr), lipgloss.WithWhitespaceStyle(theme.NewStyle()))
 	}
 	if m.header.ChatID == 0 && m.msgList.Count() == 0 {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.logo.View())
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+			m.logo.View(), lipgloss.WithWhitespaceStyle(theme.NewStyle()))
 	}
 	return m.msgList.View() + "\n" + m.composer.View()
 }

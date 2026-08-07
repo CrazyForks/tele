@@ -131,7 +131,7 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		if lo >= hi {
 			continue
 		}
-		style := lipgloss.NewStyle()
+		style := theme.NewStyle()
 		styled := false
 		self := false
 		linkURL := ""

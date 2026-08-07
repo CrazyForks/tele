@@ -49,7 +49,28 @@ func Pad(n int) string {
 		return ""
 	}
 	s := current.Load()
-	return s.padPrefix + strings.Repeat(" ", n) + s.padSuffix
+	if s.padPrefix == "" && s.padSuffix == "" {
+		// No canvas: hand back the spaces themselves rather than a concatenation
+		// of them with two empty strings. Padding runs once per row of every
+		// panel and every bubble, so the copy this saves is not nothing.
+		return spaces(n)
+	}
+	return s.padPrefix + spaces(n) + s.padSuffix
+}
+
+// spaceRun is sliced rather than repeated for the widths padding actually uses.
+// A terminal wider than this is padded the slow way; there is no correctness
+// difference, only an allocation.
+const spaceRun = "                                                                " +
+	"                                                                " +
+	"                                                                " +
+	"                                                                "
+
+func spaces(n int) string {
+	if n <= len(spaceRun) {
+		return spaceRun[:n]
+	}
+	return strings.Repeat(" ", n)
 }
 
 // PadTo returns the spaces that carry a line of visible width w out to width, or

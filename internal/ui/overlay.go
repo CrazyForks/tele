@@ -23,7 +23,10 @@ import (
 // Visible width and line count are preserved so the overlay stamping math is
 // unaffected.
 func dimBackground(content string) string {
-	dim := lipgloss.NewStyle().Foreground(theme.T().OverlayDim)
+	// Stripping the ANSI takes the canvas off with everything else, so the dim
+	// style has to put it back — otherwise the whole area behind a modal falls
+	// through to the terminal, which is the largest seam a canvas could have.
+	dim := theme.NewStyle().Foreground(theme.T().OverlayDim)
 
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
@@ -67,9 +70,9 @@ func stampOverlay(baseLines, overlayLines []string, top, left int) {
 			continue
 		}
 		bLine := baseLines[row]
-		if lipgloss.Width(bLine) < left {
-			bLine += strings.Repeat(" ", left-lipgloss.Width(bLine))
-		}
+		// The gap between the end of the base line and the overlay is canvas,
+		// not absence: a stamped overlay must not tear a hole to its left.
+		bLine += theme.PadTo(lipgloss.Width(bLine), left)
 		mLineW := lipgloss.Width(mLine)
 		right := left + mLineW
 		prefix := xansi.Truncate(bLine, left, "")
@@ -97,9 +100,7 @@ func stampBoxOverlay(base string, boxLines []string, top, left, boxW, h int) str
 		}
 		b := baseLines[row]
 		prefix := xansi.Truncate(b, left, "")
-		if w := lipgloss.Width(prefix); w < left {
-			prefix += strings.Repeat(" ", left-w)
-		}
+		prefix += theme.PadTo(lipgloss.Width(prefix), left)
 		suffix := ""
 		if lipgloss.Width(b) > left+boxW {
 			suffix = xansi.TruncateLeft(b, left+boxW, "")

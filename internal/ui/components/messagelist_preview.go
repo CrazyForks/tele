@@ -52,11 +52,8 @@ func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet st
 
 	if senderName == "" {
 		placeholder := quoteGlyph + theme.S().Quote.Render("Original not available")
-		pw := lipgloss.Width(placeholder)
-		if pw < actualW {
-			placeholder += strings.Repeat(" ", actualW-pw)
-		}
-		return []string{bs.Render(b.Left) + " " + placeholder + " " + bs.Render(b.Right)}
+		placeholder += theme.PadTo(lipgloss.Width(placeholder), actualW)
+		return []string{bs.Render(b.Left) + theme.Pad(1) + placeholder + theme.Pad(1) + bs.Render(b.Right)}
 	}
 
 	ns := ml.senderNameStyle(senderID)
@@ -71,10 +68,8 @@ func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet st
 		namePart = ns.Render(quoteGlyph) + ns.Render(senderName)
 		nw = lipgloss.Width(namePart)
 	}
-	if nw < actualW {
-		namePart += strings.Repeat(" ", actualW-nw)
-	}
-	nameRow := bs.Render(b.Left) + " " + namePart + " " + bs.Render(b.Right)
+	namePart += theme.PadTo(nw, actualW)
+	nameRow := bs.Render(b.Left) + theme.Pad(1) + namePart + theme.Pad(1) + bs.Render(b.Right)
 
 	maxSnippetW := actualW - glyphW
 	if maxSnippetW < 1 {
@@ -82,11 +77,8 @@ func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet st
 	}
 	snippet = runewidth.Truncate(snippet, maxSnippetW, "…")
 	textPart := ns.Render(quoteGlyph) + theme.S().Quote.Render(snippet)
-	tw := lipgloss.Width(textPart)
-	if tw < actualW {
-		textPart += strings.Repeat(" ", actualW-tw)
-	}
-	snippetRow := bs.Render(b.Left) + " " + textPart + " " + bs.Render(b.Right)
+	textPart += theme.PadTo(lipgloss.Width(textPart), actualW)
+	snippetRow := bs.Render(b.Left) + theme.Pad(1) + textPart + theme.Pad(1) + bs.Render(b.Right)
 
 	return []string{nameRow, snippetRow}
 }
@@ -134,17 +126,13 @@ func renderForwardLines(from string, actualW int, bs lipgloss.Style) []string {
 
 	label := runewidth.Truncate(forwardLabelText, maxTextW, "…")
 	labelPart := theme.S().Quote.Render(quoteGlyph) + theme.S().Quote.Render(label)
-	if lw := lipgloss.Width(labelPart); lw < actualW {
-		labelPart += strings.Repeat(" ", actualW-lw)
-	}
-	labelRow := bs.Render(b.Left) + " " + labelPart + " " + bs.Render(b.Right)
+	labelPart += theme.PadTo(lipgloss.Width(labelPart), actualW)
+	labelRow := bs.Render(b.Left) + theme.Pad(1) + labelPart + theme.Pad(1) + bs.Render(b.Right)
 
 	name = runewidth.Truncate(name, maxTextW, "…")
 	namePart := theme.S().Quote.Render(quoteGlyph) + theme.S().NameIncoming.Render(name)
-	if nw := lipgloss.Width(namePart); nw < actualW {
-		namePart += strings.Repeat(" ", actualW-nw)
-	}
-	nameRow := bs.Render(b.Left) + " " + namePart + " " + bs.Render(b.Right)
+	namePart += theme.PadTo(lipgloss.Width(namePart), actualW)
+	nameRow := bs.Render(b.Left) + theme.Pad(1) + namePart + theme.Pad(1) + bs.Render(b.Right)
 
 	return []string{labelRow, nameRow}
 }

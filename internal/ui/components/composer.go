@@ -533,7 +533,7 @@ func (c *Composer) sendAffordance() string {
 	if used > 0 {
 		glyphColor = theme.T().ComposerGlyphReady // blue: ready
 	}
-	glyph := lipgloss.NewStyle().Foreground(glyphColor).Render(sendGlyph)
+	glyph := theme.NewStyle().Foreground(glyphColor).Render(sendGlyph)
 
 	if remaining <= counterShowAt {
 		counterColor := theme.T().ComposerCounterDim
@@ -543,8 +543,8 @@ func (c *Composer) sendAffordance() string {
 		case remaining <= counterWarnAt:
 			counterColor = theme.T().StatusWarning
 		}
-		counter := lipgloss.NewStyle().Foreground(counterColor).Render(fmt.Sprintf("%d", remaining))
-		return counter + " " + glyph
+		counter := theme.NewStyle().Foreground(counterColor).Render(fmt.Sprintf("%d", remaining))
+		return counter + theme.Pad(1) + glyph
 	}
 	return glyph
 }

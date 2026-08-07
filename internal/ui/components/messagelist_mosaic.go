@@ -7,6 +7,7 @@ import (
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 const (
@@ -276,7 +277,7 @@ func minWidth(ws []int) int {
 // still shows, and the image swaps in at the same size on a later frame.
 func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string) []string {
 	lines := make([]string, g.TileRows)
-	blank := strings.Repeat(" ", g.TileW)
+	blank := theme.Pad(g.TileW)
 	for i := range lines {
 		lines[i] = blank
 	}
@@ -286,10 +287,8 @@ func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string)
 			case tileContain:
 				art := ml.renderer.RenderWindow(id, img, g.FitCols, g.FitRows, 0, 0, g.FitCols, g.FitRows)
 				for r := 0; r < len(art) && g.PadTop+r < g.TileRows; r++ {
-					line := strings.Repeat(" ", g.PadLeft) + art[r]
-					if w := lipgloss.Width(line); w < g.TileW {
-						line += strings.Repeat(" ", g.TileW-w)
-					}
+					line := theme.Pad(g.PadLeft) + art[r]
+					line += theme.PadTo(lipgloss.Width(line), g.TileW)
 					lines[g.PadTop+r] = line
 				}
 			default: // tileCover
@@ -297,9 +296,7 @@ func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string)
 				art := ml.renderer.RenderWindow(id, img, coverC, coverR, g.HOff, g.VOff, g.TileW, g.TileRows)
 				for r := 0; r < len(art) && r < g.TileRows; r++ {
 					al := art[r]
-					if w := lipgloss.Width(al); w < g.TileW {
-						al += strings.Repeat(" ", g.TileW-w)
-					}
+					al += theme.PadTo(lipgloss.Width(al), g.TileW)
 					lines[r] = al
 				}
 			}
@@ -312,9 +309,7 @@ func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string)
 		lines[0] = xansi.Truncate(lines[0], g.TileW, "")
 	}
 	for i, ln := range lines {
-		if w := lipgloss.Width(ln); w < g.TileW {
-			lines[i] = ln + strings.Repeat(" ", g.TileW-w)
-		}
+		lines[i] = ln + theme.PadTo(lipgloss.Width(ln), g.TileW)
 	}
 	return lines
 }
@@ -331,7 +326,7 @@ func (ml *MessageList) composeMosaicRow(tiles [][]string, widths []int, m bubble
 			rows = len(t)
 		}
 	}
-	gap := strings.Repeat(" ", mosaicGap)
+	gap := theme.Pad(mosaicGap)
 	out := make([]string, rows)
 	for r := 0; r < rows; r++ {
 		var sb strings.Builder
@@ -339,17 +334,15 @@ func (ml *MessageList) composeMosaicRow(tiles [][]string, widths []int, m bubble
 			if c > 0 {
 				sb.WriteString(gap)
 			}
-			cell := strings.Repeat(" ", widths[c])
+			cell := theme.Pad(widths[c])
 			if r < len(t) {
 				cell = t[r]
 			}
 			sb.WriteString(cell)
 		}
 		line := sb.String()
-		if w := lipgloss.Width(line); w < m.actualW {
-			line += strings.Repeat(" ", m.actualW-w)
-		}
-		out[r] = bs.Render(b.Left) + " " + line + " " + bs.Render(b.Right)
+		line += theme.PadTo(lipgloss.Width(line), m.actualW)
+		out[r] = bs.Render(b.Left) + theme.Pad(1) + line + theme.Pad(1) + bs.Render(b.Right)
 	}
 	return out
 }
@@ -447,7 +440,7 @@ func (ml *MessageList) renderMosaic(parts []domain.Message, selected bool) []str
 	}
 	top, bottom := ml.bubbleBorders(framing, m)
 	b, bs := m.b, m.bs
-	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
+	blankRow := bs.Render(b.Left) + theme.Pad(m.innerW) + bs.Render(b.Right)
 
 	prev := ml.previewParts(parts)
 	lines := []string{top}

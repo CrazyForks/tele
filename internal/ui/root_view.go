@@ -16,9 +16,13 @@ func (m RootModel) View() tea.View {
 	var content string
 	if m.screen == ScreenLogin {
 		logoView := m.logo.View()
+		// Place fills everything around the centred block with whitespace, which
+		// on the login screen is almost the whole terminal. Left to itself that
+		// whitespace carries no background at all.
+		fill := lipgloss.WithWhitespaceStyle(theme.NewStyle())
 		if m.login.CurrentStep() < 0 {
-			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n"+"connecting...")
-			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined)
+			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n"+theme.S().Body.Render("connecting..."))
+			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		} else {
 			loginContent := m.login.View().Content
 			b := lipgloss.RoundedBorder()
@@ -33,10 +37,10 @@ func (m RootModel) View() tea.View {
 			const loginPadV, loginPadH = 1, 3
 			innerW := loginContentW + 2*loginPadH
 			innerH := loginContentH + 2*loginPadV
-			padded := lipgloss.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
+			padded := theme.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
 			loginBox := components.RenderBox(padded, "Telegram", "", "", "", b, nil, innerW+2, innerH+2)
 			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n", loginBox)
-			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined)
+			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		}
 	} else {
 		paneH := m.height + 1
@@ -69,7 +73,7 @@ func (m RootModel) View() tea.View {
 		if m.chat.IsTyping() {
 			chatDot = m.chat.TypingLabel()
 		} else if m.chat.PeerOnline() {
-			chatDot = lipgloss.NewStyle().Foreground(theme.T().StatusOnline).Render("●")
+			chatDot = theme.NewStyle().Foreground(theme.T().StatusOnline).Render("●")
 		}
 
 		var main string
@@ -154,6 +158,7 @@ func (m RootModel) View() tea.View {
 	if m.noticeActive() {
 		content = m.noticeView(content)
 	}
+	content = m.fillCanvas(content)
 	v := tea.NewView(content)
 	v.AltScreen = true
 	// Enable mouse reporting (clicks + wheel). CellMotion delivers button and
@@ -164,6 +169,34 @@ func (m RootModel) View() tea.View {
 	// (issue #148). Terminals that do not support it simply never send the event.
 	v.ReportFocus = true
 	return v
+}
+
+// fillCanvas carries the composed view out to the full terminal: every row to
+// m.width, the view to m.height rows. Whatever it adds goes after the row's own
+// content, which is after whatever reset that content ends in — the only
+// position a background survives from.
+//
+// The panes do sum to exactly m.width today, in both layout branches, so this is
+// mostly redundant mostly of the time. That is the point: the guarantee that
+// every cell is painted should not rest on arithmetic in three places continuing
+// to agree through every future change to how the screen is split.
+func (m RootModel) fillCanvas(content string) string {
+	if m.width <= 0 || m.height <= 0 {
+		return content
+	}
+	if theme.IsNone(theme.T().Background) {
+		// Nothing to fill with. Padding rows out to the terminal width would be
+		// invisible and would cost a pass over the whole screen every frame.
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	for len(lines) < m.height {
+		lines = append(lines, "")
+	}
+	for i, l := range lines {
+		lines[i] = l + theme.PadTo(lipgloss.Width(l), m.width)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // overlayMenuNearBubble places a menu next to the selected message bubble: left

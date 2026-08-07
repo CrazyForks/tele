@@ -122,21 +122,37 @@ func scanGuarded(t *testing.T, report func(*ast.CallExpr) string) []string {
 // it. A bare marker is not an exemption: it exempts nothing and shows up as the
 // violation it was meant to silence, which is the only way to keep the reason
 // from becoming optional.
+// The marker holds for the whole comment group it appears in, so a reason may
+// run to as many lines as it takes without the first line silently being the
+// only one that counts.
 func exemptLines(fset *token.FileSet, file *ast.File) map[int]bool {
 	lines := map[int]bool{}
 	for _, group := range file.Comments {
-		for _, c := range group.List {
-			i := strings.Index(c.Text, canvasOK)
-			if i < 0 {
-				continue
-			}
-			if strings.TrimSpace(c.Text[i+len(canvasOK):]) == "" {
-				continue
-			}
-			lines[fset.Position(c.Pos()).Line] = true
+		if !hasReason(group) {
+			continue
+		}
+		for l := fset.Position(group.Pos()).Line; l <= fset.Position(group.End()).Line; l++ {
+			lines[l] = true
 		}
 	}
 	return lines
+}
+
+// hasReason reports whether a comment group carries the marker followed by
+// something. A bare marker exempts nothing and shows up as the violation it was
+// meant to silence, which is the only way to keep the reason from being
+// optional.
+func hasReason(group *ast.CommentGroup) bool {
+	for _, c := range group.List {
+		i := strings.Index(c.Text, canvasOK)
+		if i < 0 {
+			continue
+		}
+		if strings.TrimSpace(c.Text[i+len(canvasOK):]) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // isSelector reports whether expr is the call pkg.name, matching on the package

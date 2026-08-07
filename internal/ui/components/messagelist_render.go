@@ -74,11 +74,15 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 
 	borderFg := ml.bubbleBorderFg(msg)
 	b := lipgloss.RoundedBorder()
-	bs := lipgloss.NewStyle().Foreground(borderFg)
+	// A bubble has no fill of its own — its interior is canvas — so the border
+	// carries it like any other cell the app draws.
+	bs := theme.NewStyle().Foreground(borderFg)
 
 	// Measure content width from text only.
 	actualW := 0
 	if msg.Text != "" {
+		// canvas:ok measurement only — this render is measured and thrown away,
+		// so a background would cost work per bubble and reach no cell.
 		measureStyle := lipgloss.NewStyle().Width(maxContentW)
 		for _, part := range strings.Split(msg.Text, "\n") {
 			if part == "" {
@@ -280,7 +284,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		sideLines = append(sideLines, renderForwardLines(msg.Forward.From, actualW, bs)...)
 		// Separate the forward header from any following content with a blank line.
 		if msg.ReplyToMsgID != 0 || msg.Text != "" || msg.Media != nil {
-			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
+			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
 		}
 	}
 
@@ -295,7 +299,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		}
 		sideLines = append(sideLines, ml.renderPreviewLines(origSenderID, name, snippet, actualW, bs)...)
 		if msg.Text != "" || msg.Media != nil {
-			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
+			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
 		}
 	}
 
@@ -303,7 +307,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		sideLines = append(sideLines, labelLine(localMediaLabel(msg.LocalMedia), actualW, b, bs))
 		sideLines = append(sideLines, labelLine(uploadStatusLine(msg.LocalMedia, actualW), actualW, b, bs))
 		if msg.Text != "" {
-			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
+			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
 		}
 	}
 
@@ -319,15 +323,12 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 				artLines = ml.renderer.Render(id, img, cols)
 			}
 		}
-		blankRow := bs.Render(b.Left) + strings.Repeat(" ", innerW) + bs.Render(b.Right)
+		blankRow := bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right)
 		switch {
 		case artLines != nil:
 			for _, al := range artLines {
-				lw := lipgloss.Width(al)
-				if lw < actualW {
-					al += strings.Repeat(" ", actualW-lw)
-				}
-				sideLines = append(sideLines, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
+				al += theme.PadTo(lipgloss.Width(al), actualW)
+				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(1)+al+theme.Pad(1)+bs.Render(b.Right))
 			}
 			if overlay := ml.overlayLabelFor(msg); overlay != "" {
 				sideLines = append(sideLines, labelLine(overlay, actualW, b, bs))
@@ -362,22 +363,24 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 
 	if msg.Text != "" {
 		rendered := RenderEntities(msg.Text, msg.Entities)
+		// canvas:ok this style only breaks lines. The text arrives painted run by
+		// run from RenderEntities, and giving the wrapper a background would drop
+		// it at the first reset inside the very text it is wrapping. Its own
+		// padding is taken off below and re-emitted carrying the canvas.
 		wrapStyle := lipgloss.NewStyle().Width(actualW)
 		for _, part := range strings.Split(rendered, "\n") {
 			if part == "" {
-				sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
+				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
 				continue
 			}
 			for _, wl := range strings.Split(wrapStyle.Render(part), "\n") {
-				lw := lipgloss.Width(wl)
-				if lw < actualW {
-					wl += strings.Repeat(" ", actualW-lw)
-				}
-				sideLines = append(sideLines, bs.Render(b.Left)+" "+wl+" "+bs.Render(b.Right))
+				wl = strings.TrimRight(wl, " ")
+				wl += theme.PadTo(lipgloss.Width(wl), actualW)
+				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(1)+wl+theme.Pad(1)+bs.Render(b.Right))
 			}
 		}
 	} else if len(sideLines) == 0 {
-		sideLines = []string{bs.Render(b.Left) + strings.Repeat(" ", innerW) + bs.Render(b.Right)}
+		sideLines = []string{bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right)}
 	}
 
 	return sideLines
@@ -394,7 +397,8 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 		if leftPad < 0 {
 			leftPad = 0
 		}
-		pad := strings.Repeat(" ", leftPad)
+		// The margin an outgoing bubble is pushed across by is canvas, not gap.
+		pad := theme.Pad(leftPad)
 		for i := range allLines {
 			allLines[i] = pad + allLines[i]
 		}
@@ -472,12 +476,7 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 		}
 	}
 
-	pad := func(s string) string {
-		if w := lipgloss.Width(s); w < blockW {
-			return s + strings.Repeat(" ", blockW-w)
-		}
-		return s
-	}
+	pad := func(s string) string { return s + theme.PadTo(lipgloss.Width(s), blockW) }
 
 	lines := make([]string, 0, rows+2)
 	if nameStr != "" {
@@ -491,7 +490,7 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 		// Placement not transmitted yet: reserve the art rows so the height
 		// matches msgHeight; the image swaps in on the next render.
 		for i := 0; i < rows; i++ {
-			lines = append(lines, strings.Repeat(" ", blockW))
+			lines = append(lines, theme.Pad(blockW))
 		}
 	}
 	if overlay := ml.overlayLabelFor(msg); overlay != "" {
@@ -501,7 +500,7 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 	if fill < 0 {
 		fill = 0
 	}
-	lines = append(lines, pad(reactStr+strings.Repeat(" ", fill)+tsStr))
+	lines = append(lines, pad(reactStr+theme.Pad(fill)+tsStr))
 
 	return ml.alignBareLines(lines, blockW, selected, msg.IsOut)
 }
@@ -515,7 +514,7 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 		if leftPad < 0 {
 			leftPad = 0
 		}
-		pad := strings.Repeat(" ", leftPad)
+		pad := theme.Pad(leftPad)
 		for i := range lines {
 			lines[i] = pad + lines[i]
 		}
@@ -642,7 +641,7 @@ func (ml *MessageList) renderGroupStack(parts []domain.Message, selected bool) [
 
 	top, bottom := ml.bubbleBorders(framing, m)
 	b, bs := m.b, m.bs
-	blankRow := bs.Render(b.Left) + strings.Repeat(" ", m.innerW) + bs.Render(b.Right)
+	blankRow := bs.Render(b.Left) + theme.Pad(m.innerW) + bs.Render(b.Right)
 
 	lines := make([]string, 0, len(media)*(budget+2)+4)
 	lines = append(lines, top)
@@ -699,10 +698,8 @@ func (ml *MessageList) groupPartArt(msg domain.Message, budget int, badge string
 		if i == 0 {
 			al = overlayBadgeOnArtRow(al, badge, cols)
 		}
-		if w := lipgloss.Width(al); w < m.actualW {
-			al += strings.Repeat(" ", m.actualW-w)
-		}
-		out = append(out, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
+		al += theme.PadTo(lipgloss.Width(al), m.actualW)
+		out = append(out, bs.Render(b.Left)+theme.Pad(1)+al+theme.Pad(1)+bs.Render(b.Right))
 	}
 	return out
 }
@@ -727,18 +724,19 @@ func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
 func (ml *MessageList) captionLines(text string, entities []domain.MessageEntity, m bubbleMetrics, wrapW int) []string {
 	b, bs := m.b, m.bs
 	rendered := RenderEntities(text, entities)
+	// canvas:ok breaks lines only; see the text path of bubbleContentLines for
+	// why a wrapper of painted text cannot carry the canvas itself.
 	wrapStyle := lipgloss.NewStyle().Width(wrapW)
 	var out []string
 	for _, part := range strings.Split(rendered, "\n") {
 		if part == "" {
-			out = append(out, bs.Render(b.Left)+strings.Repeat(" ", m.innerW)+bs.Render(b.Right))
+			out = append(out, bs.Render(b.Left)+theme.Pad(m.innerW)+bs.Render(b.Right))
 			continue
 		}
 		for _, wl := range strings.Split(wrapStyle.Render(part), "\n") {
-			if w := lipgloss.Width(wl); w < m.actualW {
-				wl += strings.Repeat(" ", m.actualW-w)
-			}
-			out = append(out, bs.Render(b.Left)+" "+wl+" "+bs.Render(b.Right))
+			wl = strings.TrimRight(wl, " ")
+			wl += theme.PadTo(lipgloss.Width(wl), m.actualW)
+			out = append(out, bs.Render(b.Left)+theme.Pad(1)+wl+theme.Pad(1)+bs.Render(b.Right))
 		}
 	}
 	return out

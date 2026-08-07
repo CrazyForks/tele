@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // RenderBox renders a bordered box with an optional top title, top suffix (right of title),
@@ -29,11 +31,19 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 		thumbStart, thumbSize, showThumb = sb.Info.Thumb(sb.TrackLen)
 	}
 
-	cb := func(s string) string { return s }
+	// The border goes through a style whether or not it is coloured, so that the
+	// canvas reaches the border cells either way. With no canvas and no border
+	// colour this renders the argument unchanged, which is what it did before.
+	bs := theme.NewStyle()
 	if borderFg != nil {
-		bs := lipgloss.NewStyle().Foreground(borderFg)
-		cb = func(s string) string { return bs.Render(s) }
+		bs = bs.Foreground(borderFg)
 	}
+	cb := bs.Render
+
+	// paint is for the text the box adds itself: the title, and the single
+	// spaces framing a caller-styled label. The labels arrive already styled and
+	// are never wrapped — a reset inside one would drop the canvas from there on.
+	paint := theme.S().Body.Render
 
 	var top string
 	if topTitle != "" {
@@ -45,12 +55,12 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 				suffixW := lipgloss.Width(topSuffix)
 				remaining := fillW - suffixW - 4
 				if remaining >= 0 {
-					top = cb(b.TopLeft+b.Top) + titleStr + cb(b.Top) + " " + topSuffix + " " + cb(strings.Repeat(b.Top, remaining)+b.TopRight)
+					top = cb(b.TopLeft+b.Top) + paint(titleStr) + cb(b.Top) + theme.Pad(1) + topSuffix + theme.Pad(1) + cb(strings.Repeat(b.Top, remaining)+b.TopRight)
 				} else {
-					top = cb(b.TopLeft+b.Top) + titleStr + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
+					top = cb(b.TopLeft+b.Top) + paint(titleStr) + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
 				}
 			} else {
-				top = cb(b.TopLeft+b.Top) + titleStr + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
+				top = cb(b.TopLeft+b.Top) + paint(titleStr) + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
 			}
 		} else {
 			top = cb(b.TopLeft + strings.Repeat(b.Top, innerW) + b.TopRight)
@@ -69,7 +79,9 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 		hintW := lipgloss.Width(hintStr)
 		fillW := innerW - hintW
 		if fillW >= 2 {
-			bot = cb(b.BottomLeft+b.Bottom) + hintStr + cb(strings.Repeat(b.Bottom, fillW-1)+b.BottomRight)
+			// The hint arrives styled by the caller; only the spaces framing it
+			// are the box's to paint.
+			bot = cb(b.BottomLeft+b.Bottom) + theme.Pad(1) + bottomHint + theme.Pad(1) + cb(strings.Repeat(b.Bottom, fillW-1)+b.BottomRight)
 		} else {
 			bot = cb(b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight)
 		}
@@ -83,7 +95,15 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 		// One leading border char after the corner, then fill, then the labels.
 		fillW := innerW - 1 - lipgloss.Width(leftStr) - lipgloss.Width(rightStr)
 		if fillW >= 1 {
-			bot = cb(b.BottomLeft+b.Bottom) + leftStr + cb(strings.Repeat(b.Bottom, fillW)) + rightStr + cb(b.BottomRight)
+			// Both labels arrive styled; the box paints only the spaces it puts
+			// around them, which is why the widths above are measured on the
+			// framed strings but the framing is emitted separately here.
+			left := ""
+			if bottomHint != "" {
+				left = theme.Pad(1) + bottomHint + theme.Pad(1)
+			}
+			right := theme.Pad(1) + bottomSuffix + theme.Pad(1)
+			bot = cb(b.BottomLeft+b.Bottom) + left + cb(strings.Repeat(b.Bottom, fillW)) + right + cb(b.BottomRight)
 		} else {
 			bot = cb(b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight)
 		}
@@ -100,10 +120,10 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 	result := make([]string, 0, innerH+2)
 	result = append(result, top)
 	for ri, l := range lines {
-		lw := lipgloss.Width(l)
-		if lw < innerW {
-			l += strings.Repeat(" ", innerW-lw)
-		}
+		// The pad goes after the line, which is after whatever reset the line
+		// ends in — the only position from which a background survives. This is
+		// the interior of every panel, and the largest area of colour on screen.
+		l += theme.PadTo(lipgloss.Width(l), innerW)
 		rightChar := b.Right
 		if showThumb && sb != nil && ri >= sb.TrackTop && ri < sb.TrackTop+sb.TrackLen {
 			tr := ri - sb.TrackTop

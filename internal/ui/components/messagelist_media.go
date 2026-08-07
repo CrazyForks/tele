@@ -10,6 +10,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // renderUploadBar draws a fixed-width progress bar like "▰▰▰▱▱ 60%".
@@ -320,11 +321,8 @@ func videoOverlayLabel(m *domain.MediaRef) string {
 // labelLine renders one bordered, right-padded content line for a label.
 // Width is measured with lipgloss.Width so wide emoji pad correctly.
 func labelLine(label string, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
-	padding := ""
-	if pw := lipgloss.Width(label); actualW > pw {
-		padding = strings.Repeat(" ", actualW-pw)
-	}
-	return bs.Render(b.Left) + " " + label + padding + " " + bs.Render(b.Right)
+	padding := theme.PadTo(lipgloss.Width(label), actualW)
+	return bs.Render(b.Left) + theme.Pad(1) + label + padding + theme.Pad(1) + bs.Render(b.Right)
 }
 
 // placeholderLine renders one bordered label line for a media placeholder.

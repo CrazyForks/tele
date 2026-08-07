@@ -219,7 +219,7 @@ func (m *FilePickerModel) View() string {
 		if e.IsDir() {
 			label += "/"
 		}
-		style := lipgloss.NewStyle().Inline(true).Width(inner).MaxWidth(inner)
+		style := theme.NewStyle().Inline(true).Width(inner).MaxWidth(inner)
 		if selected {
 			style = style.Background(theme.T().SurfaceSelected).Foreground(theme.T().TextOnSelected)
 		}

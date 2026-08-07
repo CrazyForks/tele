@@ -44,11 +44,9 @@ type ForwardToChatRequest struct {
 	Comment string // optional; sent as a separate message before the forward
 }
 
-// These two carry no color, so they stay here rather than in the theme.
-var (
-	normalChatStyle = lipgloss.NewStyle()
-	activeChatStyle = lipgloss.NewStyle().Bold(true)
-)
+// The row styles used to live here as package-level vars carrying no colour.
+// They come from the theme now: a row is body text, and with a canvas set it has
+// a background to carry, which a value built once at init could not know about.
 
 func formatUnread(count int) string {
 	if count <= 0 {
@@ -310,7 +308,7 @@ func (m *ChatListModel) styleTitle(i int, id int64, truncated string) string {
 		return truncated
 	}
 	fg := components.FadeAccentColor(theme.T().HighlightAccent, theme.T().HighlightBaseChat, m.highlightStep, components.HighlightFadeSteps)
-	return lipgloss.NewStyle().Foreground(fg).Render(truncated)
+	return theme.NewStyle().Foreground(fg).Render(truncated)
 }
 
 func (m *ChatListModel) Cursor() int { return m.cursor }
@@ -545,6 +543,9 @@ func (m *ChatListModel) View() string {
 			lw := lipgloss.Width(trunc)
 			content = m.styleTitle(i, row.ID, trunc)
 			if lw < inner {
+				// canvas:ok the whole row goes through one style below, and on a
+				// selected row that style is the selection fill — painting the
+				// canvas here would cut a hole in the highlight instead.
 				content += strings.Repeat(" ", inner-lw)
 			}
 		} else {
@@ -559,16 +560,17 @@ func (m *ChatListModel) View() string {
 			if pad < 0 {
 				pad = 0
 			}
+			// canvas:ok same row style below; see the badge-less branch above.
 			content = m.styleTitle(i, row.ID, truncTitle) + strings.Repeat(" ", pad) + badge
 		}
 
 		line := prefix + content
 
-		style := normalChatStyle
+		style := theme.S().Body
 		if i == m.cursor && m.focused {
 			style = theme.S().SelectedChat
 		} else if i == activeIdx {
-			style = activeChatStyle
+			style = theme.S().BodyBold
 		}
 		lines = append(lines, style.Inline(true).Render(line))
 	}

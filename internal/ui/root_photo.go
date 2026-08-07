@@ -2,7 +2,6 @@ package ui
 
 import (
 	"image"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -13,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // photoViewer is the in-app photo modal overlay state. Unlike videoPlayer it holds
@@ -250,19 +250,17 @@ func (m RootModel) photoViewerView(base string) string {
 	switch {
 	case pv.img == nil:
 		// Loading: a cols×rows blank grid with a centered spinner line.
-		blank := strings.Repeat(" ", cols)
+		blank := theme.Pad(cols)
 		content = make([]string, rows)
 		for i := range content {
 			content[i] = blank
 		}
 		if rows > 0 {
-			line := videoSpinnerGlyph(pv.spinnerIdx) + " loading…"
+			line := theme.S().Body.Render(videoSpinnerGlyph(pv.spinnerIdx) + " loading…")
 			if lp := (cols - lipgloss.Width(line)) / 2; lp > 0 {
-				line = strings.Repeat(" ", lp) + line
+				line = theme.Pad(lp) + line
 			}
-			if rp := cols - lipgloss.Width(line); rp > 0 {
-				line += strings.Repeat(" ", rp)
-			}
+			line += theme.PadTo(lipgloss.Width(line), cols)
 			content[rows/2] = line
 		}
 	case m.imageMode == media.ModeKitty:

@@ -118,6 +118,7 @@ func (sb *StatusBar) View() string {
 		if gap := sb.width - lipgloss.Width(left) - lipgloss.Width(ver); gap >= 1 {
 			// Filler and version each set their own colors: the segments before
 			// them end with a reset, so an enclosing style would not survive.
+			// canvas:ok rendered through Bar, which paints the status-bar surface.
 			return left + theme.S().Bar.Render(strings.Repeat(" ", gap)) + theme.S().Bar.Render(ver)
 		}
 	}
@@ -381,5 +382,5 @@ func (sb *StatusBar) accentStyle() lipgloss.Style {
 	if sb.mode == keys.ModeInsert {
 		fg = theme.T().AccentInsert
 	}
-	return lipgloss.NewStyle().Background(theme.T().SurfaceStatusBar).Foreground(fg)
+	return theme.NewStyle().Background(theme.T().SurfaceStatusBar).Foreground(fg)
 }

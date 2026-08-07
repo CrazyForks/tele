@@ -15,6 +15,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // useInAppVideoPlayer reports whether a video should open in the in-app modal
@@ -398,20 +399,18 @@ func (m RootModel) videoPlayerView(base string) string {
 		id := m.kittyStore.IDFor(videoPlayerKey)
 		content = media.PlaceholderLines(id, vp.cols, vp.rows)
 	} else {
-		blank := strings.Repeat(" ", vp.cols)
+		blank := theme.Pad(vp.cols)
 		content = make([]string, vp.rows)
 		for i := range content {
 			content[i] = blank
 		}
 		if vp.rows > 0 {
 			// Center "loading…" both vertically (middle row) and horizontally.
-			line := videoSpinnerGlyph(vp.spinnerIdx) + " loading…"
+			line := theme.S().Body.Render(videoSpinnerGlyph(vp.spinnerIdx) + " loading…")
 			if lp := (vp.cols - lipgloss.Width(line)) / 2; lp > 0 {
-				line = strings.Repeat(" ", lp) + line
+				line = theme.Pad(lp) + line
 			}
-			if rp := vp.cols - lipgloss.Width(line); rp > 0 {
-				line += strings.Repeat(" ", rp)
-			}
+			line += theme.PadTo(lipgloss.Width(line), vp.cols)
 			content[vp.rows/2] = line
 		}
 	}

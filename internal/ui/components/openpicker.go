@@ -83,8 +83,8 @@ func (p *OpenPicker) choose(i int) (*OpenPicker, tea.Cmd) {
 func (p *OpenPicker) View() string {
 	// The leading number is accented like a status-bar hint key; the selected row
 	// stays plain so its highlight background keeps full contrast.
-	base := lipgloss.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().TextOnSurface)
-	accent := lipgloss.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().AccentOnSurface)
+	base := theme.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().TextOnSurface)
+	accent := theme.NewStyle().Background(OverlayMenuBg()).Foreground(theme.T().AccentOnSurface)
 	rows := make([]string, len(p.targets))
 	for i, t := range p.targets {
 		label := truncateTail(t.Label, p.maxLabel)

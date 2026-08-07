@@ -181,6 +181,7 @@ func (p *MentionPopup) renderRow(r mentionRow, selected bool, innerW int) string
 		b.WriteString(base.Render(" "))
 		b.WriteString(handle)
 	}
+	// canvas:ok rendered through base, which paints the popup surface.
 	b.WriteString(base.Render(strings.Repeat(" ", pad+1)))
 	return b.String()
 }

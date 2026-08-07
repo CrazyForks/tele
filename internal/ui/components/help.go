@@ -217,6 +217,8 @@ func (h *HelpModal) build(km keys.KeyMap) {
 			if len(key) > keyCol {
 				key = key[:keyCol]
 			}
+			// canvas:ok these spaces are rendered through HelpBg below, so they
+			// carry the modal surface rather than the canvas behind it.
 			pad := strings.Repeat(" ", keyCol-len(key))
 			// Every segment (including gaps) carries the modal background so the
 			// row fill stays solid across the reset sequences between runs.
