@@ -167,6 +167,7 @@ paints:
 
 | Token | Where |
 |---|---|
+| `text` | the body: message text, chat titles, folder labels, search rows, the unread count |
 | `text_dim` | timestamps, quotes, separators |
 | `text_muted` | muted chats |
 | `text_faint` | "no results", "empty", overlay hint descriptions |
@@ -179,7 +180,14 @@ paints:
 | `text_mode_label` | the NORMAL/INSERT label |
 | `text_code` | inline code and code blocks |
 
-Body text has no token: it is left unstyled and takes the terminal's foreground.
+`text` is the largest area of colour on screen and the one that decides whether
+a theme reads as itself. The built-ins leave it `none`, which means the
+terminal's own foreground — exactly how tele behaved before the token existed —
+so a theme has to claim it deliberately.
+
+There is no background token. tele paints its own panels, bars and fills, but
+never the screen behind them: that stays the terminal's, which is what lets a
+transparent terminal keep its backdrop.
 
 ### Accents
 

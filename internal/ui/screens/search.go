@@ -51,9 +51,6 @@ func IsSearchInternalMsg(msg tea.Msg) bool {
 	return false
 }
 
-// searchNormalRow carries no color, so it stays here rather than in the theme.
-var searchNormalRow = lipgloss.NewStyle()
-
 const searchOverlayWidth = 50
 const searchMaxResults = 8
 
@@ -459,7 +456,7 @@ func (m *SearchModel) View() string {
 		if m.forwardMsgID != 0 && r.chat.UnreadCount > 0 {
 			row = fmt.Sprintf("%s (%d)", r.chat.Title, r.chat.UnreadCount)
 		}
-		style := searchNormalRow
+		style := theme.S().Body
 		if selected {
 			style = theme.S().SearchActiveRow
 		}

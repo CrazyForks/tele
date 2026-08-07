@@ -5,6 +5,7 @@ surface_status_bar
 surface_selected
 surface_self_mention
 surface_code
+text
 text_dim
 text_muted
 text_faint

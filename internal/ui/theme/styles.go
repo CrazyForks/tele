@@ -10,6 +10,13 @@ import "charm.land/lipgloss/v2"
 // A style whose construction needs runtime input (a container background to
 // bake in, a computed width) is not here; those are built in place from T().
 type Styles struct {
+	// Body is the text the theme has no more specific token for: message text,
+	// chat titles, folder labels, search rows. With Text unset it renders
+	// exactly as an unstyled string does, so it is safe to apply everywhere the
+	// terminal's foreground used to show through.
+	Body     lipgloss.Style
+	BodyBold lipgloss.Style
+
 	// Message list.
 	NameIncoming    lipgloss.Style
 	NameEditing     lipgloss.Style
@@ -76,6 +83,9 @@ type Styles struct {
 func buildStyles(t Theme) Styles {
 	n := lipgloss.NewStyle
 	return Styles{
+		Body:     n().Foreground(t.Text),
+		BodyBold: n().Foreground(t.Text).Bold(true),
+
 		NameIncoming:    n().Foreground(t.NameIncoming).Bold(true),
 		NameEditing:     n().Foreground(t.NameEditing).Bold(true),
 		Timestamp:       n().Foreground(t.TextDim),

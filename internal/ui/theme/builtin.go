@@ -57,6 +57,7 @@ var TeleDark = Theme{
 	SurfaceSelfMention: hex("#ff87ff"), // 213
 	SurfaceCode:        hex("#303030"), // 236
 
+	Text:                hex("none"),    // the terminal's own foreground
 	TextDim:             hex("#8a8a8a"), // 245
 	TextMuted:           hex("#808080"), // 244
 	TextFaint:           hex("#808080"), // 8
@@ -157,6 +158,7 @@ var TeleLight = Theme{
 	SurfaceSelfMention: hex("#ff87ff"), // 213, carries black text
 	SurfaceCode:        hex("#e4e4e4"), // 254
 
+	Text:                hex("none"),    // the terminal's own foreground
 	TextDim:             hex("#6c6c6c"), // timestamps have to stay readable on white
 	TextMuted:           hex("#767676"),
 	TextFaint:           hex("#878787"), // fainter than dim, still legible

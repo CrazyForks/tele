@@ -21,7 +21,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   it. Nothing in a theme can stop tele starting: anything it cannot use is a
   warning and the rest of the file still applies. `tele --theme-dump` writes out
   a complete theme to start from, `tele --theme-check` explains what each slot
-  ended up with. Full reference in `docs/themes.md`.
+  ended up with. Full reference in `docs/themes.md` (#34).
+- A theme can now set the body text — message text, chat titles, folder labels,
+  search rows — which is the largest area of colour on screen and, until now,
+  came from the terminal whatever the theme said. It is left to the terminal
+  unless a theme claims it, so nothing changes for anyone who does not (#34).
 
 ### Changed
 

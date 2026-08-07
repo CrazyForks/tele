@@ -150,10 +150,16 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 			}
 		}
 		segment := string(runes[lo:hi])
-		if self {
+		switch {
+		case self:
 			segment = theme.S().SelfMention.Render(segment)
-		} else if styled {
+		case styled:
 			segment = style.Render(segment)
+		default:
+			// Plain message text. Rendered through the body style rather than
+			// emitted raw, so a theme that sets Text owns it; with Text unset
+			// this is byte-for-byte the raw segment.
+			segment = theme.S().Body.Render(segment)
 		}
 		if linkURL != "" {
 			segment = osc8(linkID, linkURL, segment)

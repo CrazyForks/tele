@@ -43,6 +43,16 @@ type Theme struct {
 	SurfaceCode        color.Color // inline code and pre blocks in message markup
 
 	// Text.
+	//
+	// Text is the body: message text, chat titles, folder labels, search rows,
+	// the unread count. It is the largest area of colour on screen and the
+	// built-ins leave it none, which means the terminal's own foreground, as it
+	// always was. A theme that sets it takes that area over.
+	//
+	// It is applied to each run rather than by wrapping a composed line: a line
+	// holding a coloured run carries an SGR reset in the middle of it, and
+	// anything wrapped around that loses its colour from the reset onward.
+	Text                color.Color
 	TextDim             color.Color // timestamps, quotes, separators
 	TextMuted           color.Color // muted chats
 	TextFaint           color.Color // "no results", "empty", overlay hint descriptions

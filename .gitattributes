@@ -1,0 +1,4 @@
+# Golden files are data a test compares byte for byte. A Windows checkout that
+# rewrote their line endings would fail the comparison over how the working copy
+# spells a line break rather than over what the file records.
+*.golden -text

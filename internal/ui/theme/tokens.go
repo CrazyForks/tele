@@ -70,6 +70,10 @@ func TokenKeys() []string {
 	return out
 }
 
+// IsNone reports whether a token holds the absence of color rather than a
+// color: the attribute is not set, and whatever is behind shows through.
+func IsNone(c color.Color) bool { return isNone(c) }
+
 // isNone reports whether c is the absence of color rather than a color.
 func isNone(c color.Color) bool {
 	if c == nil {

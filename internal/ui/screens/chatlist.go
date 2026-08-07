@@ -95,9 +95,9 @@ func rowIndicators(c project.ChatRow) string {
 	var unread string
 	switch {
 	case c.Unread > 0:
-		unread = formatUnread(c.Unread)
+		unread = theme.S().Body.Render(formatUnread(c.Unread))
 	case c.UnreadMark:
-		unread = "[•]"
+		unread = theme.S().Body.Render("[•]")
 	}
 	var reaction string
 	if c.Reactions > 0 {
@@ -303,9 +303,10 @@ func (m *ChatListModel) HighlightStep() int { return m.highlightStep }
 // keeps its selection background instead, so it is left unstyled here.
 func (m *ChatListModel) styleTitle(i int, id int64, truncated string) string {
 	if m.highlightStep <= 0 || id != m.highlightChatID {
-		return truncated
+		return theme.S().Body.Render(truncated)
 	}
 	if i == m.cursor && m.focused {
+		// The selection fill supplies the colour; leave the title to it.
 		return truncated
 	}
 	fg := components.FadeAccentColor(theme.T().HighlightAccent, theme.T().HighlightBaseChat, m.highlightStep, components.HighlightFadeSteps)

@@ -20,11 +20,6 @@ type FolderSelectedMsg struct {
 	Filter *domain.FolderFilter
 }
 
-var (
-	normalFolderStyle = lipgloss.NewStyle()
-	activeFolderStyle = lipgloss.NewStyle().Bold(true)
-)
-
 var allChatsFilter = domain.FolderFilter{ID: 0, Title: "All Chats"}
 
 var archiveFilter = domain.FolderFilter{ID: domain.ArchiveFolderID, Title: "Archive"}
@@ -160,11 +155,13 @@ func (m FoldersModel) View() string {
 	var lines []string
 	for i, f := range m.folders {
 		label := m.formatEntry(f, i == m.activeIdx)
-		style := normalFolderStyle
+		// formatEntry returns plain text, so the whole label can be styled at
+		// once: there is no inner run whose reset would cut the colour short.
+		style := theme.S().Body
 		if i == m.cursor && m.focused {
 			style = theme.S().SelectedFolder
 		} else if i == m.activeIdx {
-			style = activeFolderStyle
+			style = theme.S().BodyBold
 		}
 		lines = append(lines, style.Render(label))
 	}
