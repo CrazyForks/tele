@@ -81,7 +81,10 @@ type Styles struct {
 }
 
 func buildStyles(t Theme) Styles {
-	n := lipgloss.NewStyle
+	// Every style starts from the canvas, so one that sets no background of its
+	// own still paints rather than letting the terminal through. A style that
+	// does set one overwrites it, which is what a surface is.
+	n := func() lipgloss.Style { return newStyle(t) }
 	return Styles{
 		Body:     n().Foreground(t.Text),
 		BodyBold: n().Foreground(t.Text).Bold(true),

@@ -49,6 +49,8 @@ func hex(s string) color.Color { return mustColor(s) }
 var TeleDark = Theme{
 	Name: "tele-dark",
 
+	Background: hex("none"), // the terminal's own; see Theme.Background
+
 	SurfaceOverlay:     hex("#262626"), // 235
 	SurfaceHelp:        hex("#262626"), // 235
 	SurfaceToast:       hex("#3a3a3a"), // 237
@@ -149,6 +151,8 @@ var TeleDark = Theme{
 // text and separators are already chosen for it.
 var TeleLight = Theme{
 	Name: "tele-light",
+
+	Background: hex("none"), // the terminal's own; see Theme.Background
 
 	SurfaceOverlay:     hex("#d0d0d0"), // 252
 	SurfaceHelp:        hex("#e4e4e4"), // 254

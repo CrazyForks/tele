@@ -175,6 +175,15 @@ func (l *Loader) Resolve(name string, fallback Theme) Resolved {
 	if len(layers) > 0 {
 		res.Theme.Name = layers[0].name
 	}
+	// Checked here, on the resolution, rather than on each layer as it is
+	// applied: a chain may set a token in one layer and the token it depends on
+	// in another, and only the result says whether the requirement is met.
+	for _, token := range enforceDependencies(&res.Theme) {
+		l.warnf("%s", dependencyWarning(res.Theme.Name, token))
+		// The dump has to show what is in effect, not what was asked for, or
+		// dumping a refused theme would reproduce the file that was refused.
+		res.Origins[TokenKey(token)] = Origin{Theme: res.Theme.Name, Raw: "none"}
+	}
 	return res
 }
 

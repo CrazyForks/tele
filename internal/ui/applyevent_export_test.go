@@ -438,7 +438,7 @@ func applyEvent(t *testing.T, m ui.RootModel, st store.Store, evt store.Event) (
 // openChat opens a chat and drains the subscription's first delta, which is
 // always a full Reset. In production that round trip is the bubbletea program
 // delivering the owner's reply; a test has to make it happen itself.
-func openChat(t *testing.T, m ui.RootModel, chatID int64, title string) ui.RootModel {
+func openChat(t testing.TB, m ui.RootModel, chatID int64, title string) ui.RootModel {
 	t.Helper()
 	next, _ := m.Update(screens.OpenChatMsg{ChatID: chatID, Title: title})
 	m = next.(ui.RootModel)
@@ -453,7 +453,7 @@ func openChat(t *testing.T, m ui.RootModel, chatID int64, title string) ui.RootM
 // drainOwner feeds whatever the owner has queued into the model. Anything that
 // subscribes or moves a window queues a delta the bubbletea program would
 // deliver; a test has to deliver it itself.
-func drainOwner(t *testing.T, m ui.RootModel) ui.RootModel {
+func drainOwner(t testing.TB, m ui.RootModel) ui.RootModel {
 	t.Helper()
 	o, ok := m.Owner().(*testOwner)
 	if !ok {
@@ -465,7 +465,7 @@ func drainOwner(t *testing.T, m ui.RootModel) ui.RootModel {
 
 // toMain reaches the main screen, where the chat list first has a size and
 // subscribes, and drains the subscription's opening Reset.
-func toMain(t *testing.T, m ui.RootModel) ui.RootModel {
+func toMain(t testing.TB, m ui.RootModel) ui.RootModel {
 	t.Helper()
 	next, _ := m.Update(screens.TransitionToMainMsg{})
 	return drainOwner(t, next.(ui.RootModel))
@@ -475,7 +475,7 @@ func toMain(t *testing.T, m ui.RootModel) ui.RootModel {
 // messages for a chat through state and drains the resulting chat:<id> delta
 // into the model, the way core.Owner.backfill does in production. It replaces
 // the old ChatHistoryMsg, which was the client applying a network reply itself.
-func applyHistory(t *testing.T, m ui.RootModel, st store.Store, chatID int64) (tea.Model, tea.Cmd) {
+func applyHistory(t testing.TB, m ui.RootModel, st store.Store, chatID int64) (tea.Model, tea.Cmd) {
 	t.Helper()
 	o, ok := m.Owner().(*testOwner)
 	if !ok {

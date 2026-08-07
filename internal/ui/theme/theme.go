@@ -4,8 +4,12 @@
 package theme
 
 import (
+	"fmt"
 	"image/color"
+	"reflect"
 	"sync/atomic"
+
+	"charm.land/lipgloss/v2"
 )
 
 // GradientStop is one stop of an interpolated color ramp, at position Pos in
@@ -22,9 +26,9 @@ type GradientStop struct {
 // separate fields: they are separate ideas, and a theme must be free to split
 // them.
 //
-// There is deliberately no primary-text token. Body text is unstyled and
-// inherits the terminal foreground; a token would force a color where none is
-// forced now.
+// Tokens are independent of one another with one exception: a few carry a
+// dependency, refusing to mean anything unless another token is set alongside
+// them. See dependencies.
 //
 // Field names are the public spelling of the tokens: a theme file's keys are
 // matched against them through normalize, so SurfaceOverlay is written
@@ -32,6 +36,21 @@ type GradientStop struct {
 // which is why TestTokenKeys pins the whole list to a golden file.
 type Theme struct {
 	Name string
+
+	// Background is the canvas: the field of colour behind everything, wherever
+	// no surface covers it. The built-ins leave it none, which means the
+	// terminal's own and is how tele has always looked; a theme that sets it
+	// takes the whole screen over.
+	//
+	// It depends on Text: a theme resolving to a canvas without body text is
+	// refused, because a painted background under a foreground the app does not
+	// own is the defect that shipped once as blue-on-grey popup menus, at the
+	// scale of the whole screen. The reverse is legitimate — Text alone is what
+	// ships today. See dependencies.
+	//
+	// Setting it also ends terminal transparency, which is inherent to painting
+	// a canvas at all rather than a consequence of how it is painted.
+	Background color.Color
 
 	// Surfaces — filled areas the app paints behind content.
 	SurfaceOverlay     color.Color // popup menus, reaction picker, mention popup
@@ -139,6 +158,59 @@ var interpolated = map[string]bool{
 	"HighlightBaseBubble": true,
 }
 
+// dependency is a token that means nothing on its own: it is refused unless the
+// token it requires is also set. It is checked on the resolved theme rather than
+// on the file that declares it, because a chain may legitimately split the two
+// across layers — a theme setting text and a theme built on it setting
+// background is a complete pair, and rejecting it would forbid the separation
+// base: exists for. Checking the resolution also catches what a per-file check
+// would miss: a theme setting both, whose descendant puts one back to none.
+//
+// The relation runs one way. Text without Background is how tele ships.
+var dependencies = []struct {
+	token, requires string
+	why             string
+}{
+	{"Background", "Text",
+		"a canvas under a foreground the app does not own is unreadable in a way no theme can predict"},
+}
+
+// enforceDependencies clears any token whose dependency is unmet and returns
+// what it cleared, in declaration order. Clearing the dependent token is the
+// only available remedy — a colour cannot be invented for the one it requires —
+// and it lands the theme on behaviour that is known to work, since not setting
+// the token at all is what every theme did before it existed.
+func enforceDependencies(t *Theme) []string {
+	v := reflect.ValueOf(t).Elem()
+	var cleared []string
+	for _, d := range dependencies {
+		token := v.FieldByName(d.token)
+		if isNone(token.Interface().(color.Color)) {
+			continue
+		}
+		if !isNone(v.FieldByName(d.requires).Interface().(color.Color)) {
+			continue
+		}
+		token.Set(reflect.ValueOf(color.Color(lipgloss.NoColor{})))
+		cleared = append(cleared, d.token)
+	}
+	return cleared
+}
+
+// dependencyWarning explains a cleared token the way the file that caused it has
+// to be edited, naming the token that has to be added rather than the rule.
+func dependencyWarning(themeName, token string) string {
+	for _, d := range dependencies {
+		if d.token != token {
+			continue
+		}
+		return fmt.Sprintf("theme %s: %s is set but %s is not, so %s is ignored; %s — set %s too",
+			themeName, TokenKey(d.token), TokenKey(d.requires), TokenKey(d.token),
+			d.why, TokenKey(d.requires))
+	}
+	return fmt.Sprintf("theme %s: %s is ignored", themeName, TokenKey(token))
+}
+
 // Slots holds the theme used against each terminal background. Both are always
 // filled — a config that names one theme puts it in both — so selecting one is
 // a choice between two present values and never a fallback.
@@ -158,10 +230,16 @@ func (s Slots) pick(dark bool) Theme {
 // as one value so a render can never mix a new theme with stale styles. It also
 // remembers which background it was applied for, so a later SetSlots can
 // reinstall against the same background.
+// It also carries the escape pair that wraps a run of canvas-coloured spaces,
+// computed once here rather than per pad: padding is emitted on every row of
+// every panel, and building a style to render it would put lipgloss's alignment
+// machinery on the hottest path in the renderer.
 type snapshot struct {
 	theme  Theme
 	styles Styles
 	dark   bool
+
+	padPrefix, padSuffix string
 }
 
 var (
@@ -185,9 +263,19 @@ func SetSlots(s Slots) {
 // Apply makes the theme for the given terminal background current. It is the
 // only way the current theme changes, and it is one store at the root — a theme
 // can never be half-applied.
+//
+// Dependencies are enforced here rather than only in the loader, silently. The
+// loader is where a user hears about a broken file, but a Theme also reaches the
+// slots as a Go value — from a test, or from the built-ins — and nothing that
+// renders may see a theme whose dependencies are unmet.
 func Apply(dark bool) {
 	t := slots.Load().pick(dark)
-	current.Store(&snapshot{theme: t, styles: buildStyles(t), dark: dark})
+	enforceDependencies(&t)
+	pre, suf := padSGR(t)
+	current.Store(&snapshot{
+		theme: t, styles: buildStyles(t), dark: dark,
+		padPrefix: pre, padSuffix: suf,
+	})
 }
 
 // currentIsDark reports the background the current theme was applied for,
