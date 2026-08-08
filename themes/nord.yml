@@ -1,0 +1,118 @@
+# Nord, for a dark terminal.
+# Palette: https://www.nordtheme.com
+#
+#   Polar Night  nord0 #2e3440  nord1 #3b4252  nord2 #434c5e  nord3 #4c566a
+#   Snow Storm   nord4 #d8dee9  nord5 #e5e9f0  nord6 #eceff4
+#   Frost        nord7 #8fbcbb  nord8 #88c0d0  nord9 #81a1c1  nord10 #5e81ac
+#   Aurora       nord11 #bf616a  nord12 #d08770  nord13 #ebcb8b
+#                nord14 #a3be8c  nord15 #b48ead
+#
+# Nord's Polar Night has no shade between nord3 (#4c566a, the comment grey) and
+# the Snow Storm whites, and nord3 sits at 1.9:1 on nord0 — invisible as
+# interface text. The muted tokens here use two greys mixed toward nord4, which
+# is the one liberty this file takes with the palette. The status bar likewise
+# uses a shade below nord0, since Polar Night stops there.
+
+# Canvas. The field behind everything, wherever no panel covers it. Left unset
+# it is the terminal's own; set here to nord0, so the palette owns the whole
+# screen rather than only the parts it paints. Setting it ends terminal
+# transparency, and it requires `text` below.
+background: "#2e3440"
+
+# Surfaces. Panels step up through Polar Night; the status bar goes the other
+# way, below nord0, so it reads as a floor rather than a panel.
+surface_overlay: "#3b4252"
+surface_help: "#3b4252"
+surface_toast: "#434c5e"
+surface_status_bar: "#242933"
+surface_selected: "#5e81ac"
+surface_self_mention: "#b48ead"
+surface_code: "#3b4252"
+
+# Text. `text` is the body — message text, chat titles, folder labels, search
+# rows — and is the largest area of colour on screen. Left unset it comes from
+# the terminal; set here to nord6.
+text: "#eceff4"
+text_dim: "#d8dee9"
+text_muted: "#9099ad"
+text_faint: "#828da3"
+text_subtle: "#d8dee9"
+text_on_surface: "#eceff4"
+text_status_bar: "#eceff4"
+text_on_selected: "#eceff4"
+text_on_selected_muted: "#e5e9f0"
+text_on_toast: "#eceff4"
+text_mode_label: "#2e3440"
+text_code: "#eceff4"
+
+# Accents. All three backgrounds here are dark, so all three are light.
+accent: "#88c0d0"
+accent_on_surface: "#88c0d0"
+accent_status_bar: "#88c0d0"
+accent_insert: "#a3be8c"
+accent_mode_normal: "#81a1c1"
+accent_mode_insert: "#a3be8c"
+
+# Status and message state.
+status_error: "#bf616a"
+status_warning: "#d08770"
+status_info: "#88c0d0"
+status_online: "#a3be8c"
+tick_sent: "#9099ad"
+tick_outbox: "#9099ad"
+tick_read: "#88c0d0"
+tick_failed: "#bf616a"
+name_incoming: "#a3be8c"
+name_editing: "#ebcb8b"
+indicator: "#8fbcbb"
+unread_separator: "#88c0d0"
+waveform_played: "#88c0d0"
+reaction_chosen: "#a3be8c"
+unread_reaction: "#b48ead"
+unread_mention: "#81a1c1"
+
+# Borders.
+border_pane_active: "#a3be8c"
+border_bubble_in: "#4c566a"
+border_bubble_out: "#5e81ac"
+border_overlay: "#4c566a"
+border_composer_focused: "#a3be8c"
+border_composer_flash: "#bf616a"
+border_status_sep: "#4c566a"
+
+# Message markup.
+markup_link: "#8fbcbb"
+markup_ref: "#b48ead"
+markup_self_mention_fg: "#2e3440"
+
+# Highlights. The two base tones are what a highlight fades back to, so each is
+# what the thing normally looks like: chat-row text, and the incoming border.
+highlight_accent: "#d08770"
+highlight_error: "#bf616a"
+highlight_base_chat: "#eceff4"
+highlight_base_bubble: "#4c566a"
+overlay_dim: "#4c566a"
+
+# Composer.
+composer_counter_dim: "#9099ad"
+composer_glyph_idle: "#828da3"
+composer_glyph_ready: "#88c0d0"
+
+# Per-sender names, walking Aurora and Frost so adjacent senders differ in hue
+# rather than only in shade.
+sender_palette:
+  - "#bf616a" # nord11
+  - "#d08770" # nord12
+  - "#ebcb8b" # nord13
+  - "#a3be8c" # nord14
+  - "#8fbcbb" # nord7
+  - "#88c0d0" # nord8
+  - "#81a1c1" # nord9
+  - "#b48ead" # nord15
+
+logo_gradient:
+  - {pos: 0.00, color: "#3b4252"}
+  - {pos: 0.30, color: "#4c566a"}
+  - {pos: 0.60, color: "#5e81ac"}
+  - {pos: 0.85, color: "#88c0d0"}
+  - {pos: 1.00, color: "#eceff4"}

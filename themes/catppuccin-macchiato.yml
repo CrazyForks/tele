@@ -1,0 +1,116 @@
+# Catppuccin Macchiato, for a dark terminal.
+# Palette: https://github.com/catppuccin/catppuccin (Macchiato flavour)
+#
+#   base     #24273a   surface0 #363a4f   overlay0 #6e738d   text     #cad3f5
+#   mantle   #1e2030   surface1 #494d64   overlay1 #8087a2   subtext1 #b8c0e0
+#   crust    #181926   surface2 #5b6078   overlay2 #939ab7   subtext0 #a5adcb
+#
+#   red #ed8796   maroon #ee99a0   peach #f5a97f   yellow #eed49f
+#   green #a6da95   teal #8bd5ca    sky #91d7e3     sapphire #7dc4e4
+#   blue #8aadf4   lavender #b7bdf8 mauve #c6a0f6   pink #f5bde6
+
+# Canvas. The field behind everything, wherever no panel covers it. Left unset
+# it is the terminal's own, which is what every theme did before the token
+# existed; set here to base, so the palette owns the whole screen rather than
+# only the parts it paints. Setting it ends terminal transparency, and it
+# requires `text` below — a canvas under a foreground the app does not own is
+# the defect the pair exists to prevent.
+background: "#24273a"
+
+# Surfaces. Panels sit above base, so they use the surface ramp; the status bar
+# uses mantle, one step below base, so it reads as a floor rather than a panel.
+surface_overlay: "#363a4f"
+surface_help: "#363a4f"
+surface_toast: "#494d64"
+surface_status_bar: "#1e2030"
+surface_selected: "#8aadf4"
+surface_self_mention: "#f5bde6"
+surface_code: "#1e2030"
+
+# Text. `text` is the body — message text, chat titles, folder labels, search
+# rows — and is the largest area of colour on screen. Left unset it comes from
+# the terminal; set here so the palette actually reads as itself.
+text: "#cad3f5"
+text_dim: "#8087a2"
+text_muted: "#6e738d"
+text_faint: "#6e738d"
+text_subtle: "#a5adcb"
+text_on_surface: "#cad3f5"
+text_status_bar: "#cad3f5"
+text_on_selected: "#181926"
+text_on_selected_muted: "#24273a"
+text_on_toast: "#cad3f5"
+text_mode_label: "#181926"
+text_code: "#cad3f5"
+
+# Accents. All three backgrounds here are dark, so all three are light.
+accent: "#8aadf4"
+accent_on_surface: "#8aadf4"
+accent_status_bar: "#8aadf4"
+accent_insert: "#a6da95"
+accent_mode_normal: "#8aadf4"
+accent_mode_insert: "#a6da95"
+
+# Status and message state.
+status_error: "#ed8796"
+status_warning: "#f5a97f"
+status_info: "#7dc4e4"
+status_online: "#a6da95"
+tick_sent: "#8087a2"
+tick_outbox: "#8087a2"
+tick_read: "#7dc4e4"
+tick_failed: "#ed8796"
+name_incoming: "#a6da95"
+name_editing: "#eed49f"
+indicator: "#8bd5ca"
+unread_separator: "#7dc4e4"
+waveform_played: "#7dc4e4"
+reaction_chosen: "#a6da95"
+unread_reaction: "#f5bde6"
+unread_mention: "#8aadf4"
+
+# Borders.
+border_pane_active: "#a6da95"
+border_bubble_in: "#5b6078"
+border_bubble_out: "#7dc4e4"
+border_overlay: "#5b6078"
+border_composer_focused: "#a6da95"
+border_composer_flash: "#ed8796"
+border_status_sep: "#494d64"
+
+# Message markup.
+markup_link: "#91d7e3"
+markup_ref: "#c6a0f6"
+markup_self_mention_fg: "#181926"
+
+# Highlights. The two base tones are what a highlight fades back to, so each is
+# what the thing normally looks like: chat-row text, and the incoming border.
+highlight_accent: "#f5a97f"
+highlight_error: "#ed8796"
+highlight_base_chat: "#cad3f5"
+highlight_base_bubble: "#5b6078"
+overlay_dim: "#6e738d"
+
+# Composer.
+composer_counter_dim: "#6e738d"
+composer_glyph_idle: "#6e738d"
+composer_glyph_ready: "#8aadf4"
+
+# Per-sender names, walking the palette's accents so adjacent senders differ in
+# hue rather than only in shade.
+sender_palette:
+  - "#ed8796" # red
+  - "#f5a97f" # peach
+  - "#eed49f" # yellow
+  - "#a6da95" # green
+  - "#8bd5ca" # teal
+  - "#8aadf4" # blue
+  - "#c6a0f6" # mauve
+  - "#f5bde6" # pink
+
+logo_gradient:
+  - {pos: 0.00, color: "#363a4f"}
+  - {pos: 0.30, color: "#5b6078"}
+  - {pos: 0.60, color: "#7dc4e4"}
+  - {pos: 0.85, color: "#91d7e3"}
+  - {pos: 1.00, color: "#cad3f5"}

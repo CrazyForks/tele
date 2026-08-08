@@ -48,6 +48,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the theme loads and renders as written, and the floor is deliberately the
   UI-component bar rather than the body-text one so that tokens meant to be
   quiet may stay quiet (#215).
+- Ready-made themes ship in the repository, under `themes/`: Catppuccin
+  Macchiato, Dracula, Gruvbox Dark, Nord, Tokyo Night in its Night, Moon and Day
+  styles, and Seoul256 Light. Each one sets every token and claims the canvas,
+  so copying it into `~/.config/tele/themes/` is the whole installation, and
+  each is commented with the palette it came from and the few places it had to
+  depart from it — usually a comment grey that a scheme uses for code and that
+  is too quiet to carry interface text. All of them pass `--theme-check` clean.
 
 ### Changed
 

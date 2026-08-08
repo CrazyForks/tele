@@ -1,0 +1,117 @@
+# Dracula, for a dark terminal.
+# Palette: https://draculatheme.com/contribute
+#
+#   background #282a36  current line #44475a  foreground #f8f8f2
+#   comment    #6272a4  selection    #44475a
+#
+#   cyan #8be9fd  green #50fa7b  orange #ffb86c  pink #ff79c6
+#   purple #bd93f9  red #ff5555  yellow #f1fa8c
+#
+# Dracula's comment colour (#6272a4) is the one shade in the scheme meant to
+# recede, and it lands just under 3:1 on the background. It is used here only
+# where receding is the point — borders, the dim behind a modal — and the muted
+# text tokens are lifted off it instead.
+
+# Canvas. The field behind everything, wherever no panel covers it. Left unset
+# it is the terminal's own; set here to the scheme's background, so the palette
+# owns the whole screen rather than only the parts it paints. Setting it ends
+# terminal transparency, and it requires `text` below.
+background: "#282a36"
+
+# Surfaces. Panels use the current-line grey, which is the scheme's one lifted
+# tone; the status bar goes a shade below the canvas so it reads as a floor.
+surface_overlay: "#44475a"
+surface_help: "#44475a"
+surface_toast: "#44475a"
+surface_status_bar: "#21222c"
+surface_selected: "#bd93f9"
+surface_self_mention: "#ff79c6"
+surface_code: "#21222c"
+
+# Text. `text` is the body — message text, chat titles, folder labels, search
+# rows — and is the largest area of colour on screen. Left unset it comes from
+# the terminal; set here to the scheme's foreground.
+text: "#f8f8f2"
+text_dim: "#c8cadb"
+text_muted: "#9ba3c7"
+text_faint: "#8a93ba"
+text_subtle: "#c8cadb"
+text_on_surface: "#f8f8f2"
+text_status_bar: "#f8f8f2"
+text_on_selected: "#21222c"
+text_on_selected_muted: "#282a36"
+text_on_toast: "#f8f8f2"
+text_mode_label: "#21222c"
+text_code: "#f8f8f2"
+
+# Accents. All three backgrounds here are dark, so all three are light.
+accent: "#bd93f9"
+accent_on_surface: "#bd93f9"
+accent_status_bar: "#bd93f9"
+accent_insert: "#50fa7b"
+accent_mode_normal: "#bd93f9"
+accent_mode_insert: "#50fa7b"
+
+# Status and message state.
+status_error: "#ff5555"
+status_warning: "#ffb86c"
+status_info: "#8be9fd"
+status_online: "#50fa7b"
+tick_sent: "#9ba3c7"
+tick_outbox: "#9ba3c7"
+tick_read: "#8be9fd"
+tick_failed: "#ff5555"
+name_incoming: "#50fa7b"
+name_editing: "#f1fa8c"
+indicator: "#8be9fd"
+unread_separator: "#8be9fd"
+waveform_played: "#8be9fd"
+reaction_chosen: "#50fa7b"
+unread_reaction: "#ff79c6"
+unread_mention: "#bd93f9"
+
+# Borders.
+border_pane_active: "#50fa7b"
+border_bubble_in: "#44475a"
+border_bubble_out: "#6272a4"
+border_overlay: "#6272a4"
+border_composer_focused: "#50fa7b"
+border_composer_flash: "#ff5555"
+border_status_sep: "#6272a4"
+
+# Message markup.
+markup_link: "#8be9fd"
+markup_ref: "#ff79c6"
+markup_self_mention_fg: "#21222c"
+
+# Highlights. The two base tones are what a highlight fades back to, so each is
+# what the thing normally looks like: chat-row text, and the incoming border.
+highlight_accent: "#ffb86c"
+highlight_error: "#ff5555"
+highlight_base_chat: "#f8f8f2"
+highlight_base_bubble: "#44475a"
+overlay_dim: "#6272a4"
+
+# Composer.
+composer_counter_dim: "#9ba3c7"
+composer_glyph_idle: "#8a93ba"
+composer_glyph_ready: "#bd93f9"
+
+# Per-sender names, walking the scheme's hues so adjacent senders differ in hue
+# rather than only in shade.
+sender_palette:
+  - "#ff5555" # red
+  - "#ffb86c" # orange
+  - "#f1fa8c" # yellow
+  - "#50fa7b" # green
+  - "#8be9fd" # cyan
+  - "#bd93f9" # purple
+  - "#ff79c6" # pink
+  - "#d6acff" # bright purple
+
+logo_gradient:
+  - {pos: 0.00, color: "#44475a"}
+  - {pos: 0.30, color: "#6272a4"}
+  - {pos: 0.60, color: "#bd93f9"}
+  - {pos: 0.85, color: "#ff79c6"}
+  - {pos: 1.00, color: "#f8f8f2"}

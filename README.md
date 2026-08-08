@@ -421,7 +421,18 @@ border_pane_active: "#8ec07c"
 ```
 
 Start from `tele --theme-dump > ~/.config/tele/themes/my-dark.yml`, and use
-`tele --theme-check` when the result is not what you expected.
+`tele --theme-check` when the result is not what you expected. If your theme
+paints the screen itself with `background`, `--theme-check` also measures
+everything drawn on that canvas and names what will not be readable on it.
+
+Ready-made themes live in [`themes/`](themes/) — Catppuccin Macchiato, Dracula,
+Gruvbox Dark, Nord, Tokyo Night (Night, Moon and Day) and Seoul256 Light. Each
+one is a complete, fully commented file that sets every token, so it is also the
+easiest thing to start your own from:
+
+```console
+$ cp themes/tokyonight-night.yml ~/.config/tele/themes/
+```
 
 Full reference, including every token and the color syntax:
 [docs/themes.md](docs/themes.md)

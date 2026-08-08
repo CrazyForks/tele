@@ -51,6 +51,13 @@ $ tele --theme-dump > ~/.config/tele/themes/mine.yml
 $ tele --theme-dump=light > ~/.config/tele/themes/mine-light.yml
 ```
 
+Or start from one that already exists. The repository's [`themes/`](../themes/)
+directory holds ports of Catppuccin Macchiato, Dracula, Gruvbox Dark, Nord,
+Tokyo Night (Night, Moon and Day) and Seoul256 Light. Each sets every token and
+claims the canvas, and each is commented with the palette it came from and the
+places it had to depart from it — copy one into `~/.config/tele/themes/` and
+edit from there.
+
 To change a few colors, inherit instead. `base:` names the theme this one takes
 everything it does not set from:
 

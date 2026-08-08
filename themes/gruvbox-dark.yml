@@ -1,0 +1,119 @@
+# Gruvbox Dark, for a dark terminal.
+# Palette: https://github.com/morhetz/gruvbox
+#
+#   dark0_hard #1d2021  dark0 #282828  dark1 #3c3836  dark2 #504945
+#   dark3      #665c54  dark4 #7c6f64  gray  #928374
+#   light0     #fbf1c7  light1 #ebdbb2  light2 #d5c4a1  light3 #bdae93
+#
+#   bright: red #fb4934  green #b8bb26  yellow #fabd2f  blue #83a598
+#           purple #d3869b  aqua #8ec07c  orange #fe8019
+#
+# The bright variants are the ones meant to be read on dark0; the neutral ones
+# (#cc241d, #98971a, …) are a shade for syntax and sit too low for interface
+# text, so nothing here uses them.
+
+# Canvas. The field behind everything, wherever no panel covers it. Left unset
+# it is the terminal's own; set here to dark0, so the palette owns the whole
+# screen rather than only the parts it paints. Setting it ends terminal
+# transparency, and it requires `text` below.
+background: "#282828"
+
+# Surfaces. Panels step up through the dark ramp; the status bar uses dark0_hard,
+# below the canvas, so it reads as a floor rather than a panel. The selected row
+# takes gruvbox's faded blue rather than the bright one: a fill has to leave room
+# for the two text tones drawn on it, and the bright blue leaves none.
+surface_overlay: "#3c3836"
+surface_help: "#3c3836"
+surface_toast: "#504945"
+surface_status_bar: "#1d2021"
+surface_selected: "#076678"
+surface_self_mention: "#b16286"
+surface_code: "#1d2021"
+
+# Text. `text` is the body — message text, chat titles, folder labels, search
+# rows — and is the largest area of colour on screen. Left unset it comes from
+# the terminal; set here to light1, gruvbox's own foreground.
+text: "#ebdbb2"
+text_dim: "#bdae93"
+text_muted: "#a89984"
+text_faint: "#928374"
+text_subtle: "#d5c4a1"
+text_on_surface: "#ebdbb2"
+text_status_bar: "#ebdbb2"
+text_on_selected: "#fbf1c7"
+text_on_selected_muted: "#d5c4a1"
+text_on_toast: "#ebdbb2"
+text_mode_label: "#1d2021"
+text_code: "#ebdbb2"
+
+# Accents. All three backgrounds here are dark, so all three are light.
+accent: "#83a598"
+accent_on_surface: "#83a598"
+accent_status_bar: "#83a598"
+accent_insert: "#b8bb26"
+accent_mode_normal: "#83a598"
+accent_mode_insert: "#b8bb26"
+
+# Status and message state.
+status_error: "#fb4934"
+status_warning: "#fe8019"
+status_info: "#83a598"
+status_online: "#b8bb26"
+tick_sent: "#928374"
+tick_outbox: "#928374"
+tick_read: "#83a598"
+tick_failed: "#fb4934"
+name_incoming: "#b8bb26"
+name_editing: "#fabd2f"
+indicator: "#8ec07c"
+unread_separator: "#83a598"
+waveform_played: "#83a598"
+reaction_chosen: "#b8bb26"
+unread_reaction: "#d3869b"
+unread_mention: "#83a598"
+
+# Borders.
+border_pane_active: "#b8bb26"
+border_bubble_in: "#504945"
+border_bubble_out: "#458588"
+border_overlay: "#665c54"
+border_composer_focused: "#b8bb26"
+border_composer_flash: "#fb4934"
+border_status_sep: "#665c54"
+
+# Message markup.
+markup_link: "#8ec07c"
+markup_ref: "#d3869b"
+markup_self_mention_fg: "#fbf1c7"
+
+# Highlights. The two base tones are what a highlight fades back to, so each is
+# what the thing normally looks like: chat-row text, and the incoming border.
+highlight_accent: "#fe8019"
+highlight_error: "#fb4934"
+highlight_base_chat: "#ebdbb2"
+highlight_base_bubble: "#504945"
+overlay_dim: "#665c54"
+
+# Composer.
+composer_counter_dim: "#928374"
+composer_glyph_idle: "#928374"
+composer_glyph_ready: "#83a598"
+
+# Per-sender names, walking the bright ramp so adjacent senders differ in hue
+# rather than only in shade.
+sender_palette:
+  - "#fb4934" # bright red
+  - "#fe8019" # bright orange
+  - "#fabd2f" # bright yellow
+  - "#b8bb26" # bright green
+  - "#8ec07c" # bright aqua
+  - "#83a598" # bright blue
+  - "#d3869b" # bright purple
+  - "#d5c4a1" # light2
+
+logo_gradient:
+  - {pos: 0.00, color: "#3c3836"}
+  - {pos: 0.30, color: "#504945"}
+  - {pos: 0.60, color: "#458588"}
+  - {pos: 0.85, color: "#83a598"}
+  - {pos: 1.00, color: "#ebdbb2"}

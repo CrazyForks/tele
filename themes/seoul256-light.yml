@@ -1,0 +1,118 @@
+# Seoul256 Light, for a light terminal.
+# After junegunn/seoul256.vim — background 253 (#dadada), foreground 239
+# (#4e4e4e), with the scheme's muted brick / forest / ochre / steel / plum /
+# teal accents.
+#
+# Seoul256 is deliberately low-contrast, and several of its accents sit around
+# 2.5:1 on its own background — fine for syntax highlighting, thin for interface
+# text you have to read at a glance. The hues here are the scheme's; the ones
+# used for text are darkened until they clear roughly 3:1 on #dadada. Run
+# `tele --theme-check` to see what resolved, and adjust to taste.
+
+# Canvas. The field behind everything, wherever no panel covers it. Left unset
+# it is the terminal's own; set here to the scheme's own background, so the
+# panels above actually read as lifted off it rather than as whatever the
+# terminal happens to be. Setting it ends terminal transparency, and it requires
+# `text` below.
+background: "#dadada"
+
+# Surfaces. Panels are lighter than the background, not darker: a popup that
+# reads as lifted off the page beats one that reads as a hole in it, and the
+# extra headroom is what lets an accent on the panel stay legible.
+surface_overlay: "#ececec"
+surface_help: "#e8e8e8"
+surface_toast: "#e8e8e8"
+surface_status_bar: "#4e4e4e"
+surface_selected: "#5f87af"
+surface_self_mention: "#875f87"
+surface_code: "#e8e8e8"
+
+# Text. `text` is the body — message text, chat titles, folder labels, search
+# rows — and is the largest area of colour on screen. Left unset it comes from
+# the terminal; set here to the scheme's own foreground.
+text: "#4e4e4e"
+text_dim: "#6c6c6c"
+text_muted: "#767676"
+text_faint: "#787878"
+text_subtle: "#6c6c6c"
+text_on_surface: "#4e4e4e"
+text_status_bar: "#dadada"
+text_on_selected: "#ffffff"
+text_on_selected_muted: "#f0f0f0"
+text_on_toast: "#4e4e4e"
+text_mode_label: "#ffffff"
+text_code: "#4e4e4e"
+
+# Accents. The status bar is dark while the terminal is light, so its two
+# accents are light and the other two are dark — the one place in a light theme
+# where the accent cannot be a single value.
+accent: "#005f87"
+accent_on_surface: "#005f87"
+accent_status_bar: "#87afd7"
+accent_insert: "#87af87"
+accent_mode_normal: "#5f87af"
+accent_mode_insert: "#5f875f"
+
+# Status and message state.
+status_error: "#9d4040"
+status_warning: "#875f00"
+status_info: "#005f87"
+status_online: "#3f703f"
+tick_sent: "#767676"
+tick_outbox: "#767676"
+tick_read: "#005f87"
+tick_failed: "#9d4040"
+name_incoming: "#3f703f"
+name_editing: "#875f00"
+indicator: "#3f7070"
+unread_separator: "#005f87"
+waveform_played: "#005f87"
+reaction_chosen: "#3f703f"
+unread_reaction: "#7a4c7a"
+unread_mention: "#005f87"
+
+# Borders.
+border_pane_active: "#3f703f"
+border_bubble_in: "#a8a8a8"
+border_bubble_out: "#5f87af"
+border_overlay: "#949494"
+border_composer_focused: "#3f703f"
+border_composer_flash: "#9d4040"
+border_status_sep: "#767676"
+
+# Message markup.
+markup_link: "#00548f"
+markup_ref: "#7a4c7a"
+markup_self_mention_fg: "#ffffff"
+
+# Highlights. The two base tones are what a highlight fades back to, so each is
+# what the thing normally looks like: chat-row text, and the incoming border.
+highlight_accent: "#af7500"
+highlight_error: "#9d4040"
+highlight_base_chat: "#4e4e4e"
+highlight_base_bubble: "#a8a8a8"
+overlay_dim: "#b2b2b2"
+
+# Composer.
+composer_counter_dim: "#767676"
+composer_glyph_idle: "#7a7a7a"
+composer_glyph_ready: "#005f87"
+
+# Per-sender names, walking the scheme's hues so adjacent senders differ in hue
+# rather than only in shade.
+sender_palette:
+  - "#9d4040" # brick
+  - "#3f703f" # forest
+  - "#005f87" # steel
+  - "#7a4c7a" # plum
+  - "#3f7070" # teal
+  - "#875f00" # ochre
+  - "#5f4b8b" # iris
+  - "#6b6b2f" # olive
+
+logo_gradient:
+  - {pos: 0.00, color: "#2a3a4a"}
+  - {pos: 0.30, color: "#3f5f7f"}
+  - {pos: 0.60, color: "#5f87af"}
+  - {pos: 0.85, color: "#87afd7"}
+  - {pos: 1.00, color: "#b6cde4"}

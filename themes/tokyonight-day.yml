@@ -1,0 +1,126 @@
+# Tokyo Night (Day), for a light terminal.
+# Palette: https://github.com/folke/tokyonight.nvim (day style)
+#
+#   bg       #e1e2e7   bg_dark  #d0d5e3   bg_highlight #c4c8da
+#   fg       #3760bf   fg_dark  #6172b0   fg_gutter    #a8aecb
+#   dark3    #8990b3   comment  #848cb5   dark5        #68709a
+#
+#   red #f52a65   orange #b15c00   yellow #8c6c3e   green #587539
+#   teal #118c74  cyan #007197     blue #2e7de9     blue1 #188092
+#   magenta #9854f1   purple #7847bd   red1 #c64343
+#
+# Day is the only one of the three whose body text is not grey: fg is a blue,
+# and the scheme reads as itself only if that is kept. The comment grey (#848cb5)
+# is too light to carry interface text on this canvas, so the muted tokens step
+# down to dark5 (#68709a).
+
+# Canvas. The field behind everything, wherever no panel covers it. Left unset
+# it is the terminal's own; set here to bg, so the palette owns the whole screen
+# rather than only the parts it paints. Setting it ends terminal transparency,
+# and it requires `text` below.
+background: "#e1e2e7"
+
+# Surfaces. Panels are lighter than the canvas, not darker: a popup that reads as
+# lifted off the page beats one that reads as a hole in it. The status bar is the
+# exception — it takes bg_highlight and stays a shade below everything, which is
+# what makes it read as a floor.
+surface_overlay: "#eff0f4"
+surface_help: "#ebecf1"
+surface_toast: "#ebecf1"
+surface_status_bar: "#c4c8da"
+surface_selected: "#2e7de9"
+surface_self_mention: "#9854f1"
+surface_code: "#d8dae3"
+
+# Text. `text` is the body — message text, chat titles, folder labels, search
+# rows — and is the largest area of colour on screen. Left unset it comes from
+# the terminal; set here to fg, which in this scheme is a blue rather than a
+# grey and is most of what makes Day recognisable.
+text: "#3760bf"
+text_dim: "#6172b0"
+text_muted: "#68709a"
+text_faint: "#737ca4"
+text_subtle: "#6172b0"
+text_on_surface: "#3760bf"
+text_status_bar: "#3760bf"
+text_on_selected: "#ffffff"
+text_on_selected_muted: "#e1e2e7"
+text_on_toast: "#3760bf"
+text_mode_label: "#ffffff"
+text_code: "#3760bf"
+
+# Accents. This theme keeps the status bar light, unlike most light themes, so
+# every accent sits on a light background and all of them are dark. The status
+# bar is still the odd one out: it is a shade darker than the canvas, which
+# leaves the scheme's blue at 2.4:1 on it, so that one accent steps to the
+# darker cyan instead.
+accent: "#2e7de9"
+accent_on_surface: "#2e7de9"
+accent_status_bar: "#007197"
+accent_insert: "#587539"
+accent_mode_normal: "#2e7de9"
+accent_mode_insert: "#587539"
+
+# Status and message state.
+status_error: "#c64343"
+status_warning: "#b15c00"
+status_info: "#007197"
+status_online: "#587539"
+tick_sent: "#68709a"
+tick_outbox: "#68709a"
+tick_read: "#007197"
+tick_failed: "#c64343"
+name_incoming: "#587539"
+name_editing: "#8c6c3e"
+indicator: "#118c74"
+unread_separator: "#007197"
+waveform_played: "#007197"
+reaction_chosen: "#587539"
+unread_reaction: "#7847bd"
+unread_mention: "#2e7de9"
+
+# Borders.
+border_pane_active: "#587539"
+border_bubble_in: "#a8aecb"
+border_bubble_out: "#92a6d5"
+border_overlay: "#a8aecb"
+border_composer_focused: "#587539"
+border_composer_flash: "#c64343"
+border_status_sep: "#68709a"
+
+# Message markup.
+markup_link: "#188092"
+markup_ref: "#7847bd"
+markup_self_mention_fg: "#ffffff"
+
+# Highlights. The two base tones are what a highlight fades back to, so each is
+# what the thing normally looks like: chat-row text, and the incoming border.
+highlight_accent: "#b15c00"
+highlight_error: "#c64343"
+highlight_base_chat: "#3760bf"
+highlight_base_bubble: "#a8aecb"
+overlay_dim: "#a8aecb"
+
+# Composer.
+composer_counter_dim: "#68709a"
+composer_glyph_idle: "#737ca4"
+composer_glyph_ready: "#2e7de9"
+
+# Per-sender names, walking the scheme's hues so adjacent senders differ in hue
+# rather than only in shade.
+sender_palette:
+  - "#c64343" # red
+  - "#b15c00" # orange
+  - "#8c6c3e" # yellow
+  - "#587539" # green
+  - "#118c74" # teal
+  - "#007197" # cyan
+  - "#2e7de9" # blue
+  - "#7847bd" # purple
+
+logo_gradient:
+  - {pos: 0.00, color: "#2e5857"}
+  - {pos: 0.30, color: "#188092"}
+  - {pos: 0.60, color: "#3760bf"}
+  - {pos: 0.85, color: "#2e7de9"}
+  - {pos: 1.00, color: "#92a6d5"}

@@ -1,0 +1,118 @@
+# Tokyo Night (Night), for a dark terminal.
+# Palette: https://github.com/folke/tokyonight.nvim (night style)
+#
+#   bg       #1a1b26   bg_dark  #16161e   bg_highlight #292e42
+#   fg       #c0caf5   fg_dark  #a9b1d6   fg_gutter    #3b4261
+#   dark3    #545c7e   comment  #565f89   dark5        #737aa2
+#
+#   red #f7768e   orange #ff9e64   yellow #e0af68   green #9ece6a
+#   teal #73daca  cyan #7dcfff     blue #7aa2f7     blue0 #3d59a1
+#   magenta #bb9af7   purple #9d7cd8
+#
+# The scheme's own comment grey (#565f89) sits at 2.7:1 on this background —
+# right for a code comment you skim past, thin for interface text you have to
+# read. The muted tokens here use dark5 (#737aa2) instead, which clears 4:1.
+
+# Canvas. The field behind everything, wherever no panel covers it. Left unset
+# it is the terminal's own; set here to bg, so the palette owns the whole screen
+# rather than only the parts it paints. Setting it ends terminal transparency,
+# and it requires `text` below.
+background: "#1a1b26"
+
+# Surfaces. Panels sit above bg on bg_highlight; the status bar uses bg_dark,
+# one step below, so it reads as a floor rather than a panel.
+surface_overlay: "#292e42"
+surface_help: "#292e42"
+surface_toast: "#3b4261"
+surface_status_bar: "#16161e"
+surface_selected: "#7aa2f7"
+surface_self_mention: "#bb9af7"
+surface_code: "#16161e"
+
+# Text. `text` is the body — message text, chat titles, folder labels, search
+# rows — and is the largest area of colour on screen. Left unset it comes from
+# the terminal; set here to fg.
+text: "#c0caf5"
+text_dim: "#a9b1d6"
+text_muted: "#737aa2"
+text_faint: "#737aa2"
+text_subtle: "#a9b1d6"
+text_on_surface: "#c0caf5"
+text_status_bar: "#c0caf5"
+text_on_selected: "#16161e"
+text_on_selected_muted: "#1a1b26"
+text_on_toast: "#c0caf5"
+text_mode_label: "#16161e"
+text_code: "#c0caf5"
+
+# Accents. All three backgrounds here are dark, so all three are light.
+accent: "#7aa2f7"
+accent_on_surface: "#7aa2f7"
+accent_status_bar: "#7aa2f7"
+accent_insert: "#9ece6a"
+accent_mode_normal: "#7aa2f7"
+accent_mode_insert: "#9ece6a"
+
+# Status and message state.
+status_error: "#f7768e"
+status_warning: "#ff9e64"
+status_info: "#7dcfff"
+status_online: "#9ece6a"
+tick_sent: "#737aa2"
+tick_outbox: "#737aa2"
+tick_read: "#7dcfff"
+tick_failed: "#f7768e"
+name_incoming: "#9ece6a"
+name_editing: "#e0af68"
+indicator: "#73daca"
+unread_separator: "#7dcfff"
+waveform_played: "#7dcfff"
+reaction_chosen: "#9ece6a"
+unread_reaction: "#bb9af7"
+unread_mention: "#7aa2f7"
+
+# Borders.
+border_pane_active: "#9ece6a"
+border_bubble_in: "#3b4261"
+border_bubble_out: "#3d59a1"
+border_overlay: "#3b4261"
+border_composer_focused: "#9ece6a"
+border_composer_flash: "#f7768e"
+border_status_sep: "#545c7e"
+
+# Message markup.
+markup_link: "#7dcfff"
+markup_ref: "#bb9af7"
+markup_self_mention_fg: "#16161e"
+
+# Highlights. The two base tones are what a highlight fades back to, so each is
+# what the thing normally looks like: chat-row text, and the incoming border.
+highlight_accent: "#ff9e64"
+highlight_error: "#f7768e"
+highlight_base_chat: "#c0caf5"
+highlight_base_bubble: "#3b4261"
+overlay_dim: "#565f89"
+
+# Composer.
+composer_counter_dim: "#737aa2"
+composer_glyph_idle: "#737aa2"
+composer_glyph_ready: "#7aa2f7"
+
+# Per-sender names, walking the scheme's hues so adjacent senders differ in hue
+# rather than only in shade.
+sender_palette:
+  - "#f7768e" # red
+  - "#ff9e64" # orange
+  - "#e0af68" # yellow
+  - "#9ece6a" # green
+  - "#73daca" # teal
+  - "#7dcfff" # cyan
+  - "#7aa2f7" # blue
+  - "#bb9af7" # magenta
+
+logo_gradient:
+  - {pos: 0.00, color: "#292e42"}
+  - {pos: 0.30, color: "#3b4261"}
+  - {pos: 0.60, color: "#3d59a1"}
+  - {pos: 0.85, color: "#7aa2f7"}
+  - {pos: 1.00, color: "#c0caf5"}
