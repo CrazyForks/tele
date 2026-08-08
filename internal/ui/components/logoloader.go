@@ -211,7 +211,7 @@ func logoInteriorWaveChar(t float64) rune {
 // Returns "tele" for terminals narrower than 26 columns.
 func (l LogoLoader) View() string {
 	if l.width < 26 {
-		return "tele"
+		return theme.S().Body.Render("tele")
 	}
 
 	var wavePos float64
@@ -233,6 +233,17 @@ func (l LogoLoader) View() string {
 
 	pal := theme.T().LogoGradient
 
+	// The logo writes its own SGR rather than going through a style: it repaints
+	// every cell of a five-row banner on every animation frame, and a style per
+	// cell would put lipgloss on that path. So the canvas is folded into the
+	// escape it already writes, and its blank cells come from one prepared pad.
+	bgSGR := ""
+	if bg := theme.T().Background; !theme.IsNone(bg) {
+		r, g, b, _ := bg.RGBA()
+		bgSGR = fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r>>8, g>>8, b>>8)
+	}
+	blank := theme.Pad(1)
+
 	var sb strings.Builder
 	for r := range logoArt {
 		for c := 0; c < l.cols; c++ {
@@ -244,19 +255,19 @@ func (l LogoLoader) View() string {
 			ch := runes[r][c]
 			switch l.grid[r][c] {
 			case cellExterior:
-				sb.WriteByte(' ')
+				sb.WriteString(blank)
 			case cellBorder:
 				displayCh := logoBorderWaveChar(ch, t)
 				intensity := 0.14 + t*0.86
 				rv, gv, bv := logoInterpolateColor(intensity, pal)
-				fmt.Fprintf(&sb, "\x1b[38;2;%d;%d;%dm%s\x1b[0m", rv, gv, bv, string(displayCh))
+				fmt.Fprintf(&sb, "%s\x1b[38;2;%d;%d;%dm%s\x1b[0m", bgSGR, rv, gv, bv, string(displayCh))
 			case cellInterior:
 				ic := logoInteriorWaveChar(t)
 				if ic == 0 {
-					sb.WriteByte(' ')
+					sb.WriteString(blank)
 				} else {
 					rv, gv, bv := logoInterpolateColor(t, pal)
-					fmt.Fprintf(&sb, "\x1b[38;2;%d;%d;%dm%s\x1b[0m", rv, gv, bv, string(ic))
+					fmt.Fprintf(&sb, "%s\x1b[38;2;%d;%d;%dm%s\x1b[0m", bgSGR, rv, gv, bv, string(ic))
 				}
 			}
 		}

@@ -40,10 +40,14 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 	}
 	cb := bs.Render
 
-	// paint is for the text the box adds itself: the title, and the single
-	// spaces framing a caller-styled label. The labels arrive already styled and
-	// are never wrapped — a reset inside one would drop the canvas from there on.
-	paint := theme.S().Body.Render
+	// paint frames the title: the spaces around it are the box's own cells, and
+	// the title between them is styled separately. Framing and text are split
+	// because a caller may hand over a title that is already styled (the help
+	// modal does) — wrapping the pair would lose the background after that
+	// title's own reset, leaving the trailing space bare.
+	paint := func(title string) string {
+		return theme.Pad(1) + theme.S().Body.Render(title) + theme.Pad(1)
+	}
 
 	var top string
 	if topTitle != "" {
@@ -55,12 +59,12 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 				suffixW := lipgloss.Width(topSuffix)
 				remaining := fillW - suffixW - 4
 				if remaining >= 0 {
-					top = cb(b.TopLeft+b.Top) + paint(titleStr) + cb(b.Top) + theme.Pad(1) + topSuffix + theme.Pad(1) + cb(strings.Repeat(b.Top, remaining)+b.TopRight)
+					top = cb(b.TopLeft+b.Top) + paint(topTitle) + cb(b.Top) + theme.Pad(1) + topSuffix + theme.Pad(1) + cb(strings.Repeat(b.Top, remaining)+b.TopRight)
 				} else {
-					top = cb(b.TopLeft+b.Top) + paint(titleStr) + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
+					top = cb(b.TopLeft+b.Top) + paint(topTitle) + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
 				}
 			} else {
-				top = cb(b.TopLeft+b.Top) + paint(titleStr) + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
+				top = cb(b.TopLeft+b.Top) + paint(topTitle) + cb(strings.Repeat(b.Top, fillW-1)+b.TopRight)
 			}
 		} else {
 			top = cb(b.TopLeft + strings.Repeat(b.Top, innerW) + b.TopRight)

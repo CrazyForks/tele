@@ -89,25 +89,39 @@ func formatMentions(count int) string {
 // single space and omitted when empty: the dim mute marker, the pink
 // unread-reaction glyph, the blue unread-mention glyph, then the unread token
 // (numeric badge, or a manual-unread dot when marked unread with no real count).
-func rowIndicators(c project.ChatRow) string {
+// padRow renders n spaces through the row's own style, so the gap carries
+// whatever fills that row — the canvas, or the selection highlight.
+func padRow(base lipgloss.Style, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	// canvas:ok base always carries a background, and these spaces go through it.
+	return base.Render(strings.Repeat(" ", n))
+}
+
+// base is the row's own style, and every indicator is built on top of it rather
+// than from the theme directly. Each indicator ends in a reset, so what follows
+// it inherits nothing: taking only the foreground from the token and the fill
+// from base is what keeps a selected row's highlight solid across them.
+func rowIndicators(c project.ChatRow, base lipgloss.Style) string {
 	var unread string
 	switch {
 	case c.Unread > 0:
-		unread = theme.S().Body.Render(formatUnread(c.Unread))
+		unread = base.Render(formatUnread(c.Unread))
 	case c.UnreadMark:
-		unread = theme.S().Body.Render("[•]")
+		unread = base.Render("[•]")
 	}
 	var reaction string
 	if c.Reactions > 0 {
-		reaction = theme.S().UnreadReaction.Render(formatReactions(c.Reactions))
+		reaction = base.Foreground(theme.T().UnreadReaction).Render(formatReactions(c.Reactions))
 	}
 	var mention string
 	if c.Mentions > 0 {
-		mention = theme.S().UnreadMention.Render(formatMentions(c.Mentions))
+		mention = base.Foreground(theme.T().UnreadMention).Render(formatMentions(c.Mentions))
 	}
 	var muted string
 	if c.Muted {
-		muted = theme.S().MutedChat.Render("×")
+		muted = base.Foreground(theme.T().TextMuted).Render("×")
 	}
 	parts := make([]string, 0, 4)
 	for _, p := range []string{muted, reaction, mention, unread} {
@@ -115,7 +129,7 @@ func rowIndicators(c project.ChatRow) string {
 			parts = append(parts, p)
 		}
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, base.Render(" "))
 }
 
 // ChatListModel renders a window onto the chat list rather than the whole list:
@@ -299,16 +313,16 @@ func (m *ChatListModel) HighlightStep() int { return m.highlightStep }
 // styleTitle applies the fade-accent foreground to a row's (already truncated)
 // title while that row is the active highlight target. The focused-cursor row
 // keeps its selection background instead, so it is left unstyled here.
-func (m *ChatListModel) styleTitle(i int, id int64, truncated string) string {
+func (m *ChatListModel) styleTitle(i int, id int64, truncated string, base lipgloss.Style) string {
 	if m.highlightStep <= 0 || id != m.highlightChatID {
-		return theme.S().Body.Render(truncated)
+		return base.Render(truncated)
 	}
 	if i == m.cursor && m.focused {
-		// The selection fill supplies the colour; leave the title to it.
-		return truncated
+		// The selection fill supplies the colour; the title only takes the fill.
+		return base.Render(truncated)
 	}
 	fg := components.FadeAccentColor(theme.T().HighlightAccent, theme.T().HighlightBaseChat, m.highlightStep, components.HighlightFadeSteps)
-	return theme.NewStyle().Foreground(fg).Render(truncated)
+	return base.Foreground(fg).Render(truncated)
 }
 
 func (m *ChatListModel) Cursor() int { return m.cursor }
@@ -522,18 +536,33 @@ func (m *ChatListModel) View() string {
 			lines = append(lines, "")
 			continue
 		}
-		badge := rowIndicators(row)
+		// The row's fill is decided first, because every piece of the row is
+		// built on top of it. Rendering the pieces separately and wrapping the
+		// finished row instead would lose the fill at the first reset inside it
+		// — which is the presence dot, or the unread badge, or a highlighted
+		// title. On a selected row that reads as the highlight tearing halfway
+		// across, and on an unselected one as a hole in the canvas.
+		base := theme.S().Body
+		switch {
+		case i == m.cursor && m.focused:
+			base = theme.S().SelectedChat
+		case i == activeIdx:
+			base = theme.S().BodyBold
+		}
+		base = base.Inline(true)
 
-		prefix := "    "
+		badge := rowIndicators(row, base)
+
+		prefix := base.Render("    ")
 		if i == activeIdx {
-			prefix = "▶   "
+			prefix = base.Render("▶   ")
 		}
 		if row.IsUser && row.Online {
-			dot := theme.S().OnlineDot.Render("●")
+			dot := base.Foreground(theme.T().StatusOnline).Render("●")
 			if i == activeIdx {
-				prefix = "▶ " + dot + " "
+				prefix = base.Render("▶ ") + dot + base.Render(" ")
 			} else {
-				prefix = "  " + dot + " "
+				prefix = base.Render("  ") + dot + base.Render(" ")
 			}
 		}
 
@@ -541,13 +570,7 @@ func (m *ChatListModel) View() string {
 		if badge == "" {
 			trunc := runewidth.Truncate(row.Title, inner, "…")
 			lw := lipgloss.Width(trunc)
-			content = m.styleTitle(i, row.ID, trunc)
-			if lw < inner {
-				// canvas:ok the whole row goes through one style below, and on a
-				// selected row that style is the selection fill — painting the
-				// canvas here would cut a hole in the highlight instead.
-				content += strings.Repeat(" ", inner-lw)
-			}
+			content = m.styleTitle(i, row.ID, trunc, base) + padRow(base, inner-lw)
 		} else {
 			badgeW := lipgloss.Width(badge)
 			maxTitleW := inner - badgeW - 1
@@ -560,19 +583,10 @@ func (m *ChatListModel) View() string {
 			if pad < 0 {
 				pad = 0
 			}
-			// canvas:ok same row style below; see the badge-less branch above.
-			content = m.styleTitle(i, row.ID, truncTitle) + strings.Repeat(" ", pad) + badge
+			content = m.styleTitle(i, row.ID, truncTitle, base) + padRow(base, pad) + badge
 		}
 
-		line := prefix + content
-
-		style := theme.S().Body
-		if i == m.cursor && m.focused {
-			style = theme.S().SelectedChat
-		} else if i == activeIdx {
-			style = theme.S().BodyBold
-		}
-		lines = append(lines, style.Inline(true).Render(line))
+		lines = append(lines, prefix+content)
 	}
 	return strings.Join(lines, "\n")
 }

@@ -30,9 +30,11 @@ const benchChats = 200
 // the bottom, so what matters is that there are more than fit.
 const benchMessages = 200
 
-// newBenchRoot builds a main-screen model with a populated chat list and an open
-// chat, sized to w x h. It is the state the app spends its time in.
-func newBenchRoot(b *testing.B, w, h int) ui.RootModel {
+// newPopulatedRoot builds a main-screen model with a populated chat list and an
+// open chat, sized to w x h. It is the state the app spends its time in, which
+// makes it both what a benchmark should measure and what a seam test should
+// look at.
+func newPopulatedRoot(b testing.TB, w, h int) ui.RootModel {
 	b.Helper()
 
 	st := store.NewMemory()
@@ -84,7 +86,7 @@ func BenchmarkRootView(b *testing.B) {
 		{200, 60},
 	} {
 		b.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(b *testing.B) {
-			m := newBenchRoot(b, size.w, size.h)
+			m := newPopulatedRoot(b, size.w, size.h)
 			// Rendering once outside the loop keeps a first-call cache fill out
 			// of the first iteration's time.
 			_ = m.View()
@@ -102,7 +104,7 @@ func BenchmarkRootView(b *testing.B) {
 // dimBackground rewrites every line of the composed screen, and it is the one
 // place a canvas has to survive an ANSI strip.
 func BenchmarkRootView_HelpModal(b *testing.B) {
-	m := newBenchRoot(b, 120, 40)
+	m := newPopulatedRoot(b, 120, 40)
 	next, _ := m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	m = next.(ui.RootModel)
 	_ = m.View()

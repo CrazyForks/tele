@@ -503,6 +503,7 @@ func (c *Composer) VisualHeight() int {
 }
 
 func (c *Composer) View() string {
+	c.applyCanvas()
 	content := c.buildContent()
 	h := strings.Count(content, "\n") + 1 + 2
 
@@ -518,6 +519,39 @@ func (c *Composer) View() string {
 	}
 
 	return RenderBox(content, "", "", "", c.sendAffordance(), lipgloss.RoundedBorder(), borderFg, c.width, h)
+}
+
+// applyCanvas puts the canvas behind the textarea's own styles.
+//
+// The textarea is a vendored component that emits its own cells — the draft
+// text, the placeholder, the prompt inset, the end-of-buffer markers — and none
+// of them go through theme.NewStyle. Left alone it is a hole in the canvas the
+// size of the composer. Only the background is added: what the component chooses
+// to look like otherwise is its own business, and overwriting its defaults here
+// would change the composer's appearance for everyone, canvas or not.
+//
+// It runs per frame because the theme can change under a running session, and
+// the styles are values rather than a live reference to it.
+func (c *Composer) applyCanvas() {
+	bg := theme.T().Background
+	if theme.IsNone(bg) {
+		return
+	}
+	paint := func(s textarea.StyleState) textarea.StyleState {
+		s.Base = s.Base.Background(bg)
+		s.Text = s.Text.Background(bg)
+		s.LineNumber = s.LineNumber.Background(bg)
+		s.CursorLineNumber = s.CursorLineNumber.Background(bg)
+		s.CursorLine = s.CursorLine.Background(bg)
+		s.EndOfBuffer = s.EndOfBuffer.Background(bg)
+		s.Placeholder = s.Placeholder.Background(bg)
+		s.Prompt = s.Prompt.Background(bg)
+		return s
+	}
+	s := c.ta.Styles()
+	s.Focused = paint(s.Focused)
+	s.Blurred = paint(s.Blurred)
+	c.ta.SetStyles(s)
 }
 
 // sendAffordance renders the bottom-border send indicator: a dim glyph when the

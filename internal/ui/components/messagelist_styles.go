@@ -35,5 +35,7 @@ func buildReactStr(reactions []domain.Reaction) string {
 		}
 	}
 	sep := theme.S().Timestamp.Render(" · ")
-	return " " + strings.Join(parts, sep) + " "
+	// The framing spaces are their own cells on the bubble's bottom border,
+	// outside every run's reset, so they carry the canvas rather than nothing.
+	return theme.Pad(1) + strings.Join(parts, sep) + theme.Pad(1)
 }

@@ -413,7 +413,10 @@ func inputLine(text string, inner int) string {
 	if w := runewidth.StringWidth(text); w > budget {
 		text = runewidth.TruncateLeft(text, w-budget+1, "…")
 	}
-	return theme.S().SearchPrompt.Render(prompt) + text + searchCaret
+	// The query text and the caret follow a styled prompt, so each ends up its
+	// own run: they take the body style rather than whatever the prompt left.
+	return theme.S().SearchPrompt.Render(prompt) + theme.S().Body.Render(text) +
+		theme.S().Body.Render(searchCaret)
 }
 
 func (m *SearchModel) View() string {
@@ -434,14 +437,18 @@ func (m *SearchModel) View() string {
 		// inputLine, which windows to it).
 		title := runewidth.Truncate("Comment to "+m.target.Title, inner, "…")
 		promptLine := inputLine(m.comment, inner)
-		lines := []string{title, strings.Repeat("─", inner), promptLine}
+		lines := []string{
+			theme.S().Body.Render(title),
+			theme.S().Separator.Render(strings.Repeat("─", inner)),
+			promptLine,
+		}
 		content := strings.Join(lines, "\n")
 		h := len(lines) + 2
 		return components.RenderBox(content, "", "", hint, "", lipgloss.RoundedBorder(), nil, w, h)
 	}
 
 	queryLine := inputLine(m.query, inner)
-	divider := strings.Repeat("─", inner)
+	divider := theme.S().Separator.Render(strings.Repeat("─", inner))
 
 	lines := []string{queryLine, divider}
 

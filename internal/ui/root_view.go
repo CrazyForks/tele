@@ -21,7 +21,7 @@ func (m RootModel) View() tea.View {
 		// whitespace carries no background at all.
 		fill := lipgloss.WithWhitespaceStyle(theme.NewStyle())
 		if m.login.CurrentStep() < 0 {
-			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n"+theme.S().Body.Render("connecting..."))
+			combined := joinCentred(logoView, "\n"+theme.S().Body.Render("connecting..."))
 			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		} else {
 			loginContent := m.login.View().Content
@@ -39,7 +39,7 @@ func (m RootModel) View() tea.View {
 			innerH := loginContentH + 2*loginPadV
 			padded := theme.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
 			loginBox := components.RenderBox(padded, "Telegram", "", "", "", b, nil, innerW+2, innerH+2)
-			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n", loginBox)
+			combined := joinCentred(logoView, "\n", loginBox)
 			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		}
 	} else {
@@ -169,6 +169,30 @@ func (m RootModel) View() tea.View {
 	// (issue #148). Terminals that do not support it simply never send the event.
 	v.ReportFocus = true
 	return v
+}
+
+// joinCentred stacks blocks centred on their common width, padding with the
+// canvas. It replaces lipgloss.JoinVertical(lipgloss.Center, ...), which does
+// the same thing but pads with bare spaces and, unlike Place, offers no
+// whitespace style to fix that with. On the login screen the padding it adds
+// around the logo is most of the block.
+func joinCentred(blocks ...string) string {
+	var lines []string
+	for _, b := range blocks {
+		lines = append(lines, strings.Split(b, "\n")...)
+	}
+	w := 0
+	for _, l := range lines {
+		if lw := lipgloss.Width(l); lw > w {
+			w = lw
+		}
+	}
+	for i, l := range lines {
+		gap := w - lipgloss.Width(l)
+		left := gap / 2
+		lines[i] = theme.Pad(left) + l + theme.Pad(gap-left)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // fillCanvas carries the composed view out to the full terminal: every row to

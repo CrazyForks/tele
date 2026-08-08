@@ -79,8 +79,13 @@ func applyEntityStyle(s lipgloss.Style, typ string) lipgloss.Style {
 // correctly. text_url runs are additionally wrapped in an OSC 8 hyperlink.
 // Unknown types pass through as plain text.
 func RenderEntities(text string, entities []domain.MessageEntity) string {
+	// The two short circuits go through the body style rather than returning the
+	// text raw. Most messages carry no entity at all, so this is the ordinary
+	// path, not a corner: returning raw text here left the body of nearly every
+	// message outside the theme's reach — unpainted by the canvas, and not even
+	// taking the text token that shipped before it.
 	if len(entities) == 0 {
-		return text
+		return theme.S().Body.Render(text)
 	}
 	runes := []rune(text)
 	n := len(runes)
@@ -116,7 +121,7 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		boundarySet[end] = struct{}{}
 	}
 	if len(spans) == 0 {
-		return text
+		return theme.S().Body.Render(text)
 	}
 
 	bounds := make([]int, 0, len(boundarySet))

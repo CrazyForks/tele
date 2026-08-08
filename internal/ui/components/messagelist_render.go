@@ -183,16 +183,18 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	statusStr := statusOverride
 	if statusStr == "" && msg.IsOut {
 		if msg.ID > 0 && msg.ID <= ml.outboxReadMaxID {
-			statusStr = " " + theme.S().TickRead.Render("✓✓")
+			statusStr = theme.Pad(1) + theme.S().TickRead.Render("✓✓")
 		} else if msg.ID > 0 {
-			statusStr = " " + theme.S().TickSent.Render("✓")
+			statusStr = theme.Pad(1) + theme.S().TickSent.Render("✓")
 		}
 	}
 	editMark := ""
 	if msg.EditDate != nil {
 		editMark = theme.S().Timestamp.Render("edited") + " · "
 	}
-	tsStr := " " + editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr + " "
+	// The spaces framing the stamp sit on the bubble's bottom border, between
+	// runs that each end in a reset, so they carry the canvas themselves.
+	tsStr := theme.Pad(1) + editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr + theme.Pad(1)
 	tsW := lipgloss.Width(tsStr)
 	if innerW < tsW {
 		innerW = tsW
@@ -398,17 +400,26 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 			leftPad = 0
 		}
 		// The margin an outgoing bubble is pushed across by is canvas, not gap.
-		pad := theme.Pad(leftPad)
-		for i := range allLines {
-			allLines[i] = pad + allLines[i]
+		//
+		// The selection indicator sits in that margin, one cell left of the
+		// bubble, and the margin is built per line rather than spliced into
+		// afterwards. It used to be spliced: the first leftPad bytes were ASCII
+		// spaces, so byte offsets and cell offsets agreed. They do not any more —
+		// the pad opens with an escape sequence — and slicing at a cell offset
+		// would cut that sequence in half.
+		margin := theme.Pad(leftPad)
+		indicated := margin
+		if leftPad >= 2 {
+			indicated = theme.Pad(leftPad-1) + theme.S().Indicator.Render(indicatorChar)
 		}
-		// Draw indicator bar on every content line (all except top and bottom border).
-		// First leftPad bytes are ASCII spaces, so byte-slicing is safe.
-		if selected && ml.showIndicator && len(allLines) > 2 && leftPad >= 2 {
-			bar := " " + theme.S().Indicator.Render(indicatorChar)
-			for i := 1; i < len(allLines)-1; i++ {
-				allLines[i] = allLines[i][:leftPad-2] + bar + allLines[i][leftPad:]
+		bar := selected && ml.showIndicator && len(allLines) > 2 && leftPad >= 2
+		for i := range allLines {
+			// Content lines only: the top and bottom borders keep a clean margin.
+			if bar && i > 0 && i < len(allLines)-1 {
+				allLines[i] = indicated + allLines[i]
+				continue
 			}
+			allLines[i] = margin + allLines[i]
 		}
 	} else {
 		// Draw indicator bar on every content line to the right of the bubble.
@@ -443,9 +454,9 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 	var statusStr string
 	if msg.IsOut {
 		if msg.ID > 0 && msg.ID <= ml.outboxReadMaxID {
-			statusStr = " " + theme.S().TickRead.Render("✓✓")
+			statusStr = theme.Pad(1) + theme.S().TickRead.Render("✓✓")
 		} else if msg.ID > 0 {
-			statusStr = " " + theme.S().TickSent.Render("✓")
+			statusStr = theme.Pad(1) + theme.S().TickSent.Render("✓")
 		}
 	}
 	editMark := ""
