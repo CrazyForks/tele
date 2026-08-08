@@ -85,7 +85,8 @@ them makes tele follow your terminal instead of overriding it.
 
 `none` means the attribute is not set. As a foreground the text takes the
 terminal's own text color; as a background nothing is painted, which is the only
-way to let terminal transparency show through:
+way to let terminal transparency show through — on `background` it is what keeps
+the whole screen the terminal's:
 
 ```yaml
 surface_overlay: none
@@ -185,9 +186,57 @@ a theme reads as itself. The built-ins leave it `none`, which means the
 terminal's own foreground — exactly how tele behaved before the token existed —
 so a theme has to claim it deliberately.
 
-There is no background token. tele paints its own panels, bars and fills, but
-never the screen behind them: that stays the terminal's, which is what lets a
-transparent terminal keep its backdrop.
+### The canvas
+
+`background` is the field of colour behind everything, wherever no surface
+covers it. Both built-ins leave it `none`, which means the terminal's own — how
+tele has always looked — so nothing changes until a theme claims it.
+
+| Token | Where |
+|---|---|
+| `background` | the whole screen, behind every panel, bar and bubble |
+
+**`background` requires `text`.** A theme that sets one without the other is
+refused, with a warning, and renders as though it had set neither. The reason is
+not tidiness: painting the screen while leaving the text to the terminal puts a
+known background under an unknown foreground. That combination already shipped
+once at panel scale — popup menus came out blue on grey on a light terminal,
+with the accented hotkey indistinguishable from the label around it. At canvas
+scale it covers everything.
+
+The requirement is checked on the theme that results from the whole `base:`
+chain, not on the file in front of you, so splitting the two across layers is
+fine:
+
+```yaml
+# palette.yml
+text: "#cdd6f4"
+
+# mine.yml
+base: palette
+background: "#1e1e2e"    # accepted: the chain supplies text
+```
+
+It runs one way only. `text` without `background` is legitimate and is what the
+built-ins would do if they claimed the body text.
+
+**Setting it ends terminal transparency.** A transparent terminal shows your
+wallpaper through the cells tele does not paint; a canvas paints all of them.
+There is no partial version of this — leave `background` unset to keep the
+backdrop.
+
+Two more things are worth knowing before you set it:
+
+- Every other token that draws *on* the canvas — `text_dim`, `status_online`,
+  `tick_read`, `name_incoming`, the whole `sender_palette` — still comes from
+  wherever your chain rooted. A theme that paints a light canvas but roots in
+  `tele-dark` inherits a foreground palette tuned for black, and several of
+  those tokens will be close to invisible. Run `tele --theme-check` after
+  setting it.
+- Images keep working. A Kitty placement draws over the cells it occupies, and
+  the canvas shows through wherever the image is transparent — which is an
+  improvement: without it, transparent pixels showed the terminal instead,
+  leaving image-shaped holes in an otherwise painted screen.
 
 ### Accents
 

@@ -26,6 +26,16 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   search rows — which is the largest area of colour on screen and, until now,
   came from the terminal whatever the theme said. It is left to the terminal
   unless a theme claims it, so nothing changes for anyone who does not (#34).
+- A theme can now paint the screen itself, with `background`. Until now a theme
+  controlled the panels, bars and fills tele draws but never the field behind
+  them, so installing a full palette changed noticeably less than it looked like
+  it should. Both built-ins leave it unset, which is the terminal's own
+  background exactly as before, so this costs nothing unless you ask for it.
+  Setting it requires setting `text` too — a painted screen under a foreground
+  tele does not own is unreadable in a way no theme can predict — and it ends
+  terminal transparency, since a canvas paints the cells a transparent terminal
+  shows your wallpaper through. `tele --theme-check` reports what your chain
+  resolved to (#214).
 
 ### Changed
 
@@ -170,6 +180,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- The highlight on the selected chat row now covers the whole row. On a row for
+  someone who is online it ended just after the presence dot, leaving the name
+  and everything past it unhighlighted, because the row was coloured by wrapping
+  the finished line: the dot is its own coloured run and ends with a reset, and
+  the highlight was lost from there on. Every piece of the row now takes the
+  highlight itself (#214).
 - Closing a chat no longer silences it. Leaving a chat with `Esc` used to leave
   the app believing you were still reading it, so new messages there arrived
   with no desktop notification and no in-app toast — silence that lasted until
