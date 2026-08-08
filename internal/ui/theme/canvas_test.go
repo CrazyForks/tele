@@ -114,9 +114,15 @@ func TestDependency_IsSatisfiedAcrossTheChain(t *testing.T) {
 
 	got := l.Resolve("child", theme.TeleDark)
 
-	assert.Empty(t, l.Warnings())
 	assert.False(t, theme.IsNone(got.Theme.Background),
 		"the canvas is legitimate: the chain supplies the text it depends on")
+	// Named rather than asserted empty: this canvas is legitimate but not
+	// beyond reproach, and the legibility audit has its own opinion about the
+	// tokens inherited under it. That opinion is not this test's business.
+	for _, w := range l.Warnings() {
+		assert.NotContains(t, w, "background is set but text is not",
+			"the dependency is met across the chain and must not be reported")
+	}
 }
 
 // And the reverse: a descendant that puts the required token back to none breaks

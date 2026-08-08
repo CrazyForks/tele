@@ -28,8 +28,15 @@ func (m RootModel) reloadThemes() (RootModel, tea.Cmd) {
 		loaded.Dark.Theme.Name, loaded.Light.Theme.Name)
 	if len(loaded.Warnings) > 0 {
 		// The first problem is the one worth reading; the rest are in the log,
-		// and a reload is something you repeat until it is clean anyway.
+		// and a reload is something you repeat until it is clean anyway. The
+		// count still has to be said: without it the toast reads as "one thing
+		// is wrong", and the one thing it happens to show is whichever the
+		// loader found first — a stray key can hide the legibility audit
+		// entirely, in the authoring loop this exists for.
 		kind, text = components.ToastWarning, loaded.Warnings[0]
+		if rest := len(loaded.Warnings) - 1; rest > 0 {
+			text = fmt.Sprintf("%s (+%d more, see the log)", text, rest)
+		}
 		if m.log != nil {
 			for _, w := range loaded.Warnings {
 				m.log.Warn("theme: " + w)

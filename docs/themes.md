@@ -135,6 +135,48 @@ start. Warnings appear as toasts when tele opens and in
 file is still used, so a theme written for a later version of tele keeps working
 here.
 
+### What will not be readable
+
+If your theme sets `background`, `--theme-check` also measures everything drawn
+straight onto that canvas — every foreground token and every `sender_palette`
+entry — and lists what falls below 3.0:1 against it:
+
+```
+  canvas #ffffff: 15 tokens and 7 sender_palette entries below 3.0:1
+    markup_link           1.09:1   from mine
+    sender_palette[4]     1.22:1   from tele-dark
+    name_editing          1.39:1   from tele-dark
+    …
+```
+
+Worst first, because 1.1:1 is invisible while 2.8:1 is merely quiet. The last
+column is the one to read: `from mine` means you wrote that colour and can
+change it, `from tele-dark` means you inherited it and have to set the token in
+your file. The example above is the usual accident — a light canvas on a chain
+rooted in `tele-dark`, which supplies a foreground palette tuned for black.
+
+A token left at `none` is listed too, without a ratio. Nothing could be measured:
+`none` means the terminal's own foreground, which your canvas has no relation to.
+
+On startup and on reload you get one toast per theme rather than one per token,
+saying how many and where the detail is:
+
+```
+theme mine: 15 tokens and 7 sender_palette entries are unreadable on its canvas; run tele --theme-check
+```
+
+None of this refuses anything. The theme loads and renders exactly as you wrote
+it — the floor is a guide, not a rule, and it is set at 3.0:1 rather than the
+4.5:1 meant for body text precisely so that tokens intended to be quiet may stay
+quiet. If you disagree with a finding, ignore it. See
+[ADR 0003](adr/0003-legibility-is-reported-not-enforced.md).
+
+Two things it does not check. A theme that leaves `background` unset gets no
+audit at all — the canvas is then your terminal's, and tele cannot see it; the
+built-ins are covered by their own tests instead. And tokens drawn on a surface
+the app paints (`text_on_toast`, `accent_status_bar`) are not measured here:
+they have to be judged against that surface, not against the canvas.
+
 ## Editing a theme while tele runs
 
 The `reload_themes` action re-reads the files and reapplies them, without a
@@ -232,7 +274,9 @@ Two more things are worth knowing before you set it:
   wherever your chain rooted. A theme that paints a light canvas but roots in
   `tele-dark` inherits a foreground palette tuned for black, and several of
   those tokens will be close to invisible. Run `tele --theme-check` after
-  setting it.
+  setting it: once a theme names its own canvas, tele can measure them against
+  it and tell you which ones. See
+  [What will not be readable](#what-will-not-be-readable).
 - Images keep working. A Kitty placement draws over the cells it occupies, and
   the canvas shows through wherever the image is transparent — which is an
   improvement: without it, transparent pixels showed the terminal instead,

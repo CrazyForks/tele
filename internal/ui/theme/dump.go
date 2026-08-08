@@ -74,7 +74,59 @@ func Report(slot string, r Resolved) string {
 		}
 		fmt.Fprintf(&b, "  %d from %s: %s\n", len(keys), src, elide(keys, listCap))
 	}
+	writeFindings(&b, r)
 	return b.String()
+}
+
+// writeFindings prints what the audit found, worst first, each offender next to
+// the theme in the chain that set it. That last column is what turns a finding
+// into an edit: a token from the built-in has to be added to the file, and a
+// token the author wrote has to be changed there.
+//
+// Nothing is printed for a theme that claims no canvas, because nothing was
+// asked.
+func writeFindings(b *strings.Builder, r Resolved) {
+	if len(r.Findings) == 0 {
+		return
+	}
+	tokens, palette, unset := tally(r.Findings)
+
+	fmt.Fprintf(b, "  canvas %s: ", FormatColor(r.Theme.Background))
+	if measured := countPhrase(tokens, palette); measured != "" {
+		fmt.Fprintf(b, "%s below %.1f:1", measured, minContrast)
+		if unset > 0 {
+			fmt.Fprintf(b, "; %s", unsetPhrase(unset, true))
+		}
+	} else {
+		b.WriteString(unsetPhrase(unset, false))
+	}
+	b.WriteString("\n")
+
+	width := 0
+	for _, f := range r.Findings {
+		width = max(width, len(f.Token))
+	}
+	for _, f := range r.Findings {
+		measured := fmt.Sprintf("%.2f:1", f.Ratio)
+		if f.Unset {
+			measured = "none"
+		}
+		fmt.Fprintf(b, "    %-*s  %-7s  from %s", width, f.Token, measured, r.Origins[originKey(f.Token)].Theme)
+		if f.Unset {
+			b.WriteString(" — takes the terminal's foreground")
+		}
+		b.WriteString("\n")
+	}
+}
+
+// originKey maps a finding back to the token whose provenance was recorded. A
+// palette entry has no provenance of its own: sender_palette is replaced whole
+// by whichever theme sets it, so every entry came from that one.
+func originKey(token string) string {
+	if i := strings.IndexByte(token, '['); i >= 0 {
+		return token[:i]
+	}
+	return token
 }
 
 // listCap bounds how many token names a report prints per source. A theme that

@@ -57,6 +57,12 @@ func TestTokenKeys_AreAcceptedByTheLoader(t *testing.T) {
 	var body strings.Builder
 	for _, key := range theme.TokenKeys() {
 		switch key {
+		case "background":
+			// Dark, where every other token here is light. Any colour is
+			// accepted by the loader, but one that matches the canvas is
+			// unreadable on it, and this test would then be asserting the
+			// absence of a warning it had asked for itself.
+			body.WriteString("background: \"#000000\"\n")
 		case "sender_palette":
 			body.WriteString("sender_palette: [\"#ffffff\"]\n")
 		case "logo_gradient":

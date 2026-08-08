@@ -1,64 +1,44 @@
-package theme_test
+// This file is inside the package rather than in theme_test, unlike every other
+// test here. It is the one that needs contrast and minContrast directly:
+// the surface pairs below are not judged against a canvas, so Audit cannot
+// answer for them, and exporting the measure to reach it from outside would
+// widen the package's API for a single caller that is a test.
+package theme
 
 import (
 	"image/color"
-	"math"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
-
-// foregroundTokens are the tokens drawn straight onto the terminal background,
-// with nothing painted behind them. Only these can be checked against the
-// background: a token that sits on a surface the theme paints (text_on_toast,
-// text_on_selected) has to be judged against that surface instead, and a border
-// is a line rather than text and legitimately sits lower.
-var foregroundTokens = []string{
-	"TextDim", "TextMuted", "TextFaint",
-	"Accent",
-	"StatusError", "StatusWarning", "StatusInfo", "StatusOnline",
-	"TickSent", "TickOutbox", "TickRead", "TickFailed",
-	"NameIncoming", "NameEditing",
-	"Indicator", "UnreadSeparator", "WaveformPlayed", "ReactionChosen",
-	"UnreadReaction", "UnreadMention",
-	"MarkupLink", "MarkupRef",
-	"ComposerCounterDim", "ComposerGlyphIdle", "ComposerGlyphReady",
-}
-
-// minContrast is the floor a foreground token must clear against the background
-// it is drawn on. It is deliberately the UI-component bar rather than the
-// body-text one: some of these are meant to be quiet (text_faint is a
-// placeholder), and holding them to 4.5 would force them louder than they should
-// be. What it does catch is a token that is the wrong way round for its
-// background — the case that put pale greens and yellows into the light theme.
-const minContrast = 3.0
 
 // A theme has to be readable against the background it is for. tele-light
 // inherited its first values from the dark palette wholesale, which left pale
 // greens and yellows on white at barely 1.5:1 — invisible, and invisible in a way
 // no test noticed. This is that test.
+//
+// It goes through Audit rather than measuring for itself: the list of foreground
+// tokens now belongs to the package, and a test holding its own copy is how the
+// two drift. Giving each built-in the canvas it is meant for is what makes the
+// question askable at all, since neither claims one.
 func TestBuiltins_ForegroundTokensReadOnTheirBackground(t *testing.T) {
 	for _, tc := range []struct {
-		theme      theme.Theme
+		theme      Theme
 		background color.Color
 		name       string
 	}{
-		{theme.TeleDark, black{}, "tele-dark on a dark terminal"},
-		{theme.TeleLight, white{}, "tele-light on a light terminal"},
+		{TeleDark, black{}, "tele-dark on a dark terminal"},
+		{TeleLight, white{}, "tele-light on a light terminal"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v := reflect.ValueOf(tc.theme)
-			for _, field := range foregroundTokens {
-				f := v.FieldByName(field)
-				if !f.IsValid() {
-					t.Fatalf("no token named %s; update foregroundTokens", field)
+			for _, f := range auditOn(tc.theme, tc.background) {
+				if f.Palette {
+					continue // covered by its own test, which names it
 				}
-				got := contrast(f.Interface().(color.Color), tc.background)
-				assert.GreaterOrEqual(t, got, minContrast,
-					"%s contrasts %.2f:1 with the background it is drawn on", theme.TokenKey(field), got)
+				assert.GreaterOrEqual(t, f.Ratio, minContrast,
+					"%s contrasts %.2f:1 with the background it is drawn on", f.Token, f.Ratio)
 			}
 		})
 	}
@@ -68,20 +48,44 @@ func TestBuiltins_ForegroundTokensReadOnTheirBackground(t *testing.T) {
 // unreadable entry means every Nth person in a group has an invisible name.
 func TestBuiltins_SenderPaletteReadsOnItsBackground(t *testing.T) {
 	for _, tc := range []struct {
-		theme      theme.Theme
+		theme      Theme
 		background color.Color
 		name       string
 	}{
-		{theme.TeleDark, black{}, "tele-dark"},
-		{theme.TeleLight, white{}, "tele-light"},
+		{TeleDark, black{}, "tele-dark"},
+		{TeleLight, white{}, "tele-light"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			for i, c := range tc.theme.SenderPalette {
-				got := contrast(c, tc.background)
-				assert.GreaterOrEqual(t, got, minContrast,
-					"sender_palette[%d] contrasts %.2f:1", i, got)
+			for _, f := range auditOn(tc.theme, tc.background) {
+				if !f.Palette {
+					continue
+				}
+				assert.GreaterOrEqual(t, f.Ratio, minContrast, "%s contrasts %.2f:1", f.Token, f.Ratio)
 			}
 		})
+	}
+}
+
+// auditOn asks the audit about a built-in against the terminal it is meant for.
+// The canvas is the test's invention: neither built-in claims one, and without a
+// canvas there is nothing to measure against.
+//
+// Findings for unset tokens are dropped here. Both built-ins leave text at none
+// on purpose — it means the terminal's own foreground, which is what tele has
+// always rendered with — and reporting that under a canvas the theme never asked
+// for would be the test failing its own premise, not the theme failing.
+func auditOn(t Theme, canvas color.Color) []Finding {
+	t.Background = canvas
+	out := Audit(t)
+	return slices.DeleteFunc(out, func(f Finding) bool { return f.Unset })
+}
+
+// The foreground list is a claim about the struct, and a token renamed out from
+// under it would leave that token silently unaudited.
+func TestForegroundTokens_AllNameRealTokens(t *testing.T) {
+	v := reflect.ValueOf(TeleDark)
+	for _, name := range foregroundTokens {
+		assert.True(t, v.FieldByName(name).IsValid(), "no token named %s", name)
 	}
 }
 
@@ -109,6 +113,10 @@ const minMark = 2.5
 // onSurface are the pairs the terminal background says nothing about: the status
 // bar is dark in both themes, so its accents have to be light in both — tuning
 // them for a light terminal is what put dark blue on a dark bar.
+//
+// The audit does not cover these. It measures against the canvas a theme names,
+// and a surface is a second background the theme also names; extending it there
+// is worth doing and is not done here.
 var onSurface = []surfacePair{
 	{"AccentStatusBar", "SurfaceStatusBar", minContrast},
 	{"AccentInsert", "SurfaceStatusBar", minContrast},
@@ -137,7 +145,7 @@ var onSurface = []surfacePair{
 // for a light terminal disappears on it — which is exactly what happened, and
 // what this pins.
 func TestBuiltins_TokensReadOnTheSurfacesTheyAreDrawnOn(t *testing.T) {
-	for _, th := range []theme.Theme{theme.TeleDark, theme.TeleLight} {
+	for _, th := range []Theme{TeleDark, TeleLight} {
 		t.Run(th.Name, func(t *testing.T) {
 			v := reflect.ValueOf(th)
 			for _, pair := range onSurface {
@@ -148,7 +156,7 @@ func TestBuiltins_TokensReadOnTheSurfacesTheyAreDrawnOn(t *testing.T) {
 				got := contrast(fgField.Interface().(color.Color), bgField.Interface().(color.Color))
 				assert.GreaterOrEqual(t, got, pair.min,
 					"%s contrasts %.2f:1 with %s, the surface behind it",
-					theme.TokenKey(pair.fg), got, theme.TokenKey(pair.bg))
+					TokenKey(pair.fg), got, TokenKey(pair.bg))
 			}
 		})
 	}
@@ -161,25 +169,3 @@ func (black) RGBA() (r, g, b, a uint32) { return 0, 0, 0, 0xffff }
 type white struct{}
 
 func (white) RGBA() (r, g, b, a uint32) { return 0xffff, 0xffff, 0xffff, 0xffff }
-
-// contrast is the WCAG contrast ratio between two colors.
-func contrast(fg, bg color.Color) float64 {
-	l1, l2 := luminance(fg), luminance(bg)
-	if l1 < l2 {
-		l1, l2 = l2, l1
-	}
-	return (l1 + 0.05) / (l2 + 0.05)
-}
-
-// luminance is the WCAG relative luminance of a color.
-func luminance(c color.Color) float64 {
-	r, g, b, _ := c.RGBA()
-	lin := func(v uint32) float64 {
-		s := float64(v>>8) / 255
-		if s <= 0.04045 {
-			return s / 12.92
-		}
-		return math.Pow((s+0.055)/1.055, 2.4)
-	}
-	return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
-}

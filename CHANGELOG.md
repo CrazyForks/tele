@@ -36,6 +36,18 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   terminal transparency, since a canvas paints the cells a transparent terminal
   shows your wallpaper through. `tele --theme-check` reports what your chain
   resolved to (#214).
+- `tele --theme-check` now says what will not be readable. A theme that sets
+  `background` gets everything drawn straight onto that canvas measured against
+  it — every foreground token and every `sender_palette` entry — and anything
+  below 3.0:1 is listed worst first, next to the theme in the chain that set it,
+  so an inherited colour is told apart from one you wrote. This is the accident
+  the light palette itself fell into: a light canvas on a chain rooted in
+  `tele-dark` inherits a foreground tuned for black, and until a theme named its
+  own canvas there was nothing to measure it against. On startup and on reload
+  it is one toast per theme with a count, not one per token. Nothing is refused:
+  the theme loads and renders as written, and the floor is deliberately the
+  UI-component bar rather than the body-text one so that tokens meant to be
+  quiet may stay quiet (#215).
 
 ### Changed
 

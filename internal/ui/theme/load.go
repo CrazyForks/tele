@@ -30,10 +30,16 @@ type Origin struct {
 // lists the themes that contributed, leaf first, ending at the built-in every
 // chain roots in. Origins is keyed by token key in file spelling, the same
 // strings TokenKeys returns.
+//
+// Findings is what the audit had to say about the result, and is empty for a
+// theme that claims no canvas. It belongs here for the same reason Origins does:
+// both are facts about this resolution rather than about the theme, and both are
+// only knowable once the chain has been walked.
 type Resolved struct {
-	Theme   Theme
-	Chain   []string
-	Origins map[string]Origin
+	Theme    Theme
+	Chain    []string
+	Origins  map[string]Origin
+	Findings []Finding
 }
 
 // Loader reads themes from a directory. It is built once, reports what it found
@@ -138,8 +144,17 @@ func LoadSlots(dir, darkName, lightName string) Loaded {
 	return Loaded{Dark: dark, Light: light, Warnings: l.Warnings()}
 }
 
+// warnf records a problem, ignoring one it has already recorded. The repeat is
+// not hypothetical: putting one theme in both slots is the configuration the
+// documentation recommends, and it resolves that theme twice, so everything
+// wrong with it would be reported twice. Every warning names the theme it is
+// about, so identical text is the same problem with the same theme.
 func (l *Loader) warnf(format string, args ...any) {
-	l.warnings = append(l.warnings, fmt.Sprintf(format, args...))
+	text := fmt.Sprintf(format, args...)
+	if slices.Contains(l.warnings, text) {
+		return
+	}
+	l.warnings = append(l.warnings, text)
 }
 
 // Resolve returns the theme called name, with every token it does not set taken
@@ -147,13 +162,13 @@ func (l *Loader) warnf(format string, args ...any) {
 // fallback itself, which is what an unset config slot means.
 func (l *Loader) Resolve(name string, fallback Theme) Resolved {
 	if strings.TrimSpace(name) == "" {
-		return seed(fallback)
+		return l.audit(seed(fallback))
 	}
 
 	layers, root, err := l.chain(name)
 	if err != nil {
 		l.warnf("theme %q: %v; using %s", name, err, fallback.Name)
-		return seed(fallback)
+		return l.audit(seed(fallback))
 	}
 	if root == nil {
 		root = &fallback
@@ -183,6 +198,18 @@ func (l *Loader) Resolve(name string, fallback Theme) Resolved {
 		// The dump has to show what is in effect, not what was asked for, or
 		// dumping a refused theme would reproduce the file that was refused.
 		res.Origins[TokenKey(token)] = Origin{Theme: res.Theme.Name, Raw: "none"}
+	}
+	return l.audit(res)
+}
+
+// audit judges the finished resolution and summarises what it found. It runs
+// after the dependencies have been enforced, on the theme that will actually be
+// installed: a canvas that was refused is not a canvas anything is drawn on, and
+// measuring against it would report a screen nobody will see.
+func (l *Loader) audit(res Resolved) Resolved {
+	res.Findings = Audit(res.Theme)
+	if len(res.Findings) > 0 {
+		l.warnf("%s", auditWarning(res.Theme.Name, res.Findings))
 	}
 	return res
 }
