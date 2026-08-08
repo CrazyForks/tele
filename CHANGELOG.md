@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-08-08
+
 ### Added
 
 - Themes can now be written by hand. A theme is a file in
