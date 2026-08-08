@@ -88,7 +88,7 @@ func (m RootModel) View() tea.View {
 			foldersView := components.RenderBox(m.folderBar.View(), "[0] Folders", "", "", "", foldersBorder, foldersFg, sidebarW, innerH, foldersSB)
 			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", "", chatListBorder, chatListFg, chatlistW, innerH, chatListSB)
 			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", "", chatBorder, chatFg, chatW, innerH, chatSB)
-			main = lipgloss.JoinHorizontal(lipgloss.Top, foldersView, chatListView, chatView)
+			main = joinPanes(foldersView, chatListView, chatView)
 			chatPanelLeft = sidebarW + chatlistW
 			chatBoxW = chatW
 			chatListLeft = sidebarW
@@ -101,7 +101,7 @@ func (m RootModel) View() tea.View {
 			chatSB := &components.Scrollbar{Info: m.chat.ScrollInfo(), TrackTop: 0, TrackLen: m.chat.MessageListHeight()}
 			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", "", chatListBorder, chatListFg, chatListWidth, innerH, chatListSB)
 			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", "", chatBorder, chatFg, chatWidth, innerH, chatSB)
-			main = lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
+			main = joinPanes(chatListView, chatView)
 			chatPanelLeft = chatListWidth
 			chatBoxW = chatWidth
 			chatListLeft = 0
@@ -169,6 +169,47 @@ func (m RootModel) View() tea.View {
 	// (issue #148). Terminals that do not support it simply never send the event.
 	v.ReportFocus = true
 	return v
+}
+
+// joinPanes places blocks side by side, padding with the canvas. It replaces
+// lipgloss.JoinHorizontal(lipgloss.Top, ...) for the same reason joinCentred
+// replaces JoinVertical: the padding it adds to square blocks off is bare
+// spaces, and it offers no whitespace style.
+//
+// The padding is not hypothetical even though the panes are equal-height boxes.
+// A block whose lines are not all the same width — which is what a pane that
+// overflows its box produces — gets its short lines filled out to the widest,
+// and that fill lands between the panes, where it is most visible.
+func joinPanes(blocks ...string) string {
+	split := make([][]string, len(blocks))
+	widths := make([]int, len(blocks))
+	rows := 0
+	for i, b := range blocks {
+		split[i] = strings.Split(b, "\n")
+		if len(split[i]) > rows {
+			rows = len(split[i])
+		}
+		for _, l := range split[i] {
+			if lw := lipgloss.Width(l); lw > widths[i] {
+				widths[i] = lw
+			}
+		}
+	}
+
+	out := make([]string, rows)
+	for r := range rows {
+		var sb strings.Builder
+		for i, lines := range split {
+			line := ""
+			if r < len(lines) {
+				line = lines[r]
+			}
+			sb.WriteString(line)
+			sb.WriteString(theme.PadTo(lipgloss.Width(line), widths[i]))
+		}
+		out[r] = sb.String()
+	}
+	return strings.Join(out, "\n")
 }
 
 // joinCentred stacks blocks centred on their common width, padding with the

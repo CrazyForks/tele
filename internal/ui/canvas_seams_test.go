@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -55,8 +56,21 @@ func seams(content string, w, h int) []seam {
 
 	var out []seam
 	for row := range h {
+		// A grapheme wider than one column occupies the columns after it with
+		// placeholder cells that carry no style of their own. The terminal
+		// paints those from the one SGR that introduced the grapheme, so they
+		// are not holes — skipping them is why an emoji in the reaction picker
+		// does not read as eight of them.
+		span := 0
 		for col := range w {
 			cell := buf.CellAt(col, row)
+			if span > 0 {
+				span--
+				continue
+			}
+			if cell != nil && cell.Width > 1 {
+				span = cell.Width - 1
+			}
 			if cell != nil && cell.Style.Bg != nil {
 				continue
 			}
@@ -130,25 +144,94 @@ func TestCanvas_MainScreenHasNoSeams(t *testing.T) {
 
 // Overlays are where seams live: each one is stamped into the composed screen by
 // hand, and the stamping pads the base row out to meet it.
+//
+// The list is the one the issue audited for selection fills that stop short of
+// the row edge. A fill that ends early used to blend into the terminal and was
+// invisible; over a canvas it reads as a ragged highlight, so each is opened
+// here rather than reasoned about.
 func TestCanvas_OverlaysHaveNoSeams(t *testing.T) {
 	paintedSlots(t)
 
 	for _, tc := range []struct {
 		name string
-		key  tea.KeyPressMsg
+		open func(testing.TB, ui.RootModel) ui.RootModel
 	}{
-		{"help", tea.KeyPressMsg{Code: '?', Text: "?"}},
-		{"search", tea.KeyPressMsg{Code: '/', Text: "/"}},
+		{"help", pressKey('?')},
+		{"search", pressKey('/')},
+		{"context-menu", func(t testing.TB, m ui.RootModel) ui.RootModel {
+			return pressKey(' ')(t, focusChat(t, m))
+		}},
+		{"chat-menu", func(t testing.TB, m ui.RootModel) ui.RootModel {
+			return pressKey(' ')(t, m.WithFocus(ui.FocusChatList))
+		}},
+		{"reaction-picker", func(t testing.TB, m ui.RootModel) ui.RootModel {
+			return pressKey('t')(t, focusChat(t, m))
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m := newPopulatedRoot(t, 120, 40)
-			next, _ := m.Update(tc.key)
-			m = next.(ui.RootModel)
-
+			m := tc.open(t, newPopulatedRoot(t, 120, 40))
 			found := seams(m.View().Content, 120, 40)
 			require.Empty(t, found, report(found))
 		})
 	}
+}
+
+// A selected message is drawn differently from every other: the bubble carries
+// an indicator bar in the margin beside it, spliced into the row rather than
+// appended to it. That splice used to assume the margin was plain spaces.
+func TestCanvas_SelectedMessageHasNoSeams(t *testing.T) {
+	paintedSlots(t)
+
+	for _, size := range seamSizes {
+		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+			m := focusChat(t, newPopulatedRoot(t, size.w, size.h))
+			found := seams(m.View().Content, size.w, size.h)
+			require.Empty(t, found, report(found))
+		})
+	}
+}
+
+// The folder bar only exists when the account has folders, so the three-pane
+// layout it produces is a different split of the screen from the one every other
+// test here renders.
+func TestCanvas_FolderBarHasNoSeams(t *testing.T) {
+	paintedSlots(t)
+
+	for _, size := range seamSizes {
+		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+			m := withFolders(t, newPopulatedRoot(t, size.w, size.h))
+			found := seams(m.View().Content, size.w, size.h)
+			require.Empty(t, found, report(found))
+		})
+	}
+}
+
+// pressKey returns an opener that sends one key press.
+func pressKey(c rune) func(testing.TB, ui.RootModel) ui.RootModel {
+	return func(t testing.TB, m ui.RootModel) ui.RootModel {
+		t.Helper()
+		next, _ := m.Update(tea.KeyPressMsg{Code: c, Text: string(c)})
+		return next.(ui.RootModel)
+	}
+}
+
+// focusChat moves focus to the message list, which is what selects a message and
+// draws the indicator beside it.
+func focusChat(t testing.TB, m ui.RootModel) ui.RootModel {
+	t.Helper()
+	return pressKey('2')(t, m)
+}
+
+// withFolders gives the account folders, which switches the layout to three
+// panes with the folder bar on the left.
+func withFolders(t testing.TB, m ui.RootModel) ui.RootModel {
+	t.Helper()
+	next, _ := m.Update(ui.FolderFiltersMsg{Filters: []domain.FolderFilter{
+		{ID: 0, Title: "All Chats"},
+		{ID: 2, Title: "Work"},
+		{ID: 3, Title: "Personal"},
+	}})
+	return next.(ui.RootModel)
 }
 
 // The login screen is almost entirely whitespace around a centred block, which
