@@ -30,7 +30,7 @@
 
 ![tele demo](./assets/demo.gif)
 
-> **Status:** Active development — already usable for daily messaging (private chats, groups, replies, reactions, forwarding, drafts). Some Telegram features are still in progress.
+> **Status:** Active development - already usable for daily messaging (private chats, groups, replies, reactions, forwarding, drafts). Some Telegram features are still in progress.
 
 ---
 
@@ -38,7 +38,7 @@
 
 Telegram Desktop, the web client, and mobile apps are designed around mouse-first interaction.
 
-If you live in the terminal — using tools like Neovim, yazi, k9s, or tmux — switching to a GUI messenger breaks your flow.
+If you live in the terminal - using tools like Neovim, yazi, k9s, or tmux - switching to a GUI messenger breaks your flow.
 
 `tele` keeps you in the terminal.
 
@@ -51,7 +51,7 @@ It is built for:
 
 If tools like lazygit feel natural to you, `tele` will too.
 
-It also runs lean — typically ~50MB RSS at idle vs several hundred MB for desktop clients.
+It also runs lean - typically ~50MB RSS at idle vs several hundred MB for desktop clients.
 
 ---
 
@@ -67,7 +67,7 @@ It also runs lean — typically ~50MB RSS at idle vs several hundred MB for desk
 
 > ¹ **Architectural constraint.** `tele` is a terminal-native, cgo-free client
 > with no access to a microphone or camera capture stack. Recording voice
-> messages or round videos (кружки) — and real-time voice/video calls — fall
+> messages or round videos (кружки) - and real-time voice/video calls - fall
 > outside that design and are not planned. You can still **send** an
 > already-recorded audio or video file from disk (see [attaching media](#keybindings)).
 
@@ -93,13 +93,13 @@ per-chat drafts synced with Telegram (saved on the server, shared across devices
 
 ### 🎞 Rich media in the terminal
 
-- **Photos** — rendered inline in high quality via the Kitty graphics protocol, with an ANSI block-art fallback; press `o` to open the full-quality image in an in-app modal viewer (sender and timestamp on the border), or `O` to open it in an external viewer.
-- **Voice messages** — amplitude waveform with duration, and **in-app playback** (`p`) with an animated playhead. Fully cgo-free on every platform: Opus/Ogg is decoded in pure Go, and audio goes out via `oto` (macOS/Windows) or the PulseAudio/PipeWire protocol (Linux). On Linux this needs a running PulseAudio or PipeWire server (the desktop default).
-- **Video & round video (кружки)** — inline thumbnail preview with a `▶` / duration overlay (round notes shown as a circle); press `o` to play in the system player.
-- **GIFs** — inline static thumbnail with a `GIF` badge; the selected GIF loops silently in place (Kitty graphics mode). Requires `ffmpeg` — see below.
-- **Audio (music)** — performer / title / duration; other media types show a labelled placeholder.
+- **Photos** - rendered inline in high quality via the Kitty graphics protocol, with an ANSI block-art fallback; press `o` to open the full-quality image in an in-app modal viewer (sender and timestamp on the border), or `O` to open it in an external viewer.
+- **Voice messages** - amplitude waveform with duration, and **in-app playback** (`p`) with an animated playhead. Fully cgo-free on every platform: Opus/Ogg is decoded in pure Go, and audio goes out via `oto` (macOS/Windows) or the PulseAudio/PipeWire protocol (Linux). On Linux this needs a running PulseAudio or PipeWire server (the desktop default).
+- **Video & round video (кружки)** - inline thumbnail preview with a `▶` / duration overlay (round notes shown as a circle); press `o` to play in the system player.
+- **GIFs** - inline static thumbnail with a `GIF` badge; the selected GIF loops silently in place (Kitty graphics mode). Requires `ffmpeg` - see below.
+- **Audio (music)** - performer / title / duration; other media types show a labelled placeholder.
 
-**Sending media** — attach an existing file from disk with `u` (photos, videos,
+**Sending media** - attach an existing file from disk with `u` (photos, videos,
 voice notes, music, documents) and confirm the send-as type before sending.
 Press `u` again to stage more files: they are sent as one grouped album, with
 photos and documents split into separate albums automatically.
@@ -109,11 +109,11 @@ photos and documents split into separate albums automatically.
 > as a terminal-native, cgo-free client it has no microphone or camera capture
 > stack. This is an architectural boundary, not a missing feature on the roadmap.
 
-> **Optional dependency — `ffmpeg`:** install `ffmpeg` (with `ffprobe`) on your `PATH` to enable inline GIF playback (decoding frames) and to attach duration/dimensions/thumbnail metadata when sending videos. It is entirely optional: without it, GIFs stay static and videos still send (Telegram generates the preview server-side).
+> **Optional dependency - `ffmpeg`:** install `ffmpeg` (with `ffprobe`) on your `PATH` to enable inline GIF playback (decoding frames) and to attach duration/dimensions/thumbnail metadata when sending videos. It is entirely optional: without it, GIFs stay static and videos still send (Telegram generates the preview server-side).
 
 ### 🧠 Terminal-native design
 
-Built specifically for terminal workflows — not adapted from a GUI client.
+Built specifically for terminal workflows - not adapted from a GUI client.
 
 ### 🚀 Lightweight by design
 
@@ -127,7 +127,7 @@ YAML-based config with sensible defaults.
 
 ## Installation
 
-### Any Unix (macOS · Linux · FreeBSD · OpenBSD · NetBSD) — one-liner
+### Any Unix (macOS · Linux · FreeBSD · OpenBSD · NetBSD) - one-liner
 
 ```sh
 curl -sL https://raw.githubusercontent.com/sorokin-vladimir/tele/main/scripts/install.sh | sh
@@ -149,7 +149,7 @@ curl -sL .../install.sh | PREFIX="$HOME/.local/bin" sh
 (supported terminals only); audio playback needs a running PulseAudio/PipeWire
 server. Both degrade gracefully when unavailable.
 
-### macOS / Linux — Homebrew
+### macOS / Linux - Homebrew
 
 ```sh
 brew tap sorokin-vladimir/tap
@@ -157,7 +157,7 @@ brew trust sorokin-vladimir/tap
 brew install tele
 ```
 
-### macOS / Linux — Homebrew (beta channel)
+### macOS / Linux - Homebrew (beta channel)
 
 Want the latest merged changes ahead of the weekly stable release? Install the
 beta package from the same tap. It ships as a separate `tele-beta` binary with
@@ -175,7 +175,7 @@ Beta builds come from prerelease tags (`vX.Y.Z-beta.N`) and are published as
 GitHub prereleases, so they never show up as the "latest" release. Run it with
 `tele-beta`.
 
-### Linux — binary
+### Linux - binary
 
 ```sh
 curl -sL https://github.com/sorokin-vladimir/tele/releases/latest/download/tele-linux-amd64 \
@@ -184,7 +184,7 @@ curl -sL https://github.com/sorokin-vladimir/tele/releases/latest/download/tele-
 
 For arm64: replace `amd64` with `arm64`.
 
-### Debian / Ubuntu / Mint — apt
+### Debian / Ubuntu / Mint - apt
 
 ```sh
 echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
@@ -192,7 +192,7 @@ echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
 sudo apt update && sudo apt install tele
 ```
 
-### Fedora / RHEL / openSUSE — dnf / zypper
+### Fedora / RHEL / openSUSE - dnf / zypper
 
 ```sh
 sudo tee /etc/yum.repos.d/tele.repo <<'EOF'
@@ -205,20 +205,20 @@ EOF
 sudo dnf install tele   # or: sudo zypper install tele
 ```
 
-### Alpine — apk
+### Alpine - apk
 
 ```sh
 echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
 sudo apk add --allow-untrusted tele
 ```
 
-### Arch / Manjaro — AUR
+### Arch / Manjaro - AUR
 
 ```sh
 yay -S tele-bin      # or: paru -S tele-bin
 ```
 
-### Any Linux — Snap
+### Any Linux - Snap
 
 ```sh
 sudo snap install tele
@@ -227,7 +227,7 @@ sudo snap install tele
 > Prefer a raw package? Signed `.deb` and `.rpm` files are also attached to
 > every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
 
-### Windows — binary
+### Windows - binary
 
 Download the executable with PowerShell (run as your normal user):
 
@@ -241,7 +241,7 @@ Invoke-WebRequest `
 
 For arm64: replace `amd64` with `arm64`. Add `$dir` to your `PATH` (or run
 `tele.exe` by full path), then launch it from a terminal that supports the Kitty
-graphics protocol — e.g. [WezTerm](https://wezterm.org) — for inline images.
+graphics protocol - e.g. [WezTerm](https://wezterm.org) - for inline images.
 A plain console (cmd.exe / classic conhost) falls back to ANSI block-art photos.
 
 > Prefer a packaged install? A `.zip` containing `tele.exe`
@@ -369,7 +369,7 @@ ui:
   #   light: my-light
 
 photos:
-  mode: auto # auto | kitty | blocks — inline image renderer
+  mode: auto # auto | kitty | blocks - inline image renderer
   eager_full_quality: true # download full resolution in the background on chat open
   kitty_placement_cap: 16 # max inline images kept on the terminal at once
   max_long_side_px: 800 # cap a rendered image's long side; height also ≤ 2/3 pane
@@ -377,7 +377,7 @@ photos:
 # keybindings: see "Customizing keybindings" below
 ```
 
-`state_dir` sets where the account's state lives — the Telegram session, the
+`state_dir` sets where the account's state lives - the Telegram session, the
 local database, and the instance lock. It defaults to `$XDG_STATE_HOME/tele`,
 falling back to `~/.local/state/tele`.
 
@@ -390,13 +390,13 @@ fail quietly later.
 The older `telegram.session_file` key still works and keeps the session where it
 points, but it is deprecated and will be removed in the next release. If you have
 not set it, your existing session and database are moved into the state directory
-automatically on first run — nothing is lost and you stay logged in.
+automatically on first run - nothing is lost and you stay logged in.
 
 > **`kitty_placement_cap`** bounds how many Kitty image placements are live on
 > the terminal simultaneously. Only on-screen images (plus a few recently
 > scrolled-past) are transmitted; older ones are evicted. Transmitting an entire
 > heavy chat at once can exceed the terminal's image limit and corrupt
-> placements (shrunken/shifted photos) — lower the cap if you still see that.
+> placements (shrunken/shifted photos) - lower the cap if you still see that.
 
 > **`max_long_side_px`** caps a rendered inline image's long side in pixels
 > (mirrors the desktop clients' fixed media size). The height is additionally
@@ -425,13 +425,13 @@ Start from `tele --theme-dump > ~/.config/tele/themes/my-dark.yml`, and use
 paints the screen itself with `background`, `--theme-check` also measures
 everything drawn on that canvas and names what will not be readable on it.
 
-Ready-made themes live in [`themes/`](themes/) — Catppuccin Macchiato, Dracula,
+Ready-made themes live in [`themes/`](themes/) - Catppuccin Macchiato, Dracula,
 Gruvbox Dark, Nord, Tokyo Night (Night, Moon and Day) and Seoul256 Light. Each
 one is a complete, fully commented file that sets every token, so it is also the
 easiest thing to start your own from:
 
 ```console
-$ cp themes/tokyonight-night.yml ~/.config/tele/themes/
+cp themes/tokyonight-night.yml ~/.config/tele/themes/
 ```
 
 Full reference, including every token and the color syntax:
@@ -441,7 +441,7 @@ Full reference, including every token and the color syntax:
 
 Override default keys in the `keybindings:` section of `~/.config/tele/config.yml`.
 The generated config already lists **every action with its current default keys**,
-commented out — just uncomment a line and change the key(s). Bindings are grouped
+commented out - just uncomment a line and change the key(s). Bindings are grouped
 by **context**, then by **action**:
 
 ```yaml
@@ -455,7 +455,7 @@ keybindings:
 
 - **Replace semantics:** the keys you list become the _only_ keys for that
   action in that context. Actions you don't mention keep their defaults.
-- **Chords:** a multi-key sequence is written as space-separated key tokens —
+- **Chords:** a multi-key sequence is written as space-separated key tokens -
   `"g g"` means press `g` then `g`. Tokens use the terminal key names
   (`ctrl+d`, `enter`, `esc`, `space`, `up`, ...).
 - **Conflicts** (an unknown action/context, an empty key, a key reused for two
@@ -478,9 +478,9 @@ minor lines (`v1.9`, `v1.10`, …); patch releases ship incrementally within a l
 
 | Release             | Focus                                                                                                                                                                                                    |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v1.9` _(in work)_  | Offline history & media internals — SQLite-backed history for instant chat open, on-disk image LRU cache, album sending, `?` shortcuts help modal, Kitty renderer fixes                                  |
-| `v1.10` _(planned)_ | Search & chat polish — full-text history search, command palette, in-chat grep, pinned messages, search-modal preview, richer reply UX, plus image-modal and chat-list fixes                             |
-| `Backlog`           | Power-user & platform — color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards, voice and round-video messages, notification click routing |
+| `v1.9` _(in work)_  | Offline history & media internals - SQLite-backed history for instant chat open, on-disk image LRU cache, album sending, `?` shortcuts help modal, Kitty renderer fixes                                  |
+| `v1.10` _(planned)_ | Search & chat polish - full-text history search, command palette, in-chat grep, pinned messages, search-modal preview, richer reply UX, plus image-modal and chat-list fixes                             |
+| `Backlog`           | Power-user & platform - color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards, voice and round-video messages, notification click routing |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.
@@ -507,7 +507,7 @@ reports into `flake.nix`.
 
 ## License
 
-GPL-3.0 — free to use and fork; derivative works must remain open-source.
+GPL-3.0 - free to use and fork; derivative works must remain open-source.
 
 ---
 
