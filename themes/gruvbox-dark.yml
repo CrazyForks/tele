@@ -30,8 +30,8 @@ surface_selected: "#076678"
 surface_self_mention: "#b16286"
 surface_code: "#1d2021"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here to light1, gruvbox's own foreground.
 text: "#ebdbb2"
 text_dim: "#bdae93"

@@ -13,7 +13,7 @@
 # it is the terminal's own, which is what every theme did before the token
 # existed; set here to base, so the palette owns the whole screen rather than
 # only the parts it paints. Setting it ends terminal transparency, and it
-# requires `text` below — a canvas under a foreground the app does not own is
+# requires `text` below - a canvas under a foreground the app does not own is
 # the defect the pair exists to prevent.
 background: "#24273a"
 
@@ -27,8 +27,8 @@ surface_selected: "#8aadf4"
 surface_self_mention: "#f5bde6"
 surface_code: "#1e2030"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here so the palette actually reads as itself.
 text: "#cad3f5"
 text_dim: "#8087a2"

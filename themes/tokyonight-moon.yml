@@ -29,8 +29,8 @@ surface_selected: "#82aaff"
 surface_self_mention: "#c099ff"
 surface_code: "#1e2030"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here to fg.
 text: "#c8d3f5"
 text_dim: "#a3aed2"

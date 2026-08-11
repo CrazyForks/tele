@@ -9,7 +9,7 @@
 #
 # Dracula's comment colour (#6272a4) is the one shade in the scheme meant to
 # recede, and it lands just under 3:1 on the background. It is used here only
-# where receding is the point — borders, the dim behind a modal — and the muted
+# where receding is the point - borders, the dim behind a modal - and the muted
 # text tokens are lifted off it instead.
 
 # Canvas. The field behind everything, wherever no panel covers it. Left unset
@@ -28,8 +28,8 @@ surface_selected: "#bd93f9"
 surface_self_mention: "#ff79c6"
 surface_code: "#21222c"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here to the scheme's foreground.
 text: "#f8f8f2"
 text_dim: "#c8cadb"

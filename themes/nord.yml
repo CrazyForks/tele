@@ -8,7 +8,7 @@
 #                nord14 #a3be8c  nord15 #b48ead
 #
 # Nord's Polar Night has no shade between nord3 (#4c566a, the comment grey) and
-# the Snow Storm whites, and nord3 sits at 1.9:1 on nord0 — invisible as
+# the Snow Storm whites, and nord3 sits at 1.9:1 on nord0 - invisible as
 # interface text. The muted tokens here use two greys mixed toward nord4, which
 # is the one liberty this file takes with the palette. The status bar likewise
 # uses a shade below nord0, since Polar Night stops there.
@@ -29,8 +29,8 @@ surface_selected: "#5e81ac"
 surface_self_mention: "#b48ead"
 surface_code: "#3b4252"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here to nord6.
 text: "#eceff4"
 text_dim: "#d8dee9"

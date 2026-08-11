@@ -9,7 +9,7 @@
 #   teal #73daca  cyan #7dcfff     blue #7aa2f7     blue0 #3d59a1
 #   magenta #bb9af7   purple #9d7cd8
 #
-# The scheme's own comment grey (#565f89) sits at 2.7:1 on this background —
+# The scheme's own comment grey (#565f89) sits at 2.7:1 on this background -
 # right for a code comment you skim past, thin for interface text you have to
 # read. The muted tokens here use dark5 (#737aa2) instead, which clears 4:1.
 
@@ -29,8 +29,8 @@ surface_selected: "#7aa2f7"
 surface_self_mention: "#bb9af7"
 surface_code: "#16161e"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here to fg.
 text: "#c0caf5"
 text_dim: "#a9b1d6"

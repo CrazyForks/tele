@@ -22,7 +22,7 @@ background: "#e1e2e7"
 
 # Surfaces. Panels are lighter than the canvas, not darker: a popup that reads as
 # lifted off the page beats one that reads as a hole in it. The status bar is the
-# exception — it takes bg_highlight and stays a shade below everything, which is
+# exception - it takes bg_highlight and stays a shade below everything, which is
 # what makes it read as a floor.
 surface_overlay: "#eff0f4"
 surface_help: "#ebecf1"
@@ -32,8 +32,8 @@ surface_selected: "#2e7de9"
 surface_self_mention: "#9854f1"
 surface_code: "#d8dae3"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here to fg, which in this scheme is a blue rather than a
 # grey and is most of what makes Day recognisable.
 text: "#3760bf"

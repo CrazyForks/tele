@@ -1,10 +1,10 @@
 # Seoul256 Light, for a light terminal.
-# After junegunn/seoul256.vim — background 253 (#dadada), foreground 239
+# After junegunn/seoul256.vim - background 253 (#dadada), foreground 239
 # (#4e4e4e), with the scheme's muted brick / forest / ochre / steel / plum /
 # teal accents.
 #
 # Seoul256 is deliberately low-contrast, and several of its accents sit around
-# 2.5:1 on its own background — fine for syntax highlighting, thin for interface
+# 2.5:1 on its own background - fine for syntax highlighting, thin for interface
 # text you have to read at a glance. The hues here are the scheme's; the ones
 # used for text are darkened until they clear roughly 3:1 on #dadada. Run
 # `tele --theme-check` to see what resolved, and adjust to taste.
@@ -27,8 +27,8 @@ surface_selected: "#5f87af"
 surface_self_mention: "#875f87"
 surface_code: "#e8e8e8"
 
-# Text. `text` is the body — message text, chat titles, folder labels, search
-# rows — and is the largest area of colour on screen. Left unset it comes from
+# Text. `text` is the body - message text, chat titles, folder labels, search
+# rows - and is the largest area of colour on screen. Left unset it comes from
 # the terminal; set here to the scheme's own foreground.
 text: "#4e4e4e"
 text_dim: "#6c6c6c"
@@ -44,7 +44,7 @@ text_mode_label: "#ffffff"
 text_code: "#4e4e4e"
 
 # Accents. The status bar is dark while the terminal is light, so its two
-# accents are light and the other two are dark — the one place in a light theme
+# accents are light and the other two are dark - the one place in a light theme
 # where the accent cannot be a single value.
 accent: "#005f87"
 accent_on_surface: "#005f87"

@@ -40,7 +40,7 @@
 | `x`       | Cancel staged upload / clear reply or edit |
 | `s`       | Download the selected file     |
 | `g`       | Jump to original (for replies) |
-| `o`       | Open / view media — photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
+| `o`       | Open / view media - photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
 | `O`       | Open the selected video in the external player |
 | `p`       | Play voice message (in-app)    |
 | `Space`   | Context menu                   |
@@ -49,7 +49,7 @@
 A message that could not be sent stays in the chat, marked `✕` in its bottom
 border; selecting it names the reason in the status bar. `Enter` queues it
 again, and `Space` opens a short menu offering Retry and Discard. `x` is
-unaffected — it still clears a staged reply, edit or upload, never a queued
+unaffected - it still clears a staged reply, edit or upload, never a queued
 send.
 
 ## Compose (insert mode)
@@ -78,7 +78,7 @@ These are the action names usable as YAML keys in the `keybindings:` section of
 replaces that action's defaults in that context; unlisted actions keep theirs.
 A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 
-### Focus & app — context `global`
+### Focus & app - context `global`
 
 | Action          | Description                |
 | --------------- | -------------------------- |
@@ -89,7 +89,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `focus_next`    | Focus the next pane        |
 | `quit`          | Quit the app               |
 
-### Navigation & scrolling — contexts `folders`, `chatlist`, `chat`, `context_menu`, `delete_submenu`, `search`
+### Navigation & scrolling - contexts `folders`, `chatlist`, `chat`, `context_menu`, `delete_submenu`, `search`
 
 | Action             | Description                          |
 | ------------------ | ------------------------------------ |
@@ -103,7 +103,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `cursor_up`        | Move the active-message cursor to the previous (older) bubble |
 | `confirm`          | Confirm / open the selected item     |
 
-### Chat & messages — context `chat`
+### Chat & messages - context `chat`
 
 | Action              | Description                              |
 | ------------------- | ---------------------------------------- |
@@ -111,7 +111,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `normal`            | Leave insert mode / close the chat       |
 | `search`            | Open chat search                         |
 | `open_context_menu` | Open the message context menu            |
-| `open_in_viewer`    | Open / view the selected media — photo in the OS viewer, video inline or in the system player |
+| `open_in_viewer`    | Open / view the selected media - photo in the OS viewer, video inline or in the system player |
 | `open_external`     | Open the selected video in the external player |
 | `play_voice`        | Play the selected voice message in-app    |
 | `reply`             | Reply to the selected message            |
@@ -122,7 +122,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `cancel_upload`     | Cancel a staged upload / clear an active reply or edit |
 | `download_file`     | Download the selected file to the Downloads folder |
 
-### Context menu — contexts `context_menu`, `delete_submenu`
+### Context menu - contexts `context_menu`, `delete_submenu`
 
 | Action             | Description                           |
 | ------------------ | ------------------------------------- |
@@ -135,7 +135,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `delete_me`        | Delete only for me                    |
 | `jump_to_original` | Jump to the original (replied-to) message |
 
-### Composer — context `composer`
+### Composer - context `composer`
 
 | Action           | Description                                  |
 | ---------------- | -------------------------------------------- |
@@ -143,7 +143,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `normal`         | Unfocus the composer (keeps reply/edit/attachment) |
 | `toggle_send_as` | Toggle the send-as type for a staged attachment |
 
-### Chat-list menu — contexts `chat_menu`, `folder_submenu`
+### Chat-list menu - contexts `chat_menu`, `folder_submenu`
 
 | Action          | Description                          |
 | --------------- | ------------------------------------ |
@@ -155,7 +155,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `archive`       | Archive the selected chat            |
 | `unarchive`     | Unarchive the selected chat          |
 
-### File picker — context `filepicker`
+### File picker - context `filepicker`
 
 | Action    | Description                       |
 | --------- | --------------------------------- |
@@ -169,6 +169,6 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 > `left`, `right`.
 
 > **Keyboard layout:** letter bindings also fire on the **same physical key**
-> under a Russian (ЙЦУКЕН) layout — e.g. `r`/Reply works whether the key types
+> under a Russian (ЙЦУКЕН) layout - e.g. `r`/Reply works whether the key types
 > `r` or `к`. Bindings are still written with Latin keys; no duplication needed.
 > (Only the Russian layout is mapped today.)
