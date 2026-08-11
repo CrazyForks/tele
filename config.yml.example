@@ -14,7 +14,10 @@ ui:
 
   # Themes. Leaving this out gives the built-in tele-dark and tele-light,
   # switched by the terminal background. Name one theme to use it whatever the
-  # background is, or fill the slots one at a time. Files live in
+  # background is, or fill the slots one at a time. Eight ported palettes ship
+  # inside the binary and resolve by name with nothing installed: catppuccin-
+  # macchiato, dracula, gruvbox-dark, nord, tokyonight-night, tokyonight-moon,
+  # tokyonight-day, seoul256-light. Your own live in
   # ~/.config/tele/themes/<name>.yml — see docs/themes.md.
   #
   # theme: gruvbox-dark

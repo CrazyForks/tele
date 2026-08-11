@@ -57,7 +57,13 @@ func Dump(r Resolved) string {
 func Report(slot string, r Resolved) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s slot: %s\n", slot, r.Theme.Name)
-	fmt.Fprintf(&b, "  chain: %s\n", strings.Join(r.Chain, " <- "))
+	fmt.Fprintf(&b, "  chain: %s\n", chainText(r))
+	// A file that took a bundled theme's name is the one thing here the screen
+	// cannot hint at: the theme is not the one that ships, and it is named the
+	// same. Said as a note rather than a warning, because doing it is allowed.
+	for _, name := range r.Shadows {
+		fmt.Fprintf(&b, "  note: %s is also a bundled theme; the file is used\n", name)
+	}
 
 	bySource := map[string][]string{}
 	for _, key := range TokenKeys() {
@@ -76,6 +82,23 @@ func Report(slot string, r Resolved) string {
 	}
 	writeFindings(&b, r)
 	return b.String()
+}
+
+// chainText writes the chain with the tier each theme came from. The tier is
+// what tells "nord, the palette we ship" apart from "nord, the file you wrote":
+// both render, both are spelled the same in the config, and only one of them
+// looks the same on another machine. A theme whose source is not recorded is
+// printed bare rather than guessed at.
+func chainText(r Resolved) string {
+	parts := make([]string, 0, len(r.Chain))
+	for _, name := range r.Chain {
+		if src, ok := r.Sources[name]; ok {
+			parts = append(parts, fmt.Sprintf("%s (%s)", name, src))
+			continue
+		}
+		parts = append(parts, name)
+	}
+	return strings.Join(parts, " <- ")
 }
 
 // writeFindings prints what the audit found, worst first, each offender next to

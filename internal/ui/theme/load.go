@@ -1,8 +1,10 @@
 package theme
 
 import (
+	"errors"
 	"fmt"
 	"image/color"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +13,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/sorokin-vladimir/tele/themes"
 )
 
 // baseKey is the one key in a theme file that is not a token: it names the theme
@@ -26,10 +30,28 @@ type Origin struct {
 	Raw   string
 }
 
+// Source is the tier a theme in a chain was read from. It is a fact about this
+// machine rather than about the theme: the same name is bundled on a fresh
+// install and a file the moment the user writes one.
+type Source string
+
+const (
+	// SourceBuiltin is tele-dark or tele-light: compiled in and unshadowable.
+	SourceBuiltin Source = "built-in"
+	// SourceBundled is one of the ported palettes shipped inside the binary.
+	SourceBundled Source = "bundled"
+	// SourceFile is a theme read from the themes directory. Named after where it
+	// was read rather than who wrote it, which is what a report can show.
+	SourceFile Source = "file"
+)
+
 // Resolved is a theme together with where each of its tokens came from. Chain
 // lists the themes that contributed, leaf first, ending at the built-in every
 // chain roots in. Origins is keyed by token key in file spelling, the same
-// strings TokenKeys returns.
+// strings TokenKeys returns. Sources says which tier each name in Chain came
+// from, and Shadows names the themes in the chain that replaced a bundled theme
+// of the same name — invisible on screen, and the first thing to say when a
+// theme is not the one the user expected.
 //
 // Findings is what the audit had to say about the result, and is empty for a
 // theme that claims no canvas. It belongs here for the same reason Origins does:
@@ -38,28 +60,55 @@ type Origin struct {
 type Resolved struct {
 	Theme    Theme
 	Chain    []string
+	Sources  map[string]Source
+	Shadows  []string
 	Origins  map[string]Origin
 	Findings []Finding
 }
 
-// Loader reads themes from a directory. It is built once, reports what it found
-// wrong through Warnings, and resolves any number of names against it.
+// Loader reads themes from an ordered list of sources. It is built once,
+// reports what it found wrong through Warnings, and resolves any number of names
+// against it.
+//
+// The order is the precedence, and it belongs here rather than to the caller: a
+// name is looked for in the themes directory first and among the bundled
+// palettes second, so a file replaces a bundled theme of the same name. The two
+// built-ins are not a source — they are checked before any of them and cannot be
+// shadowed at all.
 //
 // Nothing it does is fatal. A theme that cannot be read leaves its slot holding
 // the built-in and adds a warning, because a config typo must not stand between
 // the user and their messages.
 type Loader struct {
 	dir      string
-	files    map[string]string // normalized name -> path
+	sources  []source
+	index    map[string]indexed // normalized name -> where to read it
+	shadowed map[string]bool    // normalized name -> it replaced a bundled theme
 	parsed   map[string]*fileTheme
 	warnings []string
 }
 
+// source is one place themes are read from, as a file system so that the
+// directory on disk and the copy inside the binary are read by one code path.
+type source struct {
+	kind Source
+	fsys fs.FS
+}
+
+// indexed is a theme found by name but not yet read.
+type indexed struct {
+	src  int    // index into sources, which is also its precedence
+	path string // within that source's file system
+	name string // the spelling the theme is known by, without the extension
+}
+
 // fileTheme is one theme file, parsed but not yet resolved against its base.
 type fileTheme struct {
-	name   string
-	base   string
-	tokens map[string]tokenValue // by Theme field name
+	name    string
+	base    string
+	source  Source
+	shadows bool                  // it took the name of a bundled theme
+	tokens  map[string]tokenValue // by Theme field name
 }
 
 // tokenValue is a parsed token ready to be assigned to its field, alongside the
@@ -69,26 +118,46 @@ type tokenValue struct {
 	raw   string
 }
 
-// NewLoader indexes the theme files in dir. A missing directory is not an error:
-// having no themes of your own is the normal case.
+// NewLoader indexes the themes in dir and the ones bundled in the binary. A
+// missing directory is not an error: having no themes of your own is the normal
+// case, and the bundled palettes resolve without it.
 func NewLoader(dir string) *Loader {
 	l := &Loader{
-		dir:    dir,
-		files:  map[string]string{},
-		parsed: map[string]*fileTheme{},
+		dir:      dir,
+		index:    map[string]indexed{},
+		shadowed: map[string]bool{},
+		parsed:   map[string]*fileTheme{},
 	}
+	// Precedence order. An empty path is not a directory anyone meant, and
+	// os.DirFS("") would read from the process's own root.
+	if dir != "" {
+		l.sources = append(l.sources, source{kind: SourceFile, fsys: os.DirFS(dir)})
+	}
+	l.sources = append(l.sources, source{kind: SourceBundled, fsys: themes.FS})
 
-	entries, err := os.ReadDir(dir)
+	for i, s := range l.sources {
+		l.indexSource(i, s)
+	}
+	return l
+}
+
+// indexSource lists one source and records every theme in it that no
+// higher-precedence source has already claimed.
+func (l *Loader) indexSource(i int, s source) {
+	entries, err := fs.ReadDir(s.fsys, ".")
 	if err != nil {
-		if !os.IsNotExist(err) {
-			l.warnf("themes directory %s: %v", dir, err)
+		// A themes directory that is not there is the normal case; one that is
+		// there and unreadable is worth saying out loud. The bundled source is
+		// compiled in and cannot fail either way.
+		if s.kind == SourceFile && !errors.Is(err, fs.ErrNotExist) {
+			l.warnf("themes directory %s: %v", l.dir, err)
 		}
-		return l
+		return
 	}
 
 	// Names are matched normalized, so the index is built by listing rather than
 	// by opening a path: mine-dark.yml has to be findable as mine_dark.
-	raw := map[string]string{} // normalized name -> raw file name, for reporting
+	raw := map[string]string{} // normalized name -> raw file name, within this source
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -104,18 +173,30 @@ func NewLoader(dir string) *Loader {
 			l.warnf("theme file %s shadows the built-in theme %s and is ignored; rename it", e.Name(), name)
 			continue
 		}
-		// Two files can normalize to one name. Neither is more correct, so the
-		// choice is made the only way that is stable across machines.
+		// Sources are indexed in precedence order, so a name another source has
+		// already claimed outranks this one, and nothing here will be read.
+		// Replacing a bundled theme is a legitimate thing to do and is not warned
+		// about, but it is remembered: it is invisible on screen, and
+		// --theme-check has to be able to say it.
+		if ent, taken := l.index[key]; taken && ent.src != i {
+			if s.kind == SourceBundled {
+				l.shadowed[key] = true
+			}
+			continue
+		}
+		// Two files in one source can normalize to one name. Neither is more
+		// correct, so the choice is made the only way that is stable across
+		// machines.
 		if prev, ok := raw[key]; ok {
 			winner := min(prev, e.Name())
 			l.warnf("theme files %s and %s have the same name; using %s", prev, e.Name(), winner)
-			raw[key], l.files[key] = winner, filepath.Join(dir, winner)
+			raw[key] = winner
+			l.index[key] = indexed{src: i, path: winner, name: strings.TrimSuffix(winner, filepath.Ext(winner))}
 			continue
 		}
 		raw[key] = e.Name()
-		l.files[key] = filepath.Join(dir, e.Name())
+		l.index[key] = indexed{src: i, path: e.Name(), name: name}
 	}
-	return l
 }
 
 // Warnings returns the non-fatal problems found so far, in the order they were
@@ -180,9 +261,13 @@ func (l *Loader) Resolve(name string, fallback Theme) Resolved {
 	for i := len(layers) - 1; i >= 0; i-- {
 		apply(&res, layers[i])
 	}
-	res.Chain = nil
+	res.Chain, res.Shadows = nil, nil
 	for _, layer := range layers {
 		res.Chain = append(res.Chain, layer.name)
+		res.Sources[layer.name] = layer.source
+		if layer.shadows {
+			res.Shadows = append(res.Shadows, layer.name)
+		}
 	}
 	res.Chain = append(res.Chain, root.Name)
 	// The resolved theme is known by the name that was asked for. With no
@@ -253,23 +338,24 @@ func (l *Loader) parse(key string) (*fileTheme, error) {
 	if ft, ok := l.parsed[key]; ok {
 		return ft, nil
 	}
-	path, ok := l.files[key]
+	ent, ok := l.index[key]
 	if !ok {
 		return nil, fmt.Errorf("no such theme; put it in %s", l.dir)
 	}
-	data, err := os.ReadFile(path)
+	data, err := fs.ReadFile(l.sources[ent.src].fsys, ent.path)
 	if err != nil {
 		return nil, err
 	}
 	var doc map[string]any
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+		return nil, fmt.Errorf("%s: %w", ent.path, err)
 	}
 
-	ext := filepath.Ext(path)
 	ft := &fileTheme{
-		name:   strings.TrimSuffix(filepath.Base(path), ext),
-		tokens: map[string]tokenValue{},
+		name:    ent.name,
+		source:  l.sources[ent.src].kind,
+		shadows: l.shadowed[key],
+		tokens:  map[string]tokenValue{},
 	}
 
 	for k, v := range doc {
@@ -315,7 +401,14 @@ func apply(res *Resolved, layer *fileTheme) {
 // seed starts a resolution from a complete theme, recording every token as
 // having come from it.
 func seed(t Theme) Resolved {
-	res := Resolved{Theme: t, Chain: []string{t.Name}, Origins: make(map[string]Origin, len(tokenFields))}
+	// Every resolution roots in a built-in, so that is the one source seed knows
+	// and the only one it can be right about; the layers name their own.
+	res := Resolved{
+		Theme:   t,
+		Chain:   []string{t.Name},
+		Sources: map[string]Source{t.Name: SourceBuiltin},
+		Origins: make(map[string]Origin, len(tokenFields)),
+	}
 	v := reflect.ValueOf(t)
 	for _, f := range tokenFields {
 		o := Origin{Theme: t.Name}

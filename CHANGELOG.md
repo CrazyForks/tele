@@ -6,10 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 A human title for a release is written as an em-dash suffix on its heading,
-e.g. `## [1.2.0] - 2026-06-11 — Archived folders & image layout fixes`.
+e.g. `## [1.2.0] - 2026-06-11 - Archived folders & image layout fixes`.
 Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
+
+### Added
+
+- The eight ported palettes - Catppuccin Macchiato, Dracula, Gruvbox Dark, Nord,
+  Tokyo Night (Night, Moon and Day) and Seoul256 Light - now ship inside the
+  binary. `ui.theme: nord` works on a fresh install with no theme files at all,
+  and a bundled theme is a legal `base:`. Previously they existed only in the
+  repository, so anyone who installed tele from a package, a tarball or the
+  releases page had the theming feature and none of the themes (#217).
+- `tele --theme-check` now names where each theme in the chain came from -
+  `nord (file) <- tele-dark (built-in)` - and says when a file of yours has
+  taken the name of a bundled palette, which is invisible on screen (#217).
+
+### Changed
+
+- A theme file of yours replaces a bundled palette of the same name, rather than
+  being ignored the way one named after a built-in is. `tele-dark` and
+  `tele-light` remain reserved: `base: tele-dark` has to mean the same colours on
+  every machine (#217).
 
 ## [1.10.1] - 2026-08-08
 
@@ -24,8 +43,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   warning and the rest of the file still applies. `tele --theme-dump` writes out
   a complete theme to start from, `tele --theme-check` explains what each slot
   ended up with. Full reference in `docs/themes.md` (#34).
-- A theme can now set the body text — message text, chat titles, folder labels,
-  search rows — which is the largest area of colour on screen and, until now,
+- A theme can now set the body text - message text, chat titles, folder labels,
+  search rows - which is the largest area of colour on screen and, until now,
   came from the terminal whatever the theme said. It is left to the terminal
   unless a theme claims it, so nothing changes for anyone who does not (#34).
 - A theme can now paint the screen itself, with `background`. Until now a theme
@@ -33,14 +52,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   them, so installing a full palette changed noticeably less than it looked like
   it should. Both built-ins leave it unset, which is the terminal's own
   background exactly as before, so this costs nothing unless you ask for it.
-  Setting it requires setting `text` too — a painted screen under a foreground
-  tele does not own is unreadable in a way no theme can predict — and it ends
+  Setting it requires setting `text` too - a painted screen under a foreground
+  tele does not own is unreadable in a way no theme can predict - and it ends
   terminal transparency, since a canvas paints the cells a transparent terminal
   shows your wallpaper through. `tele --theme-check` reports what your chain
   resolved to (#214).
 - `tele --theme-check` now says what will not be readable. A theme that sets
   `background` gets everything drawn straight onto that canvas measured against
-  it — every foreground token and every `sender_palette` entry — and anything
+  it - every foreground token and every `sender_palette` entry - and anything
   below 3.0:1 is listed worst first, next to the theme in the chain that set it,
   so an inherited colour is told apart from one you wrote. This is the accident
   the light palette itself fell into: a light canvas on a chain rooted in
@@ -55,7 +74,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   styles, and Seoul256 Light. Each one sets every token and claims the canvas,
   so copying it into `~/.config/tele/themes/` is the whole installation, and
   each is commented with the palette it came from and the few places it had to
-  depart from it — usually a comment grey that a scheme uses for code and that
+  depart from it - usually a comment grey that a scheme uses for code and that
   is too quiet to carry interface text. All of them pass `--theme-check` clean.
 
 ### Changed
@@ -63,8 +82,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - The light palette has been tuned for a light terminal. It had been carried
   over from the dark one wherever a colour did not previously depend on the
   background, which left 36 of its 59 colours chosen for a dark screen: pale
-  greens and yellows at barely 1.5:1 on white — sender names, the online dot,
-  the edited marker — and code blocks drawn dark-on-light. The status bar stays
+  greens and yellows at barely 1.5:1 on white - sender names, the online dot,
+  the edited marker - and code blocks drawn dark-on-light. The status bar stays
   dark on purpose. Three colours in the dark palette were too dim for the same
   reason and were lifted: the idle composer glyph, its character counter, and the
   "+N more" line under a full stack of notifications.
@@ -77,12 +96,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   dark/light pair, and a theme is now a single palette placed in a slot. You get
   the built-in pair either way; tele says so once so you can delete the line.
 - Every colour the interface draws with now lives in one place, as groundwork
-  for selectable themes. Colours are held as named roles — the accent, the
-  selection fill, the read tick, the error tone — rather than being written into
+  for selectable themes. Colours are held as named roles - the accent, the
+  selection fill, the read tick, the error tone - rather than being written into
   each component, and the light and dark variants are two complete palettes
   instead of a per-colour switch. Two things do look different: the selected row
-  — in the chat list, context menus, the reaction picker, search, folders and the
-  file picker — is now white on the blue fill instead of black, which was hard to
+  - in the chat list, context menus, the reaction picker, search, folders and the
+  file picker - is now white on the blue fill instead of black, which was hard to
   read, and the status bar text is a little brighter. Beyond that the only change
   is that the eight basic terminal colours (the online dot, read ticks,
   sender-name colours, the edited marker) used to be taken from your terminal's
@@ -100,22 +119,22 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   picked up again on the next start. Where a send has got to shows in the
   bubble's bottom border, in the same place the delivery ticks appear once it
   lands: `⋯` waiting, `↻ 4s` waiting out a retry, `↑` on its way, `✓` delivered,
-  `✓✓` read. A send that fails for a reason a retry cannot change — a chat you
-  may not post in, a chat that no longer exists — is marked `✕` and stays in the
+  `✓✓` read. A send that fails for a reason a retry cannot change - a chat you
+  may not post in, a chat that no longer exists - is marked `✕` and stays in the
   conversation instead of vanishing; the reason is said once when it happens and
   again in the status bar whenever the message is selected. Press `Enter` to try
   again, or `Space` for a short menu offering Retry and Discard. Rate limits and network failures are retried on their own, for as
   long as it takes, because nobody lost the message and giving up on it is your
-  decision rather than a timer's. Messages to one chat keep their order — a
+  decision rather than a timer's. Messages to one chat keep their order - a
   stuck one holds up that conversation and no other. This covers text messages;
   photos, files and albums are the entry below (#193).
 - Photos, files and albums now go through that same queue. An unfinished upload
   used to live in the window that started it, so quitting mid-upload lost it
   with no record that it had been attempted. A media send is now queued on disk
-  like any other, and one interrupted by a restart is picked up again — from the
+  like any other, and one interrupted by a restart is picked up again - from the
   start of the file, because an upload cannot be resumed part-way. An album is
   one item in the queue rather than one per file: it appears as a single pending
-  bubble naming what it holds and which file is going up — `3 photos 2/3` — and
+  bubble naming what it holds and which file is going up - `3 photos 2/3` - and
   that is also how it looks once it lands, so nothing re-flows when it does.
   `x` on a pending send discards it and stops the upload there and then instead
   of waiting out the rest of the file. Two things follow from the album being
@@ -131,8 +150,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Changed
 
-- Account state — the Telegram session, the local database and a new instance
-  lock — now lives in one place, `$XDG_STATE_HOME/tele` (usually
+- Account state - the Telegram session, the local database and a new instance
+  lock - now lives in one place, `$XDG_STATE_HOME/tele` (usually
   `~/.local/state/tele`), instead of sitting next to the config file. Existing
   sessions and databases are moved there automatically on first run, so there is
   nothing to do and no need to log in again. The `telegram.session_file` config
@@ -144,7 +163,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   pointers and Telegram update state, which surfaced later as missed or
   duplicated messages. It never worked; now it says so (#188).
 - tele now identifies itself properly in Telegram's active-sessions list. A
-  session used to be listed as `go1.26.0` running `tele app v0.160.0` — the Go
+  session used to be listed as `go1.26.0` running `tele app v0.160.0` - the Go
   toolchain the binary was built with and the version of an internal library,
   neither of which says which app or which machine it is. It now reports the
   machine's host name, tele's own version and the platform, so a session you do
@@ -166,7 +185,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   now one request at a time from a single place instead of a guard the chat
   window kept for itself. Otherwise nothing looks different (#194).
 - Failures now explain themselves. Where the status bar used to print whatever
-  Telegram returned — `CHAT_SEND_MEDIA_FORBIDDEN`, `PEER_ID_INVALID` — it now
+  Telegram returned - `CHAT_SEND_MEDIA_FORBIDDEN`, `PEER_ID_INVALID` - it now
   says "not allowed in this chat", "chat unavailable", "too fast, retry in 12m".
   Every failure is classified once, at the point it leaves the Telegram layer,
   so how loudly it is reported follows what actually went wrong rather than
@@ -175,7 +194,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   (#191).
 - Actions that cannot succeed now fail immediately. A message to a chat that is
   no longer reachable, or an action the chat forbids, used to be retried four
-  times with a growing pause — about seven and a half seconds of waiting before
+  times with a growing pause - about seven and a half seconds of waiting before
   the error appeared, for an answer that could not change. Only rate limits and
   transient network failures are retried now (#191).
 - A long rate limit is now reported instead of waited out. When Telegram asks
@@ -196,7 +215,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   running at once evicted each other's files; each account now has its own
   directory under the system cache location. Downloads also stream to disk
   instead of being held in memory in full, which is what a large video used to
-  cost. The old shared directory is deleted on first run — nothing to do, and
+  cost. The old shared directory is deleted on first run - nothing to do, and
   the files are re-fetched as they are needed (#196).
 
 ### Fixed
@@ -209,13 +228,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   highlight itself (#214).
 - Closing a chat no longer silences it. Leaving a chat with `Esc` used to leave
   the app believing you were still reading it, so new messages there arrived
-  with no desktop notification and no in-app toast — silence that lasted until
+  with no desktop notification and no in-app toast - silence that lasted until
   you happened to open some other chat. Notifications and toasts are also one
   decision now rather than two that happened to agree, so a banner and a toast
   can no longer disagree about the same message (#192).
 - A reaction to one of your messages now reaches you where you are actually
   looking. It used to raise a desktop banner and nothing else, so with the
-  terminal in front of you — the normal case — a reaction was silent, and you
+  terminal in front of you - the normal case - a reaction was silent, and you
   found out by scrolling back to the message. It now also pops a toast naming
   the reaction, which opens the chat when clicked. Nothing pops for a chat you
   already have open: the reaction is visible under the message (#203).
@@ -242,17 +261,17 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   error message in answer to your own keypress (#191).
 - Losing the connection is no longer treated as an unexpected error. A request
   the server never acknowledged, and a request cut off by a closed connection,
-  were both classified as internal faults — which are not worth retrying, so
+  were both classified as internal faults - which are not worth retrying, so
   the action was abandoned and reported as "unexpected error". Both are now
   what they are, a transient transport failure, and are waited out (#191, #193).
 - An offline session no longer fills with toasts. Marking a chat read follows
   the cursor, so it runs on nearly every keypress; with the connection down,
-  each one raised its own error. Work nobody asked for and cannot act on —
-  marking read, clearing reaction and mention badges — now stays quiet about
+  each one raised its own error. Work nobody asked for and cannot act on -
+  marking read, clearing reaction and mention badges - now stays quiet about
   failures that repair themselves when the connection returns.
 - A forwarded message now appears in the target chat straight away. Telegram
-  does not push an echo for what this client itself did — the created message
-  comes back only in the reply to the forward — so a forward stayed invisible
+  does not push an echo for what this client itself did - the created message
+  comes back only in the reply to the forward - so a forward stayed invisible
   until something unrelated forced a full resync, often not until the other side
   read it (#198).
 - The "new messages" divider no longer drifts upward while you read. Opening a
@@ -262,10 +281,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   anchor is now pinned for the life of the window (#202).
 - An album is now marked read. Reading counted the album's first message only,
   and since the whole album renders as one bubble there was nothing left to
-  scroll past to advance the pointer — so the remaining parts stayed unread
+  scroll past to advance the pointer - so the remaining parts stayed unread
   indefinitely and the chat kept a badge that would not clear.
 - Photos no longer stay blank when a chat opens on its first unread message. The
-  window was already positioned, so the scroll was skipped — and skipping it
+  window was already positioned, so the scroll was skipped - and skipping it
   also skipped the media fetch, leaving every picture and video poster in the
   chat empty until the reader scrolled far enough to trigger a redraw.
 - Reopening a chat no longer produces a stack of toasts about expired file
@@ -281,7 +300,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Windows: a second instance can now name the process already holding the state
   directory. The lock covered the same bytes as the recorded process ID, and
   Windows byte-range locks are mandatory, so reading that ID failed in exactly
-  the process that needed it — leaving the refusal with nothing to point at
+  the process that needed it - leaving the refusal with nothing to point at
   (#188).
 
 ## [1.9.1] - 2026-07-25
@@ -290,13 +309,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 - Photo and video albums now render as one grouped message instead of a string of
   separate bubbles. Media sent together collapse into a single bubble laid out as
-  a mosaic grid — two columns for up to four items, three for more, falling back
-  to a vertical stack on narrow panes — with each preview cropped to fit its tile
+  a mosaic grid - two columns for up to four items, three for more, falling back
+  to a vertical stack on narrow panes - with each preview cropped to fit its tile
   (whole subjects are kept; extreme aspect ratios letterbox rather than cut people
   off). Every tile is labelled `[n]` with its type and, for video, its duration.
   Open a specific item with `o` (the picker lists all parts), and once the viewer
-  is open, page through the whole album with the arrow keys — across photos and
-  videos — without reopening each one. Several files attached in one message are
+  is open, page through the whole album with the arrow keys - across photos and
+  videos - without reopening each one. Several files attached in one message are
   grouped as well (#178)
 - Press `u` repeatedly to stage several files in the composer and send them as
   one grouped album. The chips list every staged file (collapsing to a summary
@@ -321,14 +340,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   scrollable, centered reference of every hotkey grouped by surface (Global,
   Chat list, Chat, Composer, menus, and more). Dismiss with `Esc` or `?`. The
   list is generated from the live keymap, so it always matches the actual
-  bindings — including any you have overridden in config (#46)
+  bindings - including any you have overridden in config (#46)
 - `tele` now builds and ships for FreeBSD, OpenBSD, and NetBSD. Every release
   includes BSD tarballs and raw binaries (amd64, plus arm64 on FreeBSD and
   OpenBSD), and CI cross-compiles all three to catch regressions. Audio playback
   uses the pure-Go PulseAudio/PipeWire client, and on FreeBSD desktop
   notifications use the terminal-native path where the system notifier is
-  unavailable — both degrade gracefully when no server is present (#176)
-- A one-line installer for any Unix — `curl -sL .../scripts/install.sh | sh` —
+  unavailable - both degrade gracefully when no server is present (#176)
+- A one-line installer for any Unix - `curl -sL .../scripts/install.sh | sh` -
   that detects your OS and CPU architecture and downloads the matching binary.
   Pass `--beta` to install the latest prerelease as a coexisting `tele-beta`,
   `--version` to pin a specific tag, or set `PREFIX` to choose the install
@@ -364,7 +383,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   deleting each image by id instead of an ambiguous delete-all that could leave
   stale or duplicate placements on some terminals (#94)
 
-## [1.8.2] - 2026-07-18 — Reliable package publishing
+## [1.8.2] - 2026-07-18 - Reliable package publishing
 
 ### Fixed
 
@@ -388,8 +407,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   mentions of you are highlighted distinctly (#49)
 - Copy a message's text to the clipboard: press `y` on the focused bubble, or
   choose "Copy text" from its context menu. The action is offered only when the
-  message actually has text — media-only messages (a photo or sticker with no
-  caption) are skipped — and a status-bar "Copied" confirms. Works under
+  message actually has text - media-only messages (a photo or sticker with no
+  caption) are skipped - and a status-bar "Copied" confirms. Works under
   non-Latin keyboard layouts (#166)
 - Open links and media from the focused message with `o`. A message can expose
   several openable targets (its photo or video plus any links); a single target
@@ -465,8 +484,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 ### Changed
 
 - Composer redesign: the legacy `> ` prompt is replaced with a cleaner one-space
-  inset, and a send indicator (`➤`) now sits on the bottom border — dim while the
-  composer is empty, blue once there is text to send — alongside a
+  inset, and a send indicator (`➤`) now sits on the bottom border - dim while the
+  composer is empty, blue once there is text to send - alongside a
   remaining-character counter that appears as you approach the 4096-character
   limit and turns amber when close to it. The composer border turns green while
   focused (insert mode), and an empty composer shows context-aware placeholder
@@ -486,7 +505,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the reaction picker (previously reactions were only reachable through the
   context menu), consistent with `r`/`e` for reply/edit
 - Forward with a comment: in the forward chat picker, `Enter` still forwards
-  instantly, while `Tab` opens a comment line for the highlighted chat — the
+  instantly, while `Tab` opens a comment line for the highlighted chat - the
   typed comment is sent as a separate message just before the forwarded message
   (#1)
 - Highlight cues that fade out over ~3 seconds: jumping to a message via "Jump to
@@ -496,9 +515,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   orange on light themes (#39)
 - Extended markdown rendering in messages: the chat view now styles
   strikethrough, underline, and hidden-URL links (underlined, wrapped in an
-  OSC 8 terminal hyperlink), and colors auto-detected entities — links, emails,
+  OSC 8 terminal hyperlink), and colors auto-detected entities - links, emails,
   phone numbers, and bank cards in one hue; mentions, hashtags, cashtags, and bot
-  commands in another — with theme-adaptive colors readable on dark and light
+  commands in another - with theme-adaptive colors readable on dark and light
   backgrounds. Overlapping and nested styles now compose correctly (#27)
 
 ### Changed
@@ -508,7 +527,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Overlay hints now use the status-bar hint style everywhere (search, file
   picker, context menus, reaction picker, video modal): the key is accented in
   place, `enter` shows as a trailing `↵`, descriptions are dim, and entries are
-  ` · `-separated — consistent with the main status bar instead of the previous
+  ` · `-separated - consistent with the main status bar instead of the previous
   per-overlay `key -> label` / literal formats
 - Composer `esc`/`x` behavior unified: `esc` now only unfocuses the composer,
   keeping any active reply, edit, or staged attachment (so you can scroll and
@@ -517,7 +536,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   dropped a staged attachment / pending upload). Pressing `esc` again from the
   unfocused composer still closes the chat
 - Message heights are now cached instead of being recomputed every frame, so the
-  chat list no longer re-wraps every message on each render — cutting idle CPU on
+  chat list no longer re-wraps every message on each render - cutting idle CPU on
   long or media-heavy chats (#146)
 - Light/dark theme is now detected via an event-driven handler instead of a
   periodic ticker, removing a constant background poll (#148)
@@ -552,7 +571,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   Drafts load from the dialog list on startup and update via `updateDraftMessage`
   (#62)
 - Download received files: selecting a generic file (document) bubble and
-  pressing `s` — or choosing "Download" in the context menu — streams the file
+  pressing `s` - or choosing "Download" in the context menu - streams the file
   to the OS Downloads folder under its original name, resolving name collisions
   (`name (1).ext`). A status-bar indicator shows progress (reusing #114) and the
   saved path is confirmed on completion; failures surface a warning. No external
@@ -573,14 +592,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   maps, so memory no longer grows monotonically over a long session that browses
   many photos. Thumbnails and full-resolution viewer images have separate caps;
   evicted images are re-fetched transparently on demand, so only memory is
-  bounded — nothing visible changes (#113)
+  bounded - nothing visible changes (#113)
 
-## [1.5.0] - 2026-06-20 — Send media & inline video/GIF playback
+## [1.5.0] - 2026-06-20 - Send media & inline video/GIF playback
 
 ### Added
 
 - In-app video playback: pressing the open key (`o`) on a video now plays it
-  silently in a bordered modal overlaid on the chat — autoplay + loop, `space`
+  silently in a bordered modal overlaid on the chat - autoplay + loop, `space`
   to pause/resume, `esc` to close, a progress bar with `m:ss / m:ss`, a loading
   spinner, and the sender on the top border. Kitty graphics mode only and
   requires `ffmpeg`; otherwise the key opens the external player as before. The
@@ -614,13 +633,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the same optimistic + update-suppression path as text messages. Also a shared
   `internal/media` MIME helper (detect a file's type, map it to a default media
   kind) and an optimistic local-media field on stored messages. No user-facing
-  send UI yet — this is the shared layer the photo/video/voice send features
+  send UI yet - this is the shared layer the photo/video/voice send features
   build on (#128)
 
 ### Changed
 
 - Status-bar key hints now use a btop-style layout: the trigger key is the only
-  coloured element — highlighted in place inside the description word when the
+  coloured element - highlighted in place inside the description word when the
   key is a letter that appears in it (e.g. `quit`), or shown as an accented
   prefix/suffix otherwise (`f attach`, `ctrl+j/k select`, `send ↵`). The `key ->
   desc` arrows are gone; hints stay separated by ` · `. The accent colour follows
@@ -648,7 +667,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   `l` (focus-cycle) was consumed first. A key explicitly bound in the focused
   context now wins over a conflicting global binding (#132)
 
-## [1.4.0] - 2026-06-15 — Message cursor & richer inline media
+## [1.4.0] - 2026-06-15 - Message cursor & richer inline media
 
 ### Added
 
@@ -659,10 +678,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   target for the context menu and per-message actions. Plain `j`/`k` line
   scrolling keeps the cursor on screen (#124)
 - Static WEBP stickers now render as small inline images (with transparency,
-  borderless — no message bubble) in Kitty mode; animated (`.tgs`) and video
+  borderless - no message bubble) in Kitty mode; animated (`.tgs`) and video
   (`.webm`) stickers keep the alt-emoji placeholder, as do all stickers outside
   Kitty mode (#103)
-- Round video notes (кружочки) now render borderless too — the circular preview
+- Round video notes (кружочки) now render borderless too - the circular preview
   and play/duration overlay without the surrounding message bubble
 - `photos.max_long_side_px` config option (default 800) caps a rendered inline
   image's long side in pixels (#125)
@@ -670,8 +689,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 ### Fixed
 
 - A tall image could render taller than the chat pane, pushing the surrounding
-  messages out of view. Inline images are now bounded — long side to a fixed
-  pixel cap and height to at most 2/3 of the chat pane — preserving aspect ratio
+  messages out of view. Inline images are now bounded - long side to a fixed
+  pixel cap and height to at most 2/3 of the chat pane - preserving aspect ratio
   and re-evaluated on resize; block-art and Kitty render at the same size (#125)
 - A newly arrived message could be clipped or left unreachable below the bottom
   of an open chat (only its top border visible, "can't scroll down"), surviving
@@ -681,7 +700,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   perfect character packing while rendering uses word-wrap), which could also
   clip the newest message at the bottom of a chat (#115)
 - Opening or playing a large document/video could crash the client with an
-  out-of-memory error — the whole file was buffered in memory. Downloads now
+  out-of-memory error - the whole file was buffered in memory. Downloads now
   stream to a private temp file, bounded regardless of file size (#112)
 
 ## [1.3.1] - 2026-06-12
@@ -699,7 +718,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Returning from idle no longer fires a burst of desktop notifications for the
   backlog of caught-up messages; only genuinely fresh messages now notify (#123)
 
-## [1.3.0] - 2026-06-11 — Mute-aware notifications, incoming edits & proxy support
+## [1.3.0] - 2026-06-11 - Mute-aware notifications, incoming edits & proxy support
 
 ### Added
 
@@ -721,7 +740,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Emoji reaction picker now responds to non-Latin keyboard layouts (e.g. the
   Russian `hjkl` navigation keys), matching the remap used everywhere else
 
-## [1.2.0] - 2026-06-11 — Reliable updates and history scrolling
+## [1.2.0] - 2026-06-11 - Reliable updates and history scrolling
 
 ### Fixed
 
