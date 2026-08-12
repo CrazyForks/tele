@@ -318,6 +318,7 @@ func (m RootModel) WithKeyMap(km keys.KeyMap) RootModel {
 	return m
 }
 
+func (m RootModel) StatusText() string           { return m.statusBar.Status() }
 func (m RootModel) SearchActive() bool           { return m.searchModel != nil }
 func (m RootModel) Search() *screens.SearchModel { return m.searchModel }
 func (m RootModel) ContextMenuOpen() bool        { return m.contextMenu != nil }

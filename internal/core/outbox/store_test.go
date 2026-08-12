@@ -11,6 +11,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 func openDB(t *testing.T, path string) *sql.DB {
@@ -211,6 +212,152 @@ func TestNewStore_ResetsAnUploadingEntry(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, domain.OutboxQueued, got.State,
 		"bytes that were going up when the process died must be sent again")
+}
+
+func TestRequeue_PutsTheEntryBehindWhatOvertookIt(t *testing.T) {
+	s, err := NewStore(openDB(t, filepath.Join(t.TempDir(), "q.db")))
+	require.NoError(t, err)
+	rejected, _, err := s.Add(textEntry("a", 10, "the photo"))
+	require.NoError(t, err)
+	rejected.State = domain.OutboxFailed
+	require.NoError(t, s.Update(rejected))
+	overtook, _, err := s.Add(textEntry("b", 10, "typed after"))
+	require.NoError(t, err)
+
+	got, err := s.Requeue("a")
+
+	require.NoError(t, err)
+	assert.Greater(t, got.Seq, overtook.Seq, "it goes behind the sends already in the conversation")
+	assert.Equal(t, domain.OutboxQueued, got.State)
+}
+
+func TestRequeue_KeepsTheIdentityTelegramDeduplicatesOn(t *testing.T) {
+	s, err := NewStore(openDB(t, filepath.Join(t.TempDir(), "q.db")))
+	require.NoError(t, err)
+	before, _, err := s.Add(textEntry("a", 10, "the photo"))
+	require.NoError(t, err)
+
+	got, err := s.Requeue("a")
+
+	require.NoError(t, err)
+	assert.Equal(t, before.Ref, got.Ref)
+	assert.Equal(t, before.RandomID, got.RandomID,
+		"a requeued send must not become a second message")
+	assert.Equal(t, "the photo", got.Message.Text)
+	assert.Equal(t, before.CreatedAt.UTC(), got.CreatedAt.UTC(),
+		"it was composed when it was composed")
+}
+
+func TestRequeue_ClearsTheFailureItIsBeingRetriedFrom(t *testing.T) {
+	s, err := NewStore(openDB(t, filepath.Join(t.TempDir(), "q.db")))
+	require.NoError(t, err)
+	e, _, err := s.Add(textEntry("a", 10, "the photo"))
+	require.NoError(t, err)
+	e.State = domain.OutboxFailed
+	e.Attempts = 3
+	e.ErrKind, e.ErrReason, e.ErrDetail = telerr.Rejected, telerr.ReasonPhotoType, "PHOTO_EXT_INVALID"
+	require.NoError(t, s.Update(e))
+
+	got, err := s.Requeue("a")
+
+	require.NoError(t, err)
+	assert.Zero(t, got.Attempts, "asking again is a new decision, not a continued backoff")
+	assert.Empty(t, got.ErrKind)
+	assert.Empty(t, got.ErrReason)
+	assert.Empty(t, got.ErrDetail)
+}
+
+func TestRequeue_SurvivesAReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	s, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	_, _, err = s.Add(textEntry("a", 10, "the photo"))
+	require.NoError(t, err)
+	requeued, err := s.Requeue("a")
+	require.NoError(t, err)
+
+	reopened, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+
+	got, ok := reopened.Get("a")
+	require.True(t, ok, "the row must exist exactly once, under the same ref")
+	assert.Equal(t, requeued.Seq, got.Seq)
+	assert.Len(t, reopened.All(), 1)
+}
+
+func TestRequeue_AnUnknownRefIsNotAnEntry(t *testing.T) {
+	s, err := NewStore(openDB(t, filepath.Join(t.TempDir(), "q.db")))
+	require.NoError(t, err)
+
+	_, err = s.Requeue("nobody")
+
+	assert.Error(t, err)
+}
+
+// The refusal has to survive a restart, or a rejected send comes back
+// describing itself in the vaguest terms available.
+func TestUpdate_PersistsTheReasonBehindARefusal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	s, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	e, _, err := s.Add(textEntry("a", 10, "the photo"))
+	require.NoError(t, err)
+	e.State = domain.OutboxFailed
+	e.ErrKind, e.ErrReason, e.ErrDetail = telerr.Rejected, telerr.ReasonPhotoType, "PHOTO_EXT_INVALID"
+	require.NoError(t, s.Update(e))
+
+	reopened, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+
+	got, ok := reopened.Get("a")
+	require.True(t, ok)
+	assert.Equal(t, telerr.Rejected, got.ErrKind)
+	assert.Equal(t, telerr.ReasonPhotoType, got.ErrReason)
+	assert.Equal(t, "PHOTO_EXT_INVALID", got.ErrDetail)
+}
+
+// A database written before err_reason existed must open and keep its rows.
+// This is the case the reporter of #224 is in.
+func TestNewStore_OpensADatabaseWrittenBeforeTheReasonColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	db := openDB(t, path)
+	_, err := db.Exec(`
+CREATE TABLE outbox (
+	id              INTEGER PRIMARY KEY AUTOINCREMENT,
+	ref             TEXT    NOT NULL UNIQUE,
+	chat_id         INTEGER NOT NULL,
+	random_id       INTEGER NOT NULL,
+	kind            TEXT    NOT NULL,
+	payload         TEXT    NOT NULL,
+	state           TEXT    NOT NULL,
+	attempts        INTEGER NOT NULL DEFAULT 0,
+	next_attempt_at INTEGER NOT NULL DEFAULT 0,
+	created_at      INTEGER NOT NULL,
+	err_kind        TEXT    NOT NULL DEFAULT '',
+	err_detail      TEXT    NOT NULL DEFAULT ''
+);
+INSERT INTO outbox (ref, chat_id, random_id, kind, payload, state, created_at, err_kind, err_detail)
+VALUES ('stuck', 10, 42, 'text', '{"Text":"the photo"}', 'failed', 1700000000000, 'internal', 'PHOTO_EXT_INVALID');
+`)
+	require.NoError(t, err)
+
+	s, err := NewStore(db)
+
+	require.NoError(t, err)
+	got, ok := s.Get("stuck")
+	require.True(t, ok)
+	assert.Empty(t, got.ErrReason, "an older build recorded no reason, and none is invented")
+	assert.Equal(t, "PHOTO_EXT_INVALID", got.ErrDetail)
+}
+
+func TestNewStore_MigratesOnlyOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	_, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+
+	_, err = NewStore(openDB(t, path))
+
+	assert.NoError(t, err, "reopening must not trip over a column that is already there")
 }
 
 func TestRandomIDFor_IsDeterministicAndNonZero(t *testing.T) {

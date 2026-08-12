@@ -36,7 +36,7 @@ func (c *GotdClient) mapError(op string, err error) error {
 
 	var te *tgerr.Error
 	if errors.As(err, &te) {
-		kind, retryAfter := classifyTgErr(te)
+		kind, reason, retryAfter := classifyTgErr(te)
 		if kind == telerr.Internal && c.log != nil {
 			// The kind set is closed, the mapping table is not. Unmapped types
 			// are logged so the table is extended on evidence rather than by
@@ -48,6 +48,7 @@ func (c *GotdClient) mapError(op string, err error) error {
 			Kind:       kind,
 			Op:         op,
 			Detail:     te.Type,
+			Reason:     reason,
 			RetryAfter: retryAfter,
 			Transient:  kind == telerr.Network,
 			Cause:      err,
@@ -93,40 +94,66 @@ func opName(in bin.Encoder) string {
 	return "telegram"
 }
 
-// classifyTgErr maps one gotd error onto a kind, and a wait for RateLimited.
-// Codes decide first because they are stable; types refine the 400s.
-func classifyTgErr(e *tgerr.Error) (telerr.Kind, time.Duration) {
+// classifyTgErr maps one gotd error onto a kind, the reason behind a Rejected
+// one, and a wait for RateLimited. Codes decide first because they are stable;
+// types refine the 400s.
+func classifyTgErr(e *tgerr.Error) (telerr.Kind, telerr.Reason, time.Duration) {
 	switch {
 	case e.Code == 420:
 		// FLOOD_WAIT, FLOOD_PREMIUM_WAIT and SLOWMODE_WAIT all carry the wait
 		// in Argument.
-		return telerr.RateLimited, time.Duration(e.Argument) * time.Second
+		return telerr.RateLimited, "", time.Duration(e.Argument) * time.Second
 	case e.Code == 401 || e.Code == 406:
-		return telerr.Unauthorized, 0
+		return telerr.Unauthorized, "", 0
 	case e.Code == 403:
-		return telerr.Forbidden, 0
+		return telerr.Forbidden, "", 0
 	case e.Code >= 500:
-		return telerr.Network, 0
+		return telerr.Network, "", 0
+	}
+
+	if reason, ok := rejectionReasons[e.Type]; ok {
+		return telerr.Rejected, reason, 0
 	}
 
 	switch e.Type {
 	case "PEER_ID_INVALID", "CHANNEL_INVALID", "CHAT_ID_INVALID", "USER_ID_INVALID",
 		"USERNAME_NOT_OCCUPIED", "PEER_ID_NOT_SUPPORTED":
-		return telerr.PeerNotFound, 0
+		return telerr.PeerNotFound, "", 0
 	case "CHAT_WRITE_FORBIDDEN", "CHAT_FORWARDS_RESTRICTED", "USER_BANNED_IN_CHANNEL",
 		"CHAT_ADMIN_REQUIRED", "MESSAGE_DELETE_FORBIDDEN":
-		return telerr.Forbidden, 0
+		return telerr.Forbidden, "", 0
 	case "FILE_REFERENCE_EXPIRED", "FILE_REFERENCE_INVALID", "FILE_REFERENCE_EMPTY":
-		return telerr.StaleReference, 0
+		return telerr.StaleReference, "", 0
 	case "MESSAGE_ID_INVALID", "MSG_ID_INVALID", "RANDOM_ID_INVALID":
-		return telerr.NotFound, 0
+		return telerr.NotFound, "", 0
 	}
 
 	// Net for the families too large to list: CHAT_SEND_*_FORBIDDEN alone is
 	// eight distinct types.
 	if strings.HasSuffix(e.Type, "_FORBIDDEN") || strings.HasSuffix(e.Type, "_RESTRICTED") {
-		return telerr.Forbidden, 0
+		return telerr.Forbidden, "", 0
 	}
 
-	return telerr.Internal, 0
+	return telerr.Internal, "", 0
+}
+
+// rejectionReasons is the closed list of refusals we can explain. It is a list
+// and not a rule — an unrecognised 400 stays Internal, is logged as unmapped and
+// joins this table on evidence.
+//
+// Sorting every unknown 400 in here would look tidier and would be worse: the
+// difference between "Telegram refused your photo" and "we do not know what
+// happened" is exactly what a person needs, and Internal is where the second one
+// is admitted. Several types share a reason wherever the remedy is the same.
+var rejectionReasons = map[string]telerr.Reason{
+	"PHOTO_EXT_INVALID":        telerr.ReasonPhotoType,
+	"PHOTO_INVALID_DIMENSIONS": telerr.ReasonPhotoDimensions,
+	"PHOTO_SAVE_FILE_INVALID":  telerr.ReasonMediaUnreadable,
+	"IMAGE_PROCESS_FAILED":     telerr.ReasonMediaUnreadable,
+	"VIDEO_FILE_INVALID":       telerr.ReasonMediaUnreadable,
+	"MEDIA_INVALID":            telerr.ReasonMediaUnsupported,
+	"MEDIA_EMPTY":              telerr.ReasonMediaUnsupported,
+	"MESSAGE_EMPTY":            telerr.ReasonTextEmpty,
+	"MESSAGE_TOO_LONG":         telerr.ReasonTextTooLong,
+	"ENTITIES_TOO_LONG":        telerr.ReasonMarkupTooLong,
 }

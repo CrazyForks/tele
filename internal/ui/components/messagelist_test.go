@@ -1731,9 +1731,43 @@ func TestMessageList_TheQueueStateDoesNotChangeTheBubbleHeight(t *testing.T) {
 }
 
 func TestOutboxReason_NamesTheFailureInPlainWords(t *testing.T) {
-	assert.Equal(t, "not allowed in this chat", components.OutboxReason(telerr.Forbidden))
-	assert.Equal(t, "chat is unreachable", components.OutboxReason(telerr.PeerNotFound))
-	assert.Equal(t, "unexpected error", components.OutboxReason(telerr.Internal))
+	failed := func(k telerr.Kind) domain.OutboxEntry {
+		return domain.OutboxEntry{State: domain.OutboxFailed, ErrKind: k}
+	}
+	assert.Equal(t, "not allowed in this chat", components.OutboxReason(failed(telerr.Forbidden)))
+	assert.Equal(t, "chat is unreachable", components.OutboxReason(failed(telerr.PeerNotFound)))
+	assert.Equal(t, "unexpected error", components.OutboxReason(failed(telerr.Internal)))
+}
+
+// A refusal is only useful when it is specific: "Telegram would not accept it"
+// leaves a person with nothing to do, and the whole point of #224 is that the
+// reporter was told "unexpected error" about a file with a fixable name.
+func TestOutboxReason_ARefusalNamesWhatWasWrong(t *testing.T) {
+	rejected := func(r telerr.Reason) domain.OutboxEntry {
+		return domain.OutboxEntry{
+			State: domain.OutboxFailed, ErrKind: telerr.Rejected, ErrReason: r,
+			ErrDetail: "PHOTO_EXT_INVALID",
+		}
+	}
+	assert.Equal(t, "not a file Telegram accepts as a photo",
+		components.OutboxReason(rejected(telerr.ReasonPhotoType)))
+	assert.Equal(t, "message is too long",
+		components.OutboxReason(rejected(telerr.ReasonTextTooLong)))
+}
+
+// An entry rejected by an older build carries no reason, and one rejected for a
+// reason this build has no phrase for carries an unknown one. Both must read as
+// a refusal rather than as a protocol constant on screen.
+func TestOutboxReason_ARefusalWithNoPhraseStaysHonest(t *testing.T) {
+	for _, r := range []telerr.Reason{"", "something_new"} {
+		e := domain.OutboxEntry{
+			State: domain.OutboxFailed, ErrKind: telerr.Rejected, ErrReason: r,
+			ErrDetail: "SOME_NEW_REFUSAL",
+		}
+		got := components.OutboxReason(e)
+		assert.Equal(t, "Telegram would not accept it", got)
+		assert.NotContains(t, got, "SOME_NEW_REFUSAL")
+	}
 }
 
 func TestMessageList_ShowsAQueuedEntryInAChatWithNoHistory(t *testing.T) {

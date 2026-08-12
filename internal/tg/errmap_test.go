@@ -25,32 +25,80 @@ func testClient() *GotdClient {
 
 func TestClassifyTgErr(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      *tgerr.Error
-		wantKind telerr.Kind
-		wantWait time.Duration
+		name       string
+		err        *tgerr.Error
+		wantKind   telerr.Kind
+		wantWait   time.Duration
+		wantReason telerr.Reason
 	}{
-		{"flood wait", &tgerr.Error{Code: 420, Type: "FLOOD_WAIT", Argument: 30}, telerr.RateLimited, 30 * time.Second},
-		{"slowmode wait", &tgerr.Error{Code: 420, Type: "SLOWMODE_WAIT", Argument: 5}, telerr.RateLimited, 5 * time.Second},
-		{"auth key unregistered", &tgerr.Error{Code: 401, Type: "AUTH_KEY_UNREGISTERED"}, telerr.Unauthorized, 0},
-		{"auth key duplicated", &tgerr.Error{Code: 406, Type: "AUTH_KEY_DUPLICATED"}, telerr.Unauthorized, 0},
-		{"forbidden by code", &tgerr.Error{Code: 403, Type: "CHAT_WRITE_FORBIDDEN"}, telerr.Forbidden, 0},
-		{"peer id invalid", &tgerr.Error{Code: 400, Type: "PEER_ID_INVALID"}, telerr.PeerNotFound, 0},
-		{"channel invalid", &tgerr.Error{Code: 400, Type: "CHANNEL_INVALID"}, telerr.PeerNotFound, 0},
-		{"forwards restricted", &tgerr.Error{Code: 400, Type: "CHAT_FORWARDS_RESTRICTED"}, telerr.Forbidden, 0},
-		{"send media forbidden by suffix", &tgerr.Error{Code: 400, Type: "CHAT_SEND_MEDIA_FORBIDDEN"}, telerr.Forbidden, 0},
-		{"file reference expired", &tgerr.Error{Code: 400, Type: "FILE_REFERENCE_EXPIRED"}, telerr.StaleReference, 0},
-		{"message id invalid", &tgerr.Error{Code: 400, Type: "MESSAGE_ID_INVALID"}, telerr.NotFound, 0},
-		{"server error", &tgerr.Error{Code: 500, Type: "INTERNAL"}, telerr.Network, 0},
-		{"unmapped", &tgerr.Error{Code: 400, Type: "SOMETHING_NEW"}, telerr.Internal, 0},
+		{"flood wait", &tgerr.Error{Code: 420, Type: "FLOOD_WAIT", Argument: 30}, telerr.RateLimited, 30 * time.Second, ""},
+		{"slowmode wait", &tgerr.Error{Code: 420, Type: "SLOWMODE_WAIT", Argument: 5}, telerr.RateLimited, 5 * time.Second, ""},
+		{"auth key unregistered", &tgerr.Error{Code: 401, Type: "AUTH_KEY_UNREGISTERED"}, telerr.Unauthorized, 0, ""},
+		{"auth key duplicated", &tgerr.Error{Code: 406, Type: "AUTH_KEY_DUPLICATED"}, telerr.Unauthorized, 0, ""},
+		{"forbidden by code", &tgerr.Error{Code: 403, Type: "CHAT_WRITE_FORBIDDEN"}, telerr.Forbidden, 0, ""},
+		{"peer id invalid", &tgerr.Error{Code: 400, Type: "PEER_ID_INVALID"}, telerr.PeerNotFound, 0, ""},
+		{"channel invalid", &tgerr.Error{Code: 400, Type: "CHANNEL_INVALID"}, telerr.PeerNotFound, 0, ""},
+		{"forwards restricted", &tgerr.Error{Code: 400, Type: "CHAT_FORWARDS_RESTRICTED"}, telerr.Forbidden, 0, ""},
+		{"send media forbidden by suffix", &tgerr.Error{Code: 400, Type: "CHAT_SEND_MEDIA_FORBIDDEN"}, telerr.Forbidden, 0, ""},
+		{"file reference expired", &tgerr.Error{Code: 400, Type: "FILE_REFERENCE_EXPIRED"}, telerr.StaleReference, 0, ""},
+		{"message id invalid", &tgerr.Error{Code: 400, Type: "MESSAGE_ID_INVALID"}, telerr.NotFound, 0, ""},
+		{"server error", &tgerr.Error{Code: 500, Type: "INTERNAL"}, telerr.Network, 0, ""},
+		{"unmapped", &tgerr.Error{Code: 400, Type: "SOMETHING_NEW"}, telerr.Internal, 0, ""},
+
+		// The refusals: Telegram understood the request and would not take the
+		// content. #224 is the first of these, and the whole class behaves alike.
+		{"photo without a usable extension", &tgerr.Error{Code: 400, Type: "PHOTO_EXT_INVALID"},
+			telerr.Rejected, 0, telerr.ReasonPhotoType},
+		{"photo of impossible dimensions", &tgerr.Error{Code: 400, Type: "PHOTO_INVALID_DIMENSIONS"},
+			telerr.Rejected, 0, telerr.ReasonPhotoDimensions},
+		{"photo the server could not store", &tgerr.Error{Code: 400, Type: "PHOTO_SAVE_FILE_INVALID"},
+			telerr.Rejected, 0, telerr.ReasonMediaUnreadable},
+		{"image the server could not process", &tgerr.Error{Code: 400, Type: "IMAGE_PROCESS_FAILED"},
+			telerr.Rejected, 0, telerr.ReasonMediaUnreadable},
+		{"video the server could not read", &tgerr.Error{Code: 400, Type: "VIDEO_FILE_INVALID"},
+			telerr.Rejected, 0, telerr.ReasonMediaUnreadable},
+		{"media it will not carry", &tgerr.Error{Code: 400, Type: "MEDIA_INVALID"},
+			telerr.Rejected, 0, telerr.ReasonMediaUnsupported},
+		{"media that arrived empty", &tgerr.Error{Code: 400, Type: "MEDIA_EMPTY"},
+			telerr.Rejected, 0, telerr.ReasonMediaUnsupported},
+		{"nothing to send", &tgerr.Error{Code: 400, Type: "MESSAGE_EMPTY"},
+			telerr.Rejected, 0, telerr.ReasonTextEmpty},
+		{"text over the limit", &tgerr.Error{Code: 400, Type: "MESSAGE_TOO_LONG"},
+			telerr.Rejected, 0, telerr.ReasonTextTooLong},
+		{"markup over the limit", &tgerr.Error{Code: 400, Type: "ENTITIES_TOO_LONG"},
+			telerr.Rejected, 0, telerr.ReasonMarkupTooLong},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			kind, wait := classifyTgErr(tt.err)
+			kind, reason, wait := classifyTgErr(tt.err)
 			assert.Equal(t, tt.wantKind, kind)
 			assert.Equal(t, tt.wantWait, wait)
+			assert.Equal(t, tt.wantReason, reason)
 		})
 	}
+}
+
+// The point of keeping the list explicit. An unrecognised refusal must stay
+// Internal, because Internal is the admission that we do not know what happened
+// and it is what the unmapped-error warning is watching for. Sorting unknown
+// 400s into Rejected would have us telling a person, with confidence, that
+// Telegram refused their content — about an error we cannot read.
+func TestClassifyTgErr_AnUnknownRefusalIsNotRejected(t *testing.T) {
+	kind, reason, _ := classifyTgErr(&tgerr.Error{Code: 400, Type: "SOME_NEW_REFUSAL"})
+
+	assert.Equal(t, telerr.Internal, kind)
+	assert.Empty(t, reason)
+}
+
+func TestMapError_ARefusalCarriesItsReasonAndItsEvidence(t *testing.T) {
+	err := testClient().mapError("messages.sendMedia", &tgerr.Error{Code: 400, Type: "PHOTO_EXT_INVALID"})
+
+	e, ok := telerr.As(err)
+	require.True(t, ok)
+	assert.Equal(t, telerr.Rejected, e.Kind)
+	assert.Equal(t, telerr.ReasonPhotoType, e.Reason)
+	assert.Equal(t, "PHOTO_EXT_INVALID", e.Detail, "the raw type stays for the logs")
+	assert.False(t, e.Transient)
 }
 
 func TestMapError_NilStaysNil(t *testing.T) {

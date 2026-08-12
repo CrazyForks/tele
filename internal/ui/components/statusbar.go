@@ -36,6 +36,7 @@ func NewStatusBar(width int) *StatusBar {
 func (sb *StatusBar) SetWidth(w int)           { sb.width = w }
 func (sb *StatusBar) SetMode(m keys.VimMode)   { sb.mode = m }
 func (sb *StatusBar) SetStatus(s string)       { sb.status = s }
+func (sb *StatusBar) Status() string           { return sb.status }
 func (sb *StatusBar) SetVerbose(v bool)        { sb.verbose = v }
 func (sb *StatusBar) SetLastKey(k string)      { sb.lastKey = k }
 func (sb *StatusBar) SetActivePane(p string)   { sb.activePane = p }

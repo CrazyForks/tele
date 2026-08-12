@@ -99,7 +99,11 @@ type OutboxEntry struct {
 	// persisted: a crash in that window must re-send rather than assume, and the
 	// persisted RandomID makes that safe.
 	SentMsgIDs []int
-	// ErrKind and ErrDetail are empty unless State is OutboxFailed.
+	// ErrKind, ErrReason and ErrDetail are empty unless State is OutboxFailed.
+	// ErrReason is set only for a refusal, and is what the interface says to a
+	// person; ErrDetail is the raw Telegram type behind it, kept for the logs
+	// and for anyone filing a report.
 	ErrKind   telerr.Kind
+	ErrReason telerr.Reason
 	ErrDetail string
 }

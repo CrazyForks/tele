@@ -21,13 +21,17 @@ const maxBackoff = 5 * time.Minute
 // Next returns the entry the worker should attempt, if any:
 //
 //	the oldest entry by Seq whose NextAttemptAt has arrived, and which has no
-//	older entry in the same chat, in any state.
+//	older unresolved entry in the same chat.
 //
 // The second clause is the whole ordering model. Only the head of each chat's
 // queue is ever eligible, so FIFO within a chat holds with no extra bookkeeping,
-// and a chat sitting in backoff delays nobody else. It is also why a failed
-// entry blocks its own chat: letting the next message past would reorder the
-// conversation.
+// and a chat sitting in backoff delays nobody else.
+//
+// "Unresolved" is doing the work there, and it is what ADR 0005 decided. A
+// rejected entry is not a head: it will never be attempted again without a
+// person acting on it, so a position in the order it can never occupy is not an
+// order, it is a stop (#224). An entry waiting out a backoff is a head, because
+// it is going to happen and its place in the conversation is still its own.
 //
 // entries need not be sorted.
 func Next(entries []domain.OutboxEntry, now time.Time) (domain.OutboxEntry, bool) {
@@ -56,7 +60,7 @@ func EarliestDue(entries []domain.OutboxEntry, now time.Time) (time.Time, bool) 
 	var at time.Time
 	found := false
 	for _, e := range entries {
-		if e.State != domain.OutboxQueued || heads[e.ChatID] != e.Seq {
+		if e.State != domain.OutboxQueued || !isHead(e, heads) {
 			continue
 		}
 		if !e.NextAttemptAt.After(now) {
@@ -69,12 +73,19 @@ func EarliestDue(entries []domain.OutboxEntry, now time.Time) (time.Time, bool) 
 	return at, found
 }
 
-// chatHeads maps each chat to the lowest Seq it holds, whatever state that
-// entry is in. Only a head is ever eligible, which is what keeps a chat in
-// order and what makes a failed entry block its own chat and nothing else.
+// chatHeads maps each chat to the lowest Seq it holds that is still going to
+// happen. Only a head is ever eligible, which is what keeps a chat in order.
+//
+// Rejected entries are skipped, so a chat whose oldest entry was refused is
+// headed by the next one instead. A chat holding nothing else has no entry in
+// the map at all, which is why the caller must not read a missing key as Seq 0 —
+// see eligible.
 func chatHeads(entries []domain.OutboxEntry) map[int64]int64 {
 	heads := make(map[int64]int64, len(entries))
 	for _, e := range entries {
+		if e.State == domain.OutboxFailed {
+			continue
+		}
 		if seq, ok := heads[e.ChatID]; !ok || e.Seq < seq {
 			heads[e.ChatID] = e.Seq
 		}
@@ -84,8 +95,16 @@ func chatHeads(entries []domain.OutboxEntry) map[int64]int64 {
 
 func eligible(e domain.OutboxEntry, heads map[int64]int64, now time.Time) bool {
 	return e.State == domain.OutboxQueued &&
-		heads[e.ChatID] == e.Seq &&
+		isHead(e, heads) &&
 		!e.NextAttemptAt.After(now)
+}
+
+// isHead answers against the map rather than by indexing it: a chat with no
+// head has no key, and a bare lookup would return 0 and match an entry whose Seq
+// happened to be 0.
+func isHead(e domain.OutboxEntry, heads map[int64]int64) bool {
+	seq, ok := heads[e.ChatID]
+	return ok && seq == e.Seq
 }
 
 // Backoff says how long an entry waits after err, and whether it is finished.
@@ -112,7 +131,9 @@ func Backoff(err error, attempts int) (time.Duration, bool) {
 		// this is the interval at which it re-checks once a session returns.
 		return maxBackoff, false
 	default:
-		// peer_not_found, forbidden, not_found, internal, stale_reference.
+		// peer_not_found, forbidden, not_found, rejected, internal,
+		// stale_reference. All terminal: repeating the same request cannot
+		// change a refusal, a missing peer or content Telegram would not take.
 		return 0, true
 	}
 }

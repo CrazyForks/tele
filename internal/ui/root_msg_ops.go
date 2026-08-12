@@ -9,6 +9,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -126,6 +127,18 @@ func (m RootModel) handleUploadProgress(p core.Progress) (RootModel, tea.Cmd) {
 // showOutboxReason names why the selected send failed, in the status bar. The
 // bubble carries only a glyph, so this is where the reason lives once the toast
 // that announced it has gone (#193).
+//
+// What it offers depends on what failed. A refusal is about the content, so
+// repeating it unchanged repeats the refusal, and pointing at retry would send a
+// person round a loop; discard is the way out. Every other terminal kind is
+// about circumstances that can change — rights restored, a chat reachable
+// again — so retry stays the suggestion there. The retry key works either way:
+// this stops recommending it, not offering it (#224).
+//
+// The two hints name different keys because the two actions live in different
+// places. Retry is bound directly; discard is destructive and therefore stays
+// behind the context menu (#193), so its hint names the key that opens the menu
+// rather than a key that would do nothing.
 func (m *RootModel) showOutboxReason() {
 	if m.chat == nil {
 		return
@@ -134,8 +147,12 @@ func (m *RootModel) showOutboxReason() {
 	if !ok || entry.State != domain.OutboxFailed {
 		return
 	}
-	m.statusBar.SetStatus("not sent: " + components.OutboxReason(entry.ErrKind) +
-		" — " + m.keyMap.KeyFor(keys.ContextChat, keys.ActionConfirm) + " to retry")
+	action, verb := keys.ActionConfirm, " to retry"
+	if entry.ErrKind == telerr.Rejected {
+		action, verb = keys.ActionOpenContextMenu, " to discard"
+	}
+	m.statusBar.SetStatus("not sent: " + components.OutboxReason(entry) +
+		" — " + m.keyMap.KeyFor(keys.ContextChat, action) + verb)
 }
 
 // handleRetryOutbox puts a failed send back in the queue. The entry's new state

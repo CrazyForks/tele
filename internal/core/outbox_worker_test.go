@@ -108,30 +108,80 @@ func TestWorker_ARateLimitDoesNotAdvanceTheAttemptCurve(t *testing.T) {
 	assert.Equal(t, domain.OutboxQueued, e.State)
 }
 
-func TestWorker_AFailedEntryBlocksItsOwnChatOnly(t *testing.T) {
-	c := &stubClient{err: &telerr.Error{Kind: telerr.Forbidden}}
+// #224 end to end at the worker: a send Telegram refused for good used to park
+// its chat, and everything typed afterwards sat queued forever behind it.
+func TestWorker_ARejectedEntryDoesNotParkItsChat(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{
+		Kind: telerr.Rejected, Reason: telerr.ReasonPhotoType, Detail: "PHOTO_EXT_INVALID",
+	}}
+	o, _ := newCmdOwner(t, c)
+	q := newOutboxStore(t)
+	o.SetOutbox(q)
+	ctx := runWorker(t, o)
+
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "the photo"}))
+	waitFor(t, "the first entry never failed", func() bool {
+		e, ok := q.Get("r1")
+		return ok && e.State == domain.OutboxFailed
+	})
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r2", ChatID: 1, Text: "typed after"}))
+
+	waitFor(t, "the send behind a rejected one never got its turn", func() bool {
+		e, ok := q.Get("r2")
+		return ok && e.State == domain.OutboxFailed
+	})
+}
+
+// The refusal is recorded in the terms the interface speaks, with the raw
+// Telegram type kept alongside it as evidence.
+func TestWorker_ARefusalIsRecordedWithItsReason(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{
+		Kind: telerr.Rejected, Reason: telerr.ReasonPhotoType, Detail: "PHOTO_EXT_INVALID",
+	}}
+	o, _ := newCmdOwner(t, c)
+	q := newOutboxStore(t)
+	o.SetOutbox(q)
+	ctx := runWorker(t, o)
+
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "the photo"}))
+
+	waitFor(t, "the entry never failed", func() bool {
+		e, ok := q.Get("r1")
+		return ok && e.State == domain.OutboxFailed
+	})
+	e, ok := q.Get("r1")
+	require.True(t, ok)
+	assert.Equal(t, telerr.Rejected, e.ErrKind)
+	assert.Equal(t, telerr.ReasonPhotoType, e.ErrReason)
+	assert.Equal(t, "PHOTO_EXT_INVALID", e.ErrDetail)
+}
+
+// A deferred head is a different thing and still owns its place: it is going to
+// happen, so letting the next one past really would reorder the conversation.
+func TestWorker_ADeferredEntryStillHoldsItsChat(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{Kind: telerr.Network, Transient: true}}
 	o, st := newCmdOwner(t, c)
 	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}})
 	q := newOutboxStore(t)
 	o.SetOutbox(q)
 	ctx := runWorker(t, o)
 
-	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "blocked"}))
-	waitFor(t, "the first entry never failed", func() bool {
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "waiting out an outage"}))
+	waitFor(t, "the first entry never backed off", func() bool {
 		e, ok := q.Get("r1")
-		return ok && e.State == domain.OutboxFailed
+		return ok && e.State == domain.OutboxQueued && !e.NextAttemptAt.IsZero()
 	})
 	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r2", ChatID: 1, Text: "behind it"}))
 	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r3", ChatID: 2, Text: "other chat"}))
 
 	waitFor(t, "the other chat never got its turn", func() bool {
 		e, ok := q.Get("r3")
-		return ok && e.State == domain.OutboxFailed
+		return ok && e.Attempts > 0
 	})
 	behind, ok := q.Get("r2")
 	require.True(t, ok)
-	assert.Equal(t, domain.OutboxQueued, behind.State,
-		"letting it past a failed entry would reorder the conversation")
+	assert.Zero(t, behind.Attempts,
+		"letting it past a deferred entry would reorder the conversation")
 }
 
 func TestWorker_RestartResendsWithTheSameRandomID(t *testing.T) {

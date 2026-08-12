@@ -69,6 +69,51 @@ func TestContextMenu_OnAnEntryOffersRetryAndDiscard(t *testing.T) {
 	assert.False(t, m.ContextMenuOpen(), "the menu closes after the action")
 }
 
+// rootOnRejectedSend is the #224 case: the send Telegram refused, sitting under
+// the cursor with the reason it was refused for.
+func rootOnRejectedSend(t *testing.T) ui.RootModel {
+	t.Helper()
+	m, _ := newRootWithOpenChat(t)
+	m = m.WithFocus(ui.FocusChat)
+	m.Chat().SetOutbox([]domain.OutboxEntry{{
+		Ref: "r1", ChatID: 1, State: domain.OutboxFailed,
+		ErrKind: telerr.Rejected, ErrReason: telerr.ReasonPhotoType,
+		ErrDetail: "PHOTO_EXT_INVALID",
+		Message:   &domain.OutboxMessage{Text: "the photo"},
+	}})
+	require.Equal(t, "r1", m.Chat().SelectedOutboxRef())
+	return m
+}
+
+// The reporter of #224 was told "unexpected error" and offered a retry that
+// could only fail the same way. A refusal is about the content, so the way out
+// is discard.
+func TestStatusBar_ARejectedSendIsNamedAndPointsAtDiscard(t *testing.T) {
+	m := rootOnRejectedSend(t)
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'k', Text: "k"})
+	m = next.(ui.RootModel)
+
+	status := m.StatusText()
+	assert.Contains(t, status, "not a file Telegram accepts as a photo")
+	assert.Contains(t, status, "to discard")
+	assert.NotContains(t, status, "to retry", "retrying the same file repeats the refusal")
+	assert.NotContains(t, status, "PHOTO_EXT_INVALID", "the protocol type belongs in the log")
+}
+
+// Every other terminal failure is about circumstances that can change, so retry
+// stays the suggestion there.
+func TestStatusBar_AForbiddenSendStillPointsAtRetry(t *testing.T) {
+	m, _ := rootOnFailedSend(t)
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'k', Text: "k"})
+	m = next.(ui.RootModel)
+
+	status := m.StatusText()
+	assert.Contains(t, status, "not allowed in this chat")
+	assert.Contains(t, status, "to retry")
+}
+
 // x is composer state only. A staged reply and a selected failed send are
 // different targets, and x must keep aiming at the first (#193).
 func TestCancelUpload_ClearsTheReplyAndLeavesTheQueueAlone(t *testing.T) {

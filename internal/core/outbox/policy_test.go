@@ -56,10 +56,30 @@ func TestNext_KeepsFIFOWithinOneChat(t *testing.T) {
 	assert.False(t, ok, "the second message of a chat must not overtake the first")
 }
 
-func TestNext_AFailedHeadBlocksItsOwnChatOnly(t *testing.T) {
+// The defect of #224: a send Telegram refused for good used to hold its chat
+// forever, because the head is the oldest entry whatever state it is in. Every
+// message typed afterwards sat queued behind a message that was never going to
+// move, and the only way out was deleting rows by hand.
+func TestNext_ARejectedSendDoesNotHoldItsChat(t *testing.T) {
 	now := time.Unix(1000, 0)
 	entries := []domain.OutboxEntry{
 		entry(1, 10, domain.OutboxFailed, time.Time{}),
+		entry(2, 10, domain.OutboxQueued, time.Time{}),
+	}
+
+	got, ok := Next(entries, now)
+
+	require.True(t, ok, "the chat must keep sending")
+	assert.Equal(t, int64(2), got.Seq)
+}
+
+// The exception is only for sends that will never move on their own. One waiting
+// out a backoff is still going to happen and still owns its place in the
+// conversation, so letting the next past it really would reorder the chat.
+func TestNext_ADeferredSendStillHoldsItsChat(t *testing.T) {
+	now := time.Unix(1000, 0)
+	entries := []domain.OutboxEntry{
+		entry(1, 10, domain.OutboxQueued, now.Add(time.Minute)),
 		entry(2, 10, domain.OutboxQueued, time.Time{}),
 		entry(3, 20, domain.OutboxQueued, time.Time{}),
 	}
@@ -67,7 +87,47 @@ func TestNext_AFailedHeadBlocksItsOwnChatOnly(t *testing.T) {
 	got, ok := Next(entries, now)
 
 	require.True(t, ok)
-	assert.Equal(t, int64(3), got.Seq, "a failed head blocks its chat, and nothing else")
+	assert.Equal(t, int64(3), got.Seq, "a deferred head holds its chat, and nothing else")
+}
+
+func TestNext_ARejectedSendDoesNotHoldADifferentChatEither(t *testing.T) {
+	now := time.Unix(1000, 0)
+	entries := []domain.OutboxEntry{
+		entry(1, 10, domain.OutboxFailed, time.Time{}),
+		entry(2, 20, domain.OutboxQueued, time.Time{}),
+	}
+
+	got, ok := Next(entries, now)
+
+	require.True(t, ok)
+	assert.Equal(t, int64(2), got.Seq)
+}
+
+// A chat holding nothing but rejected sends has no head at all, which must read
+// as "nothing to do" rather than accidentally matching the zero Seq.
+func TestNext_AChatOfOnlyRejectedSendsOffersNothing(t *testing.T) {
+	now := time.Unix(1000, 0)
+	entries := []domain.OutboxEntry{
+		entry(1, 10, domain.OutboxFailed, time.Time{}),
+		entry(2, 10, domain.OutboxFailed, time.Time{}),
+	}
+
+	_, ok := Next(entries, now)
+
+	assert.False(t, ok)
+}
+
+func TestEarliestDue_LooksPastARejectedSend(t *testing.T) {
+	now := time.Unix(1000, 0)
+	entries := []domain.OutboxEntry{
+		entry(1, 10, domain.OutboxFailed, time.Time{}),
+		entry(2, 10, domain.OutboxQueued, now.Add(time.Minute)),
+	}
+
+	at, ok := EarliestDue(entries, now)
+
+	require.True(t, ok, "the send behind a rejected one is the head now, and it is waiting on a clock")
+	assert.Equal(t, now.Add(time.Minute), at)
 }
 
 func TestNext_IgnoresEntriesAlreadyInFlight(t *testing.T) {
@@ -149,6 +209,7 @@ func TestBackoff_UnauthorizedWaitsForLogin(t *testing.T) {
 func TestBackoff_TerminalKinds(t *testing.T) {
 	for _, kind := range []telerr.Kind{
 		telerr.PeerNotFound, telerr.Forbidden, telerr.NotFound, telerr.Internal,
+		telerr.Rejected,
 	} {
 		_, terminal := Backoff(&telerr.Error{Kind: kind}, 0)
 		assert.True(t, terminal, "kind %s must be terminal", kind)

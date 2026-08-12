@@ -93,6 +93,31 @@ func TestRetryOutbox_RequeuesAndClearsTheFailure(t *testing.T) {
 	assert.True(t, got.NextAttemptAt.IsZero())
 }
 
+// A rejected send does not hold its chat, so by the time a person retries it the
+// sends composed after it are already in the conversation. It rejoins behind
+// them rather than claiming a position that no longer exists (ADR 0005).
+func TestRetryOutbox_RejoinsBehindTheSendsThatOvertookIt(t *testing.T) {
+	o, _ := newCmdOwner(t, &stubClient{})
+	q := newOutboxStore(t)
+	o.SetOutbox(q)
+	require.NoError(t, o.Send(context.Background(), SendRequest{Ref: "r1", ChatID: 1, Text: "the photo"}))
+	rejected, _ := q.Get("r1")
+	rejected.State = domain.OutboxFailed
+	rejected.ErrKind, rejected.ErrReason = telerr.Rejected, telerr.ReasonPhotoType
+	require.NoError(t, q.Update(rejected))
+	require.NoError(t, o.Send(context.Background(), SendRequest{Ref: "r2", ChatID: 1, Text: "typed after"}))
+	overtook, _ := q.Get("r2")
+
+	require.NoError(t, o.RetryOutbox("r1"))
+
+	got, ok := q.Get("r1")
+	require.True(t, ok)
+	assert.Greater(t, got.Seq, overtook.Seq)
+	assert.Equal(t, rejected.RandomID, got.RandomID,
+		"a retry must not turn one message into two")
+	assert.Empty(t, got.ErrReason)
+}
+
 func TestRetryOutbox_AnUnknownRefIsNotFound(t *testing.T) {
 	o, _ := newCmdOwner(t, &stubClient{})
 	o.SetOutbox(newOutboxStore(t))

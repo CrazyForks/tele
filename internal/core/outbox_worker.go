@@ -113,9 +113,9 @@ func (o *Owner) recordFailure(e domain.OutboxEntry, err error) {
 		e.State = domain.OutboxFailed
 		e.NextAttemptAt = time.Time{}
 		if te, ok := telerr.As(err); ok {
-			e.ErrKind, e.ErrDetail = te.Kind, te.Detail
+			e.ErrKind, e.ErrReason, e.ErrDetail = te.Kind, te.Reason, te.Detail
 		} else {
-			e.ErrKind, e.ErrDetail = telerr.Internal, err.Error()
+			e.ErrKind, e.ErrReason, e.ErrDetail = telerr.Internal, "", err.Error()
 		}
 		o.log.Warn("outbox: send failed for good",
 			zap.String("ref", e.Ref), zap.String("kind", string(e.ErrKind)))
@@ -125,7 +125,7 @@ func (o *Owner) recordFailure(e domain.OutboxEntry, err error) {
 	} else {
 		e.State = domain.OutboxQueued
 		e.NextAttemptAt = time.Now().Add(delay)
-		e.ErrKind, e.ErrDetail = "", ""
+		e.ErrKind, e.ErrReason, e.ErrDetail = "", "", ""
 		o.log.Debug("outbox: retrying later",
 			zap.String("ref", e.Ref), zap.Duration("in", delay), zap.Int("attempts", e.Attempts))
 	}

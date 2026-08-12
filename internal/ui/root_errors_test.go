@@ -40,6 +40,18 @@ func TestErrText_KindToTextAndSeverity(t *testing.T) {
 			components.SeverityWarning,
 		},
 		{
+			"a refusal names what was wrong rather than the protocol type",
+			&telerr.Error{Kind: telerr.Rejected, Reason: telerr.ReasonPhotoType, Detail: "PHOTO_EXT_INVALID"},
+			"mark read: not a file Telegram accepts as a photo",
+			components.SeverityWarning,
+		},
+		{
+			"a refusal with no phrase for it stays honest",
+			&telerr.Error{Kind: telerr.Rejected, Detail: "SOME_NEW_REFUSAL"},
+			"mark read: Telegram would not accept it",
+			components.SeverityWarning,
+		},
+		{
 			"peer not found",
 			&telerr.Error{Kind: telerr.PeerNotFound},
 			"mark read: chat unavailable",

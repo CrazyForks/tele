@@ -31,8 +31,42 @@ const (
 	StaleReference Kind = "stale_reference"
 	// Network means a transport failure. Carries Transient.
 	Network Kind = "network"
+	// Rejected means Telegram understood the request and refused the content:
+	// a file it will not take, a text it will not carry. Terminal by nature —
+	// the same content will be refused again — so it is the person's to resolve
+	// and never a timer's. Carries Reason.
+	Rejected Kind = "rejected"
 	// Internal means a bug or an unmapped condition.
 	Internal Kind = "internal"
+)
+
+// Reason refines Rejected: what about the content was refused. The set is
+// closed, like Kind, so that the decision of what to tell a person is made
+// against a fixed list rather than by matching Telegram's error types — those
+// are mapped exactly once, in internal/tg, and nothing outside it should have to
+// know them. A Reason is deliberately coarser than the types behind it: several
+// types that call for the same remedy share one.
+type Reason string
+
+const (
+	// ReasonPhotoType means the file is not in a form Telegram accepts as a
+	// photo, usually because its name carries no usable extension.
+	ReasonPhotoType Reason = "photo_type"
+	// ReasonPhotoDimensions means the image is too large or too oddly shaped.
+	ReasonPhotoDimensions Reason = "photo_dimensions"
+	// ReasonMediaUnreadable means Telegram took the bytes and could not make
+	// sense of them: a truncated image, a video it cannot process.
+	ReasonMediaUnreadable Reason = "media_unreadable"
+	// ReasonMediaUnsupported means the attachment is not something this chat or
+	// this account can carry.
+	ReasonMediaUnsupported Reason = "media_unsupported"
+	// ReasonTextEmpty means there was nothing to send.
+	ReasonTextEmpty Reason = "text_empty"
+	// ReasonTextTooLong means the message is over Telegram's length limit.
+	ReasonTextTooLong Reason = "text_too_long"
+	// ReasonMarkupTooLong means the formatting, rather than the text, is what
+	// exceeds a limit.
+	ReasonMarkupTooLong Reason = "markup_too_long"
 )
 
 // Error is the only error shape that leaves internal/tg.
@@ -47,6 +81,10 @@ type Error struct {
 	// Detail carries the raw Telegram error type for logs, and is the only
 	// thing worth showing a user when Kind is Internal.
 	Detail string `json:"detail,omitempty"`
+	// Reason is set for Rejected only, and is what a client says to a person.
+	// Detail stays alongside it for the logs: the Reason is the remedy, the
+	// Detail is the evidence.
+	Reason Reason `json:"reason,omitempty"`
 	// RetryAfter is set for RateLimited only.
 	RetryAfter time.Duration `json:"retry_after,omitempty"`
 	// Transient is set for Network only, and reports whether a retry may help.

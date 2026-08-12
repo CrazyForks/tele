@@ -33,10 +33,20 @@ CREATE TABLE IF NOT EXISTS outbox (
 	next_attempt_at INTEGER NOT NULL DEFAULT 0,
 	created_at      INTEGER NOT NULL,
 	err_kind        TEXT    NOT NULL DEFAULT '',
-	err_detail      TEXT    NOT NULL DEFAULT ''
+	err_detail      TEXT    NOT NULL DEFAULT '',
+	err_reason      TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_due ON outbox(next_attempt_at, id);
 `
+
+// migrations run after the schema, for tables that already exist and therefore
+// were not touched by CREATE TABLE IF NOT EXISTS. Each one is additive and its
+// failure is swallowed, because the only expected failure is "duplicate column"
+// on a database that already has it — SQLite offers no ADD COLUMN IF NOT EXISTS,
+// and reading back the table definition to decide costs more than the retry.
+var migrations = []string{
+	`ALTER TABLE outbox ADD COLUMN err_reason TEXT NOT NULL DEFAULT ''`,
+}
 
 // Store is the durable queue. Reads are served from memory and every write goes
 // through to disk, the same shape SQLiteStore uses for chats: the chat
@@ -54,6 +64,9 @@ type Store struct {
 func NewStore(db *sql.DB) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
+	}
+	for _, m := range migrations {
+		_, _ = db.Exec(m)
 	}
 	s := &Store{db: db, entries: make(map[string]domain.OutboxEntry)}
 	if err := s.load(); err != nil {
@@ -77,25 +90,26 @@ func RandomIDFor(ref string) int64 {
 
 func (s *Store) load() error {
 	rows, err := s.db.Query(`SELECT id, ref, chat_id, random_id, kind, payload, state,
-		attempts, next_attempt_at, created_at, err_kind, err_detail FROM outbox`)
+		attempts, next_attempt_at, created_at, err_kind, err_detail, err_reason FROM outbox`)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var (
-			e                    domain.OutboxEntry
-			payload              string
-			kind, state, errKind string
-			nextAttempt, created int64
+			e                               domain.OutboxEntry
+			payload                         string
+			kind, state, errKind, errReason string
+			nextAttempt, created            int64
 		)
 		if err := rows.Scan(&e.Seq, &e.Ref, &e.ChatID, &e.RandomID, &kind, &payload,
-			&state, &e.Attempts, &nextAttempt, &created, &errKind, &e.ErrDetail); err != nil {
+			&state, &e.Attempts, &nextAttempt, &created, &errKind, &e.ErrDetail, &errReason); err != nil {
 			return err
 		}
 		e.Kind = domain.OutboxKind(kind)
 		e.State = domain.OutboxState(state)
 		e.ErrKind = telerr.Kind(errKind)
+		e.ErrReason = telerr.Reason(errReason)
 		if nextAttempt > 0 {
 			e.NextAttemptAt = time.UnixMilli(nextAttempt)
 		}
@@ -159,14 +173,20 @@ func (s *Store) Add(e domain.OutboxEntry) (domain.OutboxEntry, bool, error) {
 	if existing, ok := s.entries[e.Ref]; ok {
 		return existing, false, nil
 	}
+	return s.insert(e)
+}
+
+// insert writes a new row and returns the entry carrying the Seq it was given.
+// The caller holds the lock and has already decided the ref is free.
+func (s *Store) insert(e domain.OutboxEntry) (domain.OutboxEntry, bool, error) {
 	payload, err := marshalPayload(e)
 	if err != nil {
 		return domain.OutboxEntry{}, false, err
 	}
 	res, err := s.db.Exec(
 		`INSERT INTO outbox (ref, chat_id, random_id, kind, payload, state, attempts,
-			next_attempt_at, created_at, err_kind, err_detail)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '')`,
+			next_attempt_at, created_at, err_kind, err_detail, err_reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '')`,
 		e.Ref, e.ChatID, e.RandomID, string(e.Kind), string(payload), string(e.State),
 		e.Attempts, millis(e.NextAttemptAt), millis(e.CreatedAt))
 	if err != nil {
@@ -181,6 +201,47 @@ func (s *Store) Add(e domain.OutboxEntry) (domain.OutboxEntry, bool, error) {
 	return e, true, nil
 }
 
+// Requeue puts a rejected entry back at the end of its chat's queue: the row is
+// rewritten, so it takes the next Seq rather than the one it held.
+//
+// That is the point rather than a side effect (ADR 0005). The sends that
+// overtook it while it sat rejected are already in the conversation ahead of it,
+// so restoring its old position would promise an order that exists nowhere but
+// this table — and would put it back at the head, where the next refusal would
+// stop the chat again.
+//
+// Ref and RandomID survive untouched, so Telegram's deduplication is unaffected:
+// RandomID is derived from Ref, which is the entry's identity and does not
+// change. Only its place in the queue does.
+//
+// The AUTOINCREMENT on the table is what makes this safe. Without it SQLite
+// would be free to hand back the rowid just deleted, and the entry would land
+// exactly where it started.
+func (s *Store) Requeue(ref string) (domain.OutboxEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[ref]
+	if !ok {
+		return domain.OutboxEntry{}, sql.ErrNoRows
+	}
+	if _, err := s.db.Exec(`DELETE FROM outbox WHERE ref = ?`, ref); err != nil {
+		return domain.OutboxEntry{}, err
+	}
+	delete(s.entries, ref)
+
+	e.State = domain.OutboxQueued
+	e.Attempts = 0
+	e.NextAttemptAt = time.Time{}
+	e.ErrKind, e.ErrReason, e.ErrDetail = "", "", ""
+	e.SentMsgIDs = nil
+
+	requeued, _, err := s.insert(e)
+	if err != nil {
+		return domain.OutboxEntry{}, err
+	}
+	return requeued, nil
+}
+
 // Update writes an entry's mutable state back. SentMsgID is deliberately not
 // persisted: it matters only between a successful request and the message
 // landing in state, and a crash in that window must re-send rather than assume.
@@ -188,9 +249,11 @@ func (s *Store) Update(e domain.OutboxEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, err := s.db.Exec(
-		`UPDATE outbox SET state = ?, attempts = ?, next_attempt_at = ?, err_kind = ?, err_detail = ?
+		`UPDATE outbox SET state = ?, attempts = ?, next_attempt_at = ?, err_kind = ?,
+			err_detail = ?, err_reason = ?
 		 WHERE ref = ?`,
-		string(e.State), e.Attempts, millis(e.NextAttemptAt), string(e.ErrKind), e.ErrDetail, e.Ref,
+		string(e.State), e.Attempts, millis(e.NextAttemptAt), string(e.ErrKind), e.ErrDetail,
+		string(e.ErrReason), e.Ref,
 	); err != nil {
 		return err
 	}

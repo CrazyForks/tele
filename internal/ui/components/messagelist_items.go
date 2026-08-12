@@ -97,9 +97,14 @@ func (ml *MessageList) buildItems(msgs []domain.Message) []listItem {
 	return append(items, ml.outboxItems()...)
 }
 
-// outboxItems renders the send queue as list items. They always sit at the end:
-// a pending send is newer than everything in the window by definition, so there
-// is nothing to merge.
+// outboxItems renders the send queue as list items. They always sit at the end,
+// so there is nothing to merge with the window.
+//
+// "At the end" no longer means "newest". A rejected send does not hold its chat,
+// so the sends composed after it go out and land in the window above it, while
+// it stays here waiting on a decision (ADR 0005). Below therefore reads as "not
+// in the conversation yet" rather than "most recent", which is the distinction
+// that matters to someone looking at it.
 func (ml *MessageList) outboxItems() []listItem {
 	if len(ml.outbox) == 0 {
 		return nil
@@ -183,11 +188,20 @@ func outboxStatusGlyph(e domain.OutboxEntry) string {
 }
 
 // OutboxReason names a terminal failure in the taxonomy's terms rather than
-// Telegram's: the reader is deciding whether to retry, not debugging a
+// Telegram's: the reader is deciding what to do about it, not debugging a
 // protocol. The bubble shows only a glyph; this is what the status bar says
 // when the cursor rests on the entry (#193).
-func OutboxReason(k telerr.Kind) string {
-	switch k {
+//
+// It takes the entry rather than the kind because a refusal is only useful once
+// it is specific. "Telegram would not accept this" leaves a person with nothing
+// to do; "this file is not one Telegram accepts as a photo" and "this message is
+// too long" lead to different actions (#224). The raw Telegram type stays in the
+// entry's detail and in the log, for a report rather than for the screen.
+func OutboxReason(e domain.OutboxEntry) string {
+	if e.ErrKind == telerr.Rejected {
+		return RejectionReason(e.ErrReason)
+	}
+	switch e.ErrKind {
 	case telerr.Forbidden:
 		return "not allowed in this chat"
 	case telerr.PeerNotFound:
@@ -196,6 +210,34 @@ func OutboxReason(k telerr.Kind) string {
 		return "chat no longer exists"
 	default:
 		return "unexpected error"
+	}
+}
+
+// RejectionReason phrases one refusal. The fallback covers a reason this build
+// has no phrase for, and an entry rejected by an older build, which recorded
+// none: both are honest as "Telegram would not accept it", and neither is worth
+// leaking a protocol constant over.
+//
+// Exported because the toast raised at the moment of the refusal and the status
+// bar reminder that outlives it must say the same thing.
+func RejectionReason(r telerr.Reason) string {
+	switch r {
+	case telerr.ReasonPhotoType:
+		return "not a file Telegram accepts as a photo"
+	case telerr.ReasonPhotoDimensions:
+		return "image is too large or oddly shaped"
+	case telerr.ReasonMediaUnreadable:
+		return "Telegram could not read this file"
+	case telerr.ReasonMediaUnsupported:
+		return "attachment is not supported here"
+	case telerr.ReasonTextEmpty:
+		return "there was nothing to send"
+	case telerr.ReasonTextTooLong:
+		return "message is too long"
+	case telerr.ReasonMarkupTooLong:
+		return "formatting is too long"
+	default:
+		return "Telegram would not accept it"
 	}
 }
 
